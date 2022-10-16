@@ -14,8 +14,6 @@ jobs:
         run: |
           sudo apt install xz-utils
           sudo sh -c 'wget -c https://ziglang.org/builds/zig-linux-x86_64-0.10.0-dev.4333+f5f28e0d2.tar.xz -O - | tar -xJ --strip-components=1 -C /usr/local/bin'
-      - name: x86_64-linux -> aarch64-macos
-        run: zig build -Dtarget=aarch64-macos.12-none
       - name: build
         run: zig build
   x86_64-windows:
@@ -47,5 +45,7 @@ jobs:
         run: |
           brew install xz
           sudo sh -c 'wget -c https://ziglang.org/builds/zig-macos-x86_64-0.10.0-dev.4333+f5f28e0d2.tar.xz -O - | tar -xJ --strip-components=1 -C /usr/local/bin'
+        env:
+          AGREE: true
       - name: build
         run: zig build
