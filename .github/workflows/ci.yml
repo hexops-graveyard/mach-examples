@@ -45,7 +45,7 @@ jobs:
         run: |
           brew install xz
           sudo sh -c 'wget -c https://ziglang.org/builds/zig-macos-x86_64-0.10.0-dev.4333+f5f28e0d2.tar.xz -O - | tar -xJ --strip-components=1 -C /usr/local/bin'
-        env:
-          AGREE: true
       - name: build
         run: zig build
+        env:
+          AGREE: true
