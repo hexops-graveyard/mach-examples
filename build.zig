@@ -17,6 +17,7 @@ pub fn build(b: *std.build.Builder) !void {
         deps: []const Pkg = &.{},
         std_platform_only: bool = false,
         has_assets: bool = false,
+        use_freetype: bool = false,
     }{
         .{ .name = "triangle" },
         .{ .name = "triangle-msaa" },
@@ -33,8 +34,7 @@ pub fn build(b: *std.build.Builder) !void {
         .{ .name = "cubemap", .deps = &.{ Packages.zmath, Packages.zigimg } },
         .{ .name = "map-async", .deps = &.{} },
         .{ .name = "sysaudio", .deps = &.{} },
-        // TODO(build-system): need linking against freetype
-        // .{ .name = "gkurve", .deps = &.{ Packages.zmath, Packages.zigimg }, .std_platform_only = true },
+        .{ .name = "gkurve", .deps = &.{ Packages.zmath, Packages.zigimg }, .std_platform_only = true, .use_freetype = true },
     }) |example| {
         // FIXME: this is workaround for a problem that some examples
         // (having the std_platform_only=true field) as well as zigimg
@@ -55,6 +55,7 @@ pub fn build(b: *std.build.Builder) !void {
                 .deps = example.deps,
                 .res_dirs = if (example.has_assets) &.{example.name ++ "/assets"} else null,
                 .watch_paths = &.{example.name},
+                .use_freetype = if (example.use_freetype) "freetype" else null,
             },
         );
         app.setBuildMode(mode);
@@ -82,6 +83,8 @@ pub fn build(b: *std.build.Builder) !void {
     copyFile("assets/skybox/negy.png", "cubemap/negy.png");
     copyFile("assets/skybox/posz.png", "cubemap/posz.png");
     copyFile("assets/skybox/negz.png", "cubemap/negz.png");
+
+    copyFile("libs/mach/libs/freetype/upstream/assets/FiraSans-Regular.ttf", "gkurve/FiraSans-Regular.ttf");
 
     const compile_all = b.step("compile-all", "Compile all examples and applications");
     compile_all.dependOn(b.getInstallStep());
