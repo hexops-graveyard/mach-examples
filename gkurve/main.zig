@@ -88,17 +88,14 @@ pub fn init(app: *App, core: *mach.Core) !void {
     const lib = try ft.Library.init();
     defer lib.deinit();
 
-    const size_multiplier = 5;
-    const character = "è";
-    var label = try Label.init(lib, "gkurve/FiraSans-Regular.ttf", 0, 110 * size_multiplier, core.allocator);
-    defer label.deinit();
-    // try label.print(app, "All your game's bases are belong to us èçòà", .{}, @Vector(2, f32){ 0, 420 }, @Vector(4, f32){ 1, 1, 1, 1 });
-    try label.print(app, character, .{}, @Vector(2, f32){ 50 * size_multiplier, 40 }, @Vector(4, f32){ 1, 1, 1, 1 });
-
-    var resizable_label: ResizableLabel = undefined;
-    try resizable_label.init(lib, "gkurve/FiraSans-Regular.ttf", 0, core.allocator, white_texture_uv_data);
-    defer resizable_label.deinit();
-    try resizable_label.print(app, character, .{}, @Vector(4, f32){ 0, 40, 0, 0 }, @Vector(4, f32){ 1, 1, 1, 1 }, 80 * size_multiplier);
+    const DemoMode = enum {
+        gkurves,
+        bitmap_text, // TODO: broken
+        text,
+        quad,
+        circle,
+    };
+    const demo_mode: DemoMode = .gkurves;
 
     queue.writeTexture(
         &.{ .texture = texture },
@@ -111,18 +108,47 @@ pub fn init(app: *App, core: *mach.Core) !void {
     const window_width = @intToFloat(f32, wsize.width);
     const window_height = @intToFloat(f32, wsize.height);
     const triangle_scale = 250;
-    _ = window_width;
-    _ = window_height;
-    _ = triangle_scale;
-    _ = img_uv_data;
-    // try draw.equilateralTriangle(app, .{ window_width / 2, window_height / 2 }, triangle_scale, .{}, img_uv_data);
-    // try draw.equilateralTriangle(app, .{ window_width / 2, window_height / 2 - triangle_scale }, triangle_scale, .{ .type = .concave }, img_uv_data);
-    // try draw.equilateralTriangle(app, .{ window_width / 2 - triangle_scale, window_height / 2 - triangle_scale / 2 }, triangle_scale, .{ .type = .convex }, white_texture_uv_data);
-    // try draw.quad(app, .{ 0, 0 }, .{ 480, 480 }, .{}, .{ .bottom_left = .{ 0, 0 }, .width_and_height = .{ 1, 1 } });
-    // try draw.circle(app, .{ window_width / 2, window_height / 2 }, window_height / 2 - 10, .{ 0, 0.5, 0.75, 1.0 }, white_texture_uv_data);
+    switch (demo_mode) {
+        .gkurves => {
+            try draw.equilateralTriangle(app, .{ window_width / 2, window_height / 2 }, triangle_scale, .{}, img_uv_data, 1.0);
+            try draw.equilateralTriangle(app, .{ window_width / 2, window_height / 2 - triangle_scale }, triangle_scale, .{ .type = .quadratic_concave }, img_uv_data, 1.0);
+            try draw.equilateralTriangle(app, .{ window_width / 2 - triangle_scale, window_height / 2 }, triangle_scale, .{ .type = .quadratic_convex }, white_texture_uv_data, 1.0);
+            try draw.equilateralTriangle(app, .{ window_width / 2 - triangle_scale, window_height / 2 - triangle_scale }, triangle_scale, .{ .type = .quadratic_convex }, white_texture_uv_data, 0.5);
+        },
+        .bitmap_text => {
+            // const character = "Gotta-go-fast!\n0123456789\n~!@#$%^&*()_+è\n:\"<>?`-=[];',./";
+            // const character = "ABCDEFGHIJ\nKLMNOPQRST\nUVWXYZ";
+            const size_multiplier = 5;
+            var label = try Label.init(lib, "gkurve/FiraSans-Regular.ttf", 0, 110 * size_multiplier, core.allocator);
+            defer label.deinit();
+            try label.print(app, "All your game's bases are belong to us èçòà", .{}, @Vector(2, f32){ 0, 420 }, @Vector(4, f32){ 1, 1, 1, 1 });
+            try label.print(app, "wow!", .{}, @Vector(2, f32){ 70 * size_multiplier, 70 }, @Vector(4, f32){ 1, 1, 1, 1 });
+        },
+        .text => {
+            const character = "Gotta-go-fast!\n0123456789\n~!@#$%^&*()_+è\n:\"<>?`-=[];',./";
+            const size_multiplier = 5;
 
-    const vs_module = core.device.createShaderModuleWGSL("vert.wgsl", @embedFile("vert.wgsl"));
-    const fs_module = core.device.createShaderModuleWGSL("frag.wgsl", @embedFile("frag.wgsl"));
+            var resizable_label: ResizableLabel = undefined;
+            try resizable_label.init(lib, "gkurve/FiraSans-Regular.ttf", 0, core.allocator, white_texture_uv_data);
+            defer resizable_label.deinit();
+            try resizable_label.print(app, character, .{}, @Vector(4, f32){ 20, 300, 0, 0 }, @Vector(4, f32){ 1, 1, 1, 1 }, 20 * size_multiplier);
+            try resizable_label.print(app, character, .{}, @Vector(4, f32){ 20, 150, 0, 0 }, @Vector(4, f32){ 1, 1, 1, 1 }, 130 * size_multiplier);
+        },
+        .quad => {
+            try draw.quad(app, .{ 0, 0 }, .{ 480, 480 }, .{}, .{ .bottom_left = .{ 0, 0 }, .width_and_height = .{ 1, 1 } });
+        },
+        .circle => {
+            try draw.circle(app, .{ window_width / 2, window_height / 2 }, window_height / 2 - 10, .{ 0, 0.5, 0.75, 1.0 }, white_texture_uv_data);
+        },
+    }
+
+    const vert_wgsl = try std.fs.cwd().readFileAllocOptions(core.allocator, "gkurve/vert.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
+    defer core.allocator.free(vert_wgsl);
+    const vs_module = core.device.createShaderModuleWGSL("gkurve/vert.wgsl", vert_wgsl);
+
+    const frag_wgsl = try std.fs.cwd().readFileAllocOptions(core.allocator, "gkurve/frag.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
+    defer core.allocator.free(frag_wgsl);
+    const fs_module = core.device.createShaderModuleWGSL("gkurve/frag.wgsl", frag_wgsl);
 
     const blend = gpu.BlendState{
         .color = .{
@@ -195,12 +221,13 @@ pub fn init(app: *App, core: *mach.Core) !void {
         // .min_filter = .linear,
     });
 
+    std.debug.assert((app.vertices.items.len / 3) == app.fragment_uniform_list.items.len);
     const bind_group = core.device.createBindGroup(
         &gpu.BindGroup.Descriptor.init(.{
             .layout = bgl,
             .entries = &.{
                 gpu.BindGroup.Entry.buffer(0, vertex_uniform_buffer, 0, @sizeOf(draw.VertexUniform)),
-                gpu.BindGroup.Entry.buffer(1, frag_uniform_buffer, 0, @sizeOf(draw.FragUniform) * app.vertices.items.len / 3),
+                gpu.BindGroup.Entry.buffer(1, frag_uniform_buffer, 0, @sizeOf(draw.FragUniform) * app.fragment_uniform_list.items.len),
                 gpu.BindGroup.Entry.sampler(2, sampler),
                 gpu.BindGroup.Entry.textureView(3, texture.createView(&gpu.TextureView.Descriptor{ .dimension = .dimension_2d })),
             },

@@ -7,7 +7,7 @@ const UVData = @import("atlas.zig").UVData;
 
 const Vec2 = @Vector(2, f32);
 
-pub const Vertex = extern struct {
+pub const Vertex = struct {
     pos: @Vector(4, f32),
     uv: Vec2,
 };
@@ -26,20 +26,22 @@ pub const VertexUniform = struct {
 };
 
 const GkurveType = enum(u32) {
-    concave = 0,
-    convex = 1,
-    filled = 2,
+    quadratic_convex = 0,
+    semicircle_convex = 1,
+    quadratic_concave = 2,
+    semicircle_concave = 3,
+    triangle = 4,
 };
 
-pub const FragUniform = extern struct {
-    type: GkurveType = .filled,
+pub const FragUniform = struct {
+    type: GkurveType = .triangle,
     // Padding for struct alignment to 16 bytes (minimum in WebGPU uniform).
     padding: @Vector(3, f32) = undefined,
     blend_color: @Vector(4, f32) = @Vector(4, f32){ 1, 1, 1, 1 },
 };
 
-pub fn equilateralTriangle(app: *App, position: Vec2, scale: f32, uniform: FragUniform, uv_data: UVData) !void {
-    const triangle_height = scale * @sqrt(0.75);
+pub fn equilateralTriangle(app: *App, position: Vec2, scale: f32, uniform: FragUniform, uv_data: UVData, height_scale: f32) !void {
+    const triangle_height = scale * @sqrt(0.75) * height_scale;
 
     try app.vertices.appendSlice(&[3]Vertex{
         .{ .pos = .{ position[0] + scale / 2, position[1] + triangle_height, 0, 1 }, .uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 0.5, 1 } },
@@ -76,11 +78,11 @@ pub fn quad(app: *App, position: Vec2, scale: Vec2, uniform: FragUniform, uv_dat
 
 pub fn circle(app: *App, position: Vec2, radius: f32, blend_color: @Vector(4, f32), uv_data: UVData) !void {
     const low_mid = Vertex{
-        .pos = .{ position[0], position[1] - radius, 0, 1 },
+        .pos = .{ position[0], position[1] - (radius * 2.0), 0, 1 },
         .uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 0.5, 0 },
     };
     const high_mid = Vertex{
-        .pos = .{ position[0], position[1] + radius, 0, 1 },
+        .pos = .{ position[0], position[1] + (radius * 2.0), 0, 1 },
         .uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 0.5, 1 },
     };
 
@@ -93,74 +95,23 @@ pub fn circle(app: *App, position: Vec2, radius: f32, blend_color: @Vector(4, f3
         .uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 1, 0.5 },
     };
 
-    const p = 0.95 * radius;
-
-    const high_right = Vertex{
-        .pos = .{ position[0] + p, position[1] + p, 0, 1 },
-        .uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 1, 0.75 },
-    };
-    const high_left = Vertex{
-        .pos = .{ position[0] - p, position[1] + p, 0, 1 },
-        .uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 0, 0.75 },
-    };
-    const low_right = Vertex{
-        .pos = .{ position[0] + p, position[1] - p, 0, 1 },
-        .uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 1, 0.25 },
-    };
-    const low_left = Vertex{
-        .pos = .{ position[0] - p, position[1] - p, 0, 1 },
-        .uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 0, 0.25 },
-    };
-
     try app.vertices.appendSlice(&[_]Vertex{
-        low_mid,
-        mid_right,
-        high_mid,
-
         high_mid,
         mid_left,
-        low_mid,
-
-        low_right,
-        mid_right,
-        low_mid,
-
-        high_right,
-        high_mid,
         mid_right,
 
-        high_left,
-        mid_left,
-        high_mid,
-
-        low_left,
         low_mid,
         mid_left,
+        mid_right,
     });
 
     try app.fragment_uniform_list.appendSlice(&[_]FragUniform{
         .{
-            .type = .filled,
+            .type = .semicircle_convex,
             .blend_color = blend_color,
         },
         .{
-            .type = .filled,
-            .blend_color = blend_color,
-        },
-        .{
-            .type = .convex,
-            .blend_color = blend_color,
-        },
-        .{
-            .type = .convex,
-            .blend_color = blend_color,
-        },
-        .{
-            .type = .convex,
-            .blend_color = blend_color,
-        },
-        .{
-            .type = .convex,
+            .type = .semicircle_convex,
             .blend_color = blend_color,
         },
     });
