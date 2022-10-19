@@ -9,7 +9,7 @@ const UVData = @import("atlas.zig").UVData;
 const App = @import("main.zig").App;
 const draw = @import("draw.zig");
 const Vertex = draw.Vertex;
-const trimesh2d = @import("trimesh2d");
+const trimesh2d = @import("mach").trimesh2d;
 
 // If true, show the filled triangles green, the concave beziers blue and the convex ones red
 const debug_colors = false;
@@ -288,9 +288,9 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                 try ctx.app.vertices.appendSlice(convex_vertices_after_offset);
 
                 if (debug_colors) {
-                    try ctx.app.fragment_uniform_list.appendNTimes(.{ .type = .convex, .blend_color = .{ 1, 0, 0, 1 } }, convex_vertices_after_offset.len / 3);
+                    try ctx.app.fragment_uniform_list.appendNTimes(.{ .type = .quadratic_convex, .blend_color = .{ 1, 0, 0, 1 } }, convex_vertices_after_offset.len / 3);
                 } else {
-                    try ctx.app.fragment_uniform_list.appendNTimes(.{ .type = .convex, .blend_color = ctx.text_color }, convex_vertices_after_offset.len / 3);
+                    try ctx.app.fragment_uniform_list.appendNTimes(.{ .type = .quadratic_convex, .blend_color = ctx.text_color }, convex_vertices_after_offset.len / 3);
                 }
 
                 var concave_vertices_after_offset = try ctx.label.allocator.alloc(Vertex, v.value_ptr.concave_vertices.items.len);
@@ -301,9 +301,9 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                 try ctx.app.vertices.appendSlice(concave_vertices_after_offset);
 
                 if (debug_colors) {
-                    try ctx.app.fragment_uniform_list.appendNTimes(.{ .type = .concave, .blend_color = .{ 0, 0, 1, 1 } }, concave_vertices_after_offset.len / 3);
+                    try ctx.app.fragment_uniform_list.appendNTimes(.{ .type = .quadratic_concave, .blend_color = .{ 0, 0, 1, 1 } }, concave_vertices_after_offset.len / 3);
                 } else {
-                    try ctx.app.fragment_uniform_list.appendNTimes(.{ .type = .concave, .blend_color = ctx.text_color }, concave_vertices_after_offset.len / 3);
+                    try ctx.app.fragment_uniform_list.appendNTimes(.{ .type = .quadratic_concave, .blend_color = ctx.text_color }, concave_vertices_after_offset.len / 3);
                 }
 
                 ctx.app.update_vertex_buffer = true;

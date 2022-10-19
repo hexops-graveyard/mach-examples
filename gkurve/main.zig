@@ -132,7 +132,6 @@ pub fn init(app: *App, core: *mach.Core) !void {
             try resizable_label.init(lib, "gkurve/FiraSans-Regular.ttf", 0, core.allocator, white_texture_uv_data);
             defer resizable_label.deinit();
             try resizable_label.print(app, character, .{}, @Vector(4, f32){ 20, 300, 0, 0 }, @Vector(4, f32){ 1, 1, 1, 1 }, 20 * size_multiplier);
-            try resizable_label.print(app, character, .{}, @Vector(4, f32){ 20, 150, 0, 0 }, @Vector(4, f32){ 1, 1, 1, 1 }, 130 * size_multiplier);
         },
         .quad => {
             try draw.quad(app, .{ 0, 0 }, .{ 480, 480 }, .{}, .{ .bottom_left = .{ 0, 0 }, .width_and_height = .{ 1, 1 } });
