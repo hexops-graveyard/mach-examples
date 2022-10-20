@@ -26,6 +26,8 @@ struct FragUniform {
     // return vec4<f32>(0.0, 1.0, 0.0, 1.0);
 
     // Example 3: Render gkurve primitives
+    let antialiased = true;
+    let aa_px = 0.5; // pixels to consume for AA
     // Concave (inverted quadratic bezier curve)
     // inversion = -1.0;
     // Convex (inverted quadratic bezier curve)
@@ -52,13 +54,26 @@ struct FragUniform {
     let inner_dist = (dist - (border_px * (1.0-is_inverted))) / dist_scale_px;
 
     // Signed distance to wireframe edges.
-    // let wireframe_px = 3.0;
+    // let wireframe_px = 1.0;
     // let wireframe_color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
     // let wireframe_dist = distanceToWireframe(bary_in);
-    // let wireframe_outer = wireframe_dist / dist_scale_px;
-    // let wireframe_inner = (wireframe_dist - wireframe_px) / dist_scale_px;
-    // if (wireframe_outer >= 0.0 && wireframe_inner < 0.0) {
-    //     return wireframe_color;
+    // if (antialiased) {
+    //     let wireframe_outer = wireframe_dist;
+    //     let wireframe_inner = wireframe_outer - wireframe_px - (aa_px * 3.0);
+    //     if ((wireframe_outer / dist_scale_px) >= 0.0 && (wireframe_inner / dist_scale_px) < 0.0) {
+    //         let step = select(
+    //             (wireframe_outer - aa_px) / wireframe_outer,
+    //             (wireframe_inner + aa_px) / wireframe_inner,
+    //             wireframe_outer > abs(wireframe_inner),
+    //         );
+    //         return vec4<f32>(wireframe_color.rgb, smoothstep(0.0, 1.0, step));
+    //     }
+    // } else {
+    //     let wireframe_outer = wireframe_dist / dist_scale_px;
+    //     let wireframe_inner = (wireframe_dist - wireframe_px) / dist_scale_px;
+    //     if (wireframe_outer >= 0.0 && wireframe_inner < 0.0) {
+    //         return wireframe_color;
+    //     }
     // }
 
     if (ubos[triangle_index].type_ == 4u) {
