@@ -14,7 +14,6 @@ struct FragUniform {
 ) -> @location(0) vec4<f32> {
     // Example 1: Visualize barycentric coordinates:
     // let bary = bary_in;
-    // return vec4<f32>(1.0-d, 1.0-d, 1.0-d, 1.0);
     // return vec4<f32>(bary.x, bary.y, 0.0, 1.0);
     // return vec4<f32>(0.0, bary.x, 0.0, 1.0); // [1.0 (bottom-left vertex), 0.0 (bottom-right vertex)]
     // return vec4<f32>(0.0, bary.y, 0.0, 1.0); // [1.0 (bottom-left vertex), 0.0 (top-right face)]
@@ -38,7 +37,7 @@ struct FragUniform {
     correct_uv.y = 1.0 - correct_uv.y;
     var color = textureSample(myTexture, mySampler, correct_uv) * ubos[triangle_index].blend_color;
 
-    // Signed distance to quadratic bézier
+    // Signed distance to quadratic bézier / semicircle.
     const dist_scale_px = 300.0;
     let border_color = vec4<f32>(1.0, 0.0, 0.0, 1.0);
     let border_px = 30.0;
@@ -52,24 +51,14 @@ struct FragUniform {
     let outer_dist = (dist + (border_px * is_inverted)) / dist_scale_px;
     let inner_dist = (dist - (border_px * (1.0-is_inverted))) / dist_scale_px;
 
-    // // Wireframe rendering.
-    // let right_face_dist = bary.y;
-    // let bottom_face_dist = bary.x-bary.y;
-    // let left_face_dist = 1.0 - ((bottom_face_dist*2.0) + bary.y);
-    // let normal_bary = vec3<f32>(right_face_dist, bottom_face_dist, left_face_dist);
-
-    // let border_smoothing = 1.0;
-    // let fwd = fwidth(normal_bary);
-    // let w = smoothstep(border_px * fwd, (border_px + border_smoothing) * fwd, normal_bary);
-    // let width = 1.0 - min(min(w.x, w.y), w.z);
-    // let epsilon = 0.001;
-    // if (right_face_dist >= -epsilon && right_face_dist <= width
-    //     || left_face_dist >= -epsilon && left_face_dist <= width
-    //     || bottom_face_dist >= -epsilon && bottom_face_dist <= width) {
-    //     color = mix(color, border_color, width);
-    //     if (dist < 0.0 && ubos[triangle_index].type_ != 4u) {
-    //         return vec4<f32>(border_color.rgb, width);
-    //     }
+    // Signed distance to wireframe edges.
+    // let wireframe_px = 3.0;
+    // let wireframe_color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
+    // let wireframe_dist = distanceToWireframe(bary_in);
+    // let wireframe_outer = wireframe_dist / dist_scale_px;
+    // let wireframe_inner = (wireframe_dist - wireframe_px) / dist_scale_px;
+    // if (wireframe_outer >= 0.0 && wireframe_inner < 0.0) {
+    //     return wireframe_color;
     // }
 
     if (ubos[triangle_index].type_ == 4u) {
@@ -113,4 +102,17 @@ fn distanceToSemicircle(bary: vec2<f32>) -> f32 {
 
     let d = (1.0 - (x*x + y*y)) - 0.2;
     return (-d / 6.0) / sqrt(fx * fx + fy * fy);
+}
+
+// Calculates signed distance to the wireframe (i.e. faces) of the triangle using barycentric
+// coordinates.
+fn distanceToWireframe(bary: vec2<f32>) -> f32 {
+    let normal = vec3<f32>(
+        bary.y, // distance to right face
+        (bary.x - bary.y) * 2.0, // distance to bottom face
+        1.0 - (((bary.x - bary.y)) + bary.x), // distance to left face
+    );
+    let fw = sqrt(dpdx(normal)*dpdx(normal) + dpdy(normal)*dpdy(normal));
+    let d = normal / fw;
+    return min(min(d.x, d.y), d.z);
 }
