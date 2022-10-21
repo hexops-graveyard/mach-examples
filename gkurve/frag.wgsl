@@ -37,13 +37,13 @@ const dist_scale_px = 300.0; // TODO: do not hard code
     correct_uv.y = 1.0 - correct_uv.y;
     var color = textureSample(myTexture, mySampler, correct_uv) * ubos[triangle_index].blend_color;
 
-    // Signed distance to quadratic bézier / semicircle.
+    // Curve rendering
     let border_color = vec4<f32>(1.0, 0.0, 0.0, 1.0);
     let border_px = 30.0;
     let is_semicircle = ubos[triangle_index].type_ == 1u || ubos[triangle_index].type_ == 3u;
     var result = curveColor(bary_in, border_px, border_color, color, inversion, is_semicircle);
 
-    // Wireframe rendering.
+    // Wireframe rendering
     let wireframe_px = 5.0;
     let wireframe_color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
     if (wireframe) {
@@ -51,6 +51,7 @@ const dist_scale_px = 300.0; // TODO: do not hard code
     }
 
     if (ubos[triangle_index].type_ == 4u) {
+        // Triangle rendering
         return color;
     }
     if (result.a == 0.0) { discard; }
