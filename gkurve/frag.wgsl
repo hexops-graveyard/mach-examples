@@ -31,10 +31,6 @@ const dist_scale_px = 300.0; // TODO: do not hard code
     // return vec4<f32>(0.0, 1.0, 0.0, 1.0);
 
     // Example 3: Render gkurve primitives
-    // Concave (inverted quadratic bezier curve)
-    // inversion = -1.0;
-    // Convex (inverted quadratic bezier curve)
-    // inversion = 1.0;
     let inversion = select( 1.0, -1.0, ubos[triangle_index].type_ == 0u || ubos[triangle_index].type_ == 1u);
     // Texture uvs
     var correct_uv = uv;
@@ -44,31 +40,21 @@ const dist_scale_px = 300.0; // TODO: do not hard code
     // Signed distance to quadratic bézier / semicircle.
     let border_color = vec4<f32>(1.0, 0.0, 0.0, 1.0);
     let border_px = 30.0;
-    let is_inverted = (inversion + 1.0) / 2.0; // 1.0 if inverted, 0.0 otherwise
-    let dist = select(
-        distanceToQuadratic(bary_in),
-        distanceToSemicircle(bary_in),
-        ubos[triangle_index].type_ == 1u || ubos[triangle_index].type_ == 3u,
-    ) * inversion;
-
-    let outer_dist = (dist + (border_px * is_inverted)) / dist_scale_px;
-    let inner_dist = (dist - (border_px * (1.0-is_inverted))) / dist_scale_px;
+    let is_semicircle = ubos[triangle_index].type_ == 1u || ubos[triangle_index].type_ == 3u;
+    var result = curveColor(bary_in, border_px, border_color, color, inversion, is_semicircle);
 
     // Wireframe rendering.
     let wireframe_px = 5.0;
     let wireframe_color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
-    // return wireframeColor(bary_in, wireframe_px, wireframe_color, color);
+    if (wireframe) {
+        result = wireframeColor(bary_in, wireframe_px, wireframe_color, result);
+    }
 
     if (ubos[triangle_index].type_ == 4u) {
         return color;
     }
-    if (outer_dist >= 0.0 && inner_dist < 0.0) {
-        return border_color;
-    } else if (outer_dist >= 0.0) {
-        return color;
-    } else {
-        discard;
-    }
+    if (result.a == 0.0) { discard; }
+    return result;
 }
 
 // Performs alpha blending between two premultiplied-alpha colors.
@@ -149,5 +135,37 @@ fn wireframeColor(bary: vec2<f32>, px: f32, color: vec4<f32>, blend_color: vec4<
     } else {
         // If we're at the edge use the wireframe color, otherwise use the background blend_color.
         return select(blend_color, color, (px - dist) >= 0.0);
+    }
+}
+
+// Calculates the color for a curve.
+//
+// inversion: concave (-1.0) or convex (1.0)
+// is_semicircle: quadratic bezier (false) or semicircle (true)
+fn curveColor(
+    bary: vec2<f32>,
+    border_px: f32,
+    border_color: vec4<f32>,
+    blend_color: vec4<f32>,
+    inversion: f32,
+    is_semicircle: bool,
+) -> vec4<f32> {
+    let dist = select(
+        distanceToQuadratic(bary),
+        distanceToSemicircle(bary),
+        is_semicircle,
+    ) * inversion;
+
+    let is_inverted = (inversion + 1.0) / 2.0; // 1.0 if inverted, 0.0 otherwise
+    let outer_dist = (dist + (border_px * is_inverted)) / dist_scale_px;
+    let inner_dist = (dist - (border_px * (1.0-is_inverted))) / dist_scale_px;
+    let in_border = outer_dist >= 0.0 && inner_dist < 0.0;
+
+    if (in_border) {
+        return border_color;
+    } else if (outer_dist >= 0.0) {
+        return blend_color;
+    } else {
+        return vec4<f32>(0.0);
     }
 }
