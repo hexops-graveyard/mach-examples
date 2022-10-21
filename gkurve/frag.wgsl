@@ -7,6 +7,11 @@ struct FragUniform {
 @binding(2) @group(0) var mySampler: sampler;
 @binding(3) @group(0) var myTexture: texture_2d<f32>;
 
+const wireframe = true;
+const antialiased = true;
+const aa_px = 1.0; // pixels to consume for AA
+const dist_scale_px = 300.0; // TODO: do not hard code
+
 @fragment fn main( 
     @location(0) uv: vec2<f32>,
     @interpolate(linear) @location(1) bary_in: vec2<f32>,
@@ -26,21 +31,17 @@ struct FragUniform {
     // return vec4<f32>(0.0, 1.0, 0.0, 1.0);
 
     // Example 3: Render gkurve primitives
-    let antialiased = true;
-    let aa_px = 0.5; // pixels to consume for AA
     // Concave (inverted quadratic bezier curve)
     // inversion = -1.0;
     // Convex (inverted quadratic bezier curve)
     // inversion = 1.0;
     let inversion = select( 1.0, -1.0, ubos[triangle_index].type_ == 0u || ubos[triangle_index].type_ == 1u);
     // Texture uvs
-    // (These two could be cut with vec2(0.0,1.0) + uv * vec2(1.0,-1.0))
     var correct_uv = uv;
     correct_uv.y = 1.0 - correct_uv.y;
     var color = textureSample(myTexture, mySampler, correct_uv) * ubos[triangle_index].blend_color;
 
     // Signed distance to quadratic bézier / semicircle.
-    const dist_scale_px = 300.0;
     let border_color = vec4<f32>(1.0, 0.0, 0.0, 1.0);
     let border_px = 30.0;
     let is_inverted = (inversion + 1.0) / 2.0; // 1.0 if inverted, 0.0 otherwise
@@ -53,28 +54,10 @@ struct FragUniform {
     let outer_dist = (dist + (border_px * is_inverted)) / dist_scale_px;
     let inner_dist = (dist - (border_px * (1.0-is_inverted))) / dist_scale_px;
 
-    // Signed distance to wireframe edges.
-    // let wireframe_px = 1.0;
-    // let wireframe_color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
-    // let wireframe_dist = distanceToWireframe(bary_in);
-    // if (antialiased) {
-    //     let wireframe_outer = wireframe_dist;
-    //     let wireframe_inner = wireframe_outer - wireframe_px - (aa_px * 3.0);
-    //     if ((wireframe_outer / dist_scale_px) >= 0.0 && (wireframe_inner / dist_scale_px) < 0.0) {
-    //         let step = select(
-    //             (wireframe_outer - aa_px) / wireframe_outer,
-    //             (wireframe_inner + aa_px) / wireframe_inner,
-    //             wireframe_outer > abs(wireframe_inner),
-    //         );
-    //         return vec4<f32>(wireframe_color.rgb, smoothstep(0.0, 1.0, step));
-    //     }
-    // } else {
-    //     let wireframe_outer = wireframe_dist / dist_scale_px;
-    //     let wireframe_inner = (wireframe_dist - wireframe_px) / dist_scale_px;
-    //     if (wireframe_outer >= 0.0 && wireframe_inner < 0.0) {
-    //         return wireframe_color;
-    //     }
-    // }
+    // Wireframe rendering.
+    let wireframe_px = 5.0;
+    let wireframe_color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
+    // return wireframeColor(bary_in, wireframe_px, wireframe_color, color);
 
     if (ubos[triangle_index].type_ == 4u) {
         return color;
@@ -86,6 +69,11 @@ struct FragUniform {
     } else {
         discard;
     }
+}
+
+// Performs alpha blending between two premultiplied-alpha colors.
+fn alphaBlend(a: vec4<f32>, b: vec4<f32>) -> vec4<f32> {
+    return a + (b * (1.0 - a.a));
 }
 
 // Calculates signed distance to a quadratic bézier curve using barycentric coordinates.
@@ -130,4 +118,36 @@ fn distanceToWireframe(bary: vec2<f32>) -> f32 {
     let fw = sqrt(dpdx(normal)*dpdx(normal) + dpdy(normal)*dpdy(normal));
     let d = normal / fw;
     return min(min(d.x, d.y), d.z);
+}
+
+// Calculates the color of the wireframe, taking into account antialiasing and alpha blending with
+// the desired background blend color.
+fn wireframeColor(bary: vec2<f32>, px: f32, color: vec4<f32>, blend_color: vec4<f32>) -> vec4<f32> {
+    let dist = distanceToWireframe(bary);
+    if (antialiased) {
+        let outer = dist;
+        let inner = (px + (aa_px * 2.0)) - dist;
+        let in_wireframe = outer >= 0.0 && inner >= 0.0;
+        if (in_wireframe) {
+            // Note: If this is the outer edge of the wireframe, we do not want to perform alpha
+            // blending with the background blend color, since it is an antialiased edge and should
+            // be transparent. However, if it is the internal edge of the wireframe, we do want to
+            // perform alpha blending as it should be an overlay, not transparent.
+            let is_outer_edge = outer < inner;
+            if (is_outer_edge) {
+                let alpha = smoothstep(0.0, 1.0, outer*(1.0 / aa_px));
+                return vec4<f32>((color.rgb/color.a)*alpha, alpha);
+            } else {
+                let aa_inner = inner - aa_px;
+                let alpha = smoothstep(0.0, 1.0, aa_inner*(1.0 / aa_px));
+                let wireframe_color = vec4<f32>((color.rgb/color.a)*alpha, alpha);
+                return alphaBlend(wireframe_color, blend_color);
+            }
+            return color;
+        }
+        return blend_color;
+    } else {
+        // If we're at the edge use the wireframe color, otherwise use the background blend_color.
+        return select(blend_color, color, (px - dist) >= 0.0);
+    }
 }
