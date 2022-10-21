@@ -3,7 +3,7 @@
 	url = https://github.com/hexops/mach
 [submodule "libs/zmath"]
 	path = libs/zmath
-	url = https://github.com/PiergiorgioZagaria/zmath
+	url = https://github.com/machlibs/zmath
 [submodule "libs/zigimg"]
 	path = libs/zigimg
 	url = https://github.com/zigimg/zigimg
