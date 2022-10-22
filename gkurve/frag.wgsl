@@ -41,19 +41,19 @@ const dist_scale_px = 300.0; // TODO: do not hard code
     let border_color = vec4<f32>(1.0, 0.0, 0.0, 1.0);
     let border_px = 30.0;
     let is_semicircle = ubos[triangle_index].type_ == 1u || ubos[triangle_index].type_ == 3u;
-    var result = curveColor(bary_in, border_px, border_color, color, inversion, is_semicircle);
+    var result = select(
+        curveColor(bary_in, border_px, border_color, color, inversion, is_semicircle),
+        color,
+        ubos[triangle_index].type_ == 4u, // triangle rendering
+    );
 
     // Wireframe rendering
-    let wireframe_px = 5.0;
+    let wireframe_px = 1.0;
     let wireframe_color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
     if (wireframe) {
         result = wireframeColor(bary_in, wireframe_px, wireframe_color, result);
     }
 
-    if (ubos[triangle_index].type_ == 4u) {
-        // Triangle rendering
-        return color;
-    }
     if (result.a == 0.0) { discard; }
     return result;
 }
