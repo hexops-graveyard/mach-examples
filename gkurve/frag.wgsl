@@ -58,8 +58,8 @@ const dist_scale_px = 300.0; // TODO: do not hard code
     return result;
 }
 
-// Performs alpha blending between two premultiplied-alpha colors.
-fn alphaBlend(a: vec4<f32>, b: vec4<f32>) -> vec4<f32> {
+// Performs alpha 'over' blending between two premultiplied-alpha colors.
+fn alphaOver(a: vec4<f32>, b: vec4<f32>) -> vec4<f32> {
     return a + (b * (1.0 - a.a));
 }
 
@@ -128,7 +128,7 @@ fn wireframeColor(bary: vec2<f32>, px: f32, color: vec4<f32>, blend_color: vec4<
                 let aa_inner = inner - aa_px;
                 let alpha = smoothstep(0.0, 1.0, aa_inner*(1.0 / aa_px));
                 let wireframe_color = vec4<f32>((color.rgb/color.a)*alpha, alpha);
-                return alphaBlend(wireframe_color, blend_color);
+                return alphaOver(wireframe_color, blend_color);
             }
         }
         return blend_color;
@@ -163,9 +163,9 @@ fn curveColor(
         let inner = ((border_px + (aa_px * 2.0)) * (1.0-is_inverted)) - dist; // top
         let in_border = outer >= 0.0 && inner >= 0.0;
         if (in_border) {
-            // Note: If this is the outer edge of the wireframe, we do not want to perform alpha
+            // Note: If this is the outer edge of the curve, we do not want to perform alpha
             // blending with the background blend color, since it is an antialiased edge and should
-            // be transparent. However, if it is the internal edge of the wireframe, we do want to
+            // be transparent. However, if it is the internal edge of the curve, we do want to
             // perform alpha blending as it should be an overlay, not transparent.
             let is_outer_edge = outer < inner;
             if (is_outer_edge) {
@@ -176,7 +176,7 @@ fn curveColor(
                 let aa_inner = inner - (aa_px * (1.0 - is_inverted));
                 let alpha = smoothstep(0.0, 1.0, aa_inner*(1.0 / aa_px));
                 let new_border_color = vec4<f32>((border_color.rgb/border_color.a)*alpha, alpha);
-                return alphaBlend(new_border_color, blend_color);
+                return alphaOver(new_border_color, blend_color);
             }
             return border_color;
         } else if (outer >= 0.0) {
