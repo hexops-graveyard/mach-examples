@@ -25,7 +25,8 @@ git submodule add https://github.com/hexops/mach libs/mach
 In your `build.zig`, use `mach.App`:
 
 ```zig
-const mach = @import("libs/mach/build.zig");
+const std = @import("std");
+const mach = @import("lib/mach/build.zig");
 
 pub fn build(b: *std.build.Builder) !void {
     const target = b.standardTargetOptions(.{});
@@ -38,17 +39,14 @@ pub fn build(b: *std.build.Builder) !void {
         .deps = &[_]std.build.Pkg{},
     });
     app.setBuildMode(mode);
-    app.link(.{});
+    try app.link(.{});
     app.install();
 
-    const run_cmd = app.run();
-    run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    const run_cmd = try app.run();
+    run_cmd.dependOn(b.getInstallStep());
 
     const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    run_step.dependOn(run_cmd);
 }
 ```
 
