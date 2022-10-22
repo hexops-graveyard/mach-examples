@@ -27,11 +27,11 @@ In your `build.zig`, use `mach.App`:
 ```zig
 const mach = @import("libs/mach/build.zig");
 
-pub fn build(b: *std.build.Builder) void {
+pub fn build(b: *std.build.Builder) !void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
-    const app = mach.App.init(b, .{
+    const app = try mach.App.init(b, .{
         .name = "myapp",
         .src = "src/main.zig",
         .target = target,
