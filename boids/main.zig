@@ -212,7 +212,7 @@ pub fn update(app: *App, core: *mach.Core) !void {
 
     var command = command_encoder.finish(null);
     command_encoder.release();
-    core.device.getQueue().submit(&.{command});
+    core.device.getQueue().submit(&[_]*gpu.CommandBuffer{command});
     command.release();
 
     core.swap_chain.?.present();

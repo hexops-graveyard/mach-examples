@@ -208,7 +208,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
     // texture filled with the image data.
     var command = encoder.finish(null);
     encoder.release();
-    queue.submit(&.{command});
+    queue.submit(&[_]*gpu.CommandBuffer{command});
     command.release();
 
     // The textureView in the bind group needs dimension defined as "dimension_cube".
@@ -310,7 +310,7 @@ pub fn update(app: *App, core: *mach.Core) !void {
     var command = encoder.finish(null);
     encoder.release();
 
-    app.queue.submit(&.{command});
+    app.queue.submit(&[_]*gpu.CommandBuffer{command});
     command.release();
     core.swap_chain.?.present();
     back_buffer_view.release();

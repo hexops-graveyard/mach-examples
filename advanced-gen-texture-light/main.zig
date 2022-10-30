@@ -164,7 +164,7 @@ pub fn update(app: *App, core: *mach.Core) !void {
     var command = encoder.finish(null);
     defer command.release();
 
-    app.queue.submit(&.{command});
+    app.queue.submit(&[_]*gpu.CommandBuffer{command});
     core.swap_chain.?.present();
 }
 
