@@ -60,7 +60,7 @@ pub fn init(_: *App, core: *mach.Core) !void {
     }).callback;
 
     var queue = core.device.getQueue();
-    queue.submit(&.{command});
+    queue.submit(&[_]*gpu.CommandBuffer{command});
 
     staging.mapAsync(.{ .read = true }, 0, buffer_size, &response, callback);
     while (true) {
