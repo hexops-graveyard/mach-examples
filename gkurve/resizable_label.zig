@@ -9,7 +9,7 @@ const UVData = @import("atlas.zig").UVData;
 const App = @import("main.zig").App;
 const draw = @import("draw.zig");
 const Vertex = draw.Vertex;
-const trimesh2d = @import("mach").trimesh2d;
+const earcut = @import("mach").earcut;
 
 // If true, show the filled triangles green, the concave beziers blue and the convex ones red
 const debug_colors = false;
@@ -44,7 +44,7 @@ const CharVertices = struct {
 face: ft.Face,
 char_map: std.AutoHashMap(u21, CharVertices),
 allocator: std.mem.Allocator,
-tessellator: trimesh2d.Processor(f32),
+tessellator: earcut.Processor(f32),
 white_texture: UVData,
 
 // The data that the write function needs
@@ -76,7 +76,7 @@ pub fn init(self: *ResizableLabel, lib: ft.Library, font_path: []const u8, face_
         .face = try lib.createFace(font_path, face_index),
         .char_map = std.AutoHashMap(u21, CharVertices).init(allocator),
         .allocator = allocator,
-        .tessellator = trimesh2d.Processor(f32){},
+        .tessellator = earcut.Processor(f32){},
         .white_texture = white_texture,
     };
 }
@@ -108,7 +108,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                 offset[1] -= @intToFloat(f32, ctx.label.face.glyph().metrics().vertAdvance) * (@intToFloat(f32, ctx.text_size) / 1024);
             },
             ' ' => {
-                std.debug.todo("Space character not implemented yet");
+                @panic("TODO: Space character not implemented yet");
                 // const v = try ctx.label.char_map.getOrPut(char);
                 // if (!v.found_existing) {
                 //     try ctx.label.face.setCharSize(ctx.label.size * 64, 0, 50, 0);
@@ -181,29 +181,30 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                     for (outline_ctx.outline_verts.items) |item| {
                         if (item.items.len == 0) continue;
                         // TODO(gkurve): don't discard this, make tessellator use Vec2 / avoid copy?
-                        var polygon = std.ArrayListUnmanaged(Vec2){};
+                        var polygon = std.ArrayListUnmanaged(f32){};
                         defer polygon.deinit(ctx.label.allocator);
                         if (ctx.label.face.glyph().outline().?.orientation() == .truetype) {
                             // TrueType orientation has clockwise contours, so reverse the list
                             // since we need CCW.
                             var i = item.items.len - 1;
-                            while (i > 0) : (i -= 1) try polygon.append(ctx.label.allocator, item.items[i]);
+                            while (i > 0) : (i -= 1) {
+                                try polygon.append(ctx.label.allocator, item.items[i][0]);
+                                try polygon.append(ctx.label.allocator, item.items[i][1]);
+                            }
                         } else {
-                            for (item.items) |vert| try polygon.append(ctx.label.allocator, vert);
+                            for (item.items) |vert| {
+                                try polygon.append(ctx.label.allocator, vert[0]);
+                                try polygon.append(ctx.label.allocator, vert[1]);
+                            }
                         }
 
-                        // TODO(gkurve): reuse this buffer
-                        var out_triangles = std.ArrayListUnmanaged(u32){};
-                        defer out_triangles.deinit(ctx.label.allocator);
+                        try ctx.label.tessellator.process(ctx.label.allocator, polygon.items, null, 2);
 
-                        try ctx.label.tessellator.process(ctx.label.allocator, polygon, &out_triangles);
-                        defer ctx.label.tessellator.reset();
-
-                        for (out_triangles.items) |idx| {
-                            try all_outlines.append(polygon.items[idx]);
-                            try all_indices.append(@intCast(u16, idx + idx_offset));
+                        for (ctx.label.tessellator.triangles.items) |idx| {
+                            try all_outlines.append(Vec2{polygon.items[idx*2], polygon.items[(idx*2)+1]});
+                            try all_indices.append(@intCast(u16, (idx*2) + idx_offset));
                         }
-                        idx_offset += @intCast(u16, out_triangles.items.len);
+                        idx_offset += @intCast(u16, ctx.label.tessellator.triangles.items.len);
                     }
 
                     for (all_outlines.items) |item| {
