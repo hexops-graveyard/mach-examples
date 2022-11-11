@@ -24,7 +24,7 @@ pub const App = @This();
 pub fn init(app: *App, core: *mach.Core) !void {
     timer = try mach.Timer.start();
 
-    const vs_module = core.device.createShaderModuleWGSL("vert.wgsl", @embedFile("vert.wgsl"));
+    const shader_module = core.device.createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
 
     const vertex_attributes = [_]gpu.VertexAttribute{
         .{ .format = .float32x4, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
@@ -36,8 +36,6 @@ pub fn init(app: *App, core: *mach.Core) !void {
         .attributes = &vertex_attributes,
     });
 
-    const fs_module = core.device.createShaderModuleWGSL("frag.wgsl", @embedFile("frag.wgsl"));
-
     const blend = gpu.BlendState{};
     const color_target = gpu.ColorTargetState{
         .format = core.swap_chain_format,
@@ -45,8 +43,8 @@ pub fn init(app: *App, core: *mach.Core) !void {
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
     const fragment = gpu.FragmentState.init(.{
-        .module = fs_module,
-        .entry_point = "main",
+        .module = shader_module,
+        .entry_point = "frag_main",
         .targets = &.{color_target},
     });
 
@@ -66,8 +64,8 @@ pub fn init(app: *App, core: *mach.Core) !void {
         .fragment = &fragment,
         .layout = pipeline_layout,
         .vertex = gpu.VertexState.init(.{
-            .module = vs_module,
-            .entry_point = "main",
+            .module = shader_module,
+            .entry_point = "vertex_main",
             .buffers = &.{vertex_buffer_layout},
         }),
         .primitive = .{
@@ -119,8 +117,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
     app.bind_group1 = bind_group1;
     app.bind_group2 = bind_group2;
 
-    vs_module.release();
-    fs_module.release();
+    shader_module.release();
     pipeline_layout.release();
     bgl.release();
 }

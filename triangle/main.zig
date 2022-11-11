@@ -8,8 +8,7 @@ pipeline: *gpu.RenderPipeline,
 queue: *gpu.Queue,
 
 pub fn init(app: *App, core: *mach.Core) !void {
-    const vs_module = core.device.createShaderModuleWGSL("vert.wgsl", @embedFile("vert.wgsl"));
-    const fs_module = core.device.createShaderModuleWGSL("frag.wgsl", @embedFile("frag.wgsl"));
+    const shader_module = core.device.createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
 
     // Fragment state
     const blend = gpu.BlendState{};
@@ -19,23 +18,22 @@ pub fn init(app: *App, core: *mach.Core) !void {
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
     const fragment = gpu.FragmentState.init(.{
-        .module = fs_module,
-        .entry_point = "main",
+        .module = shader_module,
+        .entry_point = "frag_main",
         .targets = &.{color_target},
     });
     const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
         .fragment = &fragment,
         .vertex = gpu.VertexState{
-            .module = vs_module,
-            .entry_point = "main",
+            .module = shader_module,
+            .entry_point = "vertex_main",
         },
     };
 
     app.pipeline = core.device.createRenderPipeline(&pipeline_descriptor);
     app.queue = core.device.getQueue();
 
-    vs_module.release();
-    fs_module.release();
+    shader_module.release();
 }
 
 pub fn deinit(_: *App, _: *mach.Core) void {}
