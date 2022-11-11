@@ -71,7 +71,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
             .depth_compare = .less,
         },
         .vertex = gpu.VertexState.init(.{
-            .module = vs_module,
+            .module = shader_module,
             .entry_point = "vertex_main",
             .buffers = &.{vertex_buffer_layout},
         }),

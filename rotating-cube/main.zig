@@ -42,7 +42,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
     const fragment = gpu.FragmentState.init(.{
-        .module = vertex_module,
+        .module = shader_module,
         .entry_point = "frag_main",
         .targets = &.{color_target},
     });
