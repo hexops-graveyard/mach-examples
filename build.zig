@@ -18,10 +18,12 @@ pub fn build(b: *std.build.Builder) !void {
         std_platform_only: bool = false,
         has_assets: bool = false,
         use_freetype: bool = false,
+        use_model3d: bool = false,
     }{
         .{ .name = "triangle" },
         .{ .name = "triangle-msaa" },
         .{ .name = "boids" },
+        .{ .name = "pbr-basic", .deps = &.{ Packages.zmath, Packages.model3d }, .use_model3d = true },
         .{ .name = "rotating-cube", .deps = &.{Packages.zmath} },
         .{ .name = "pixel-post-process", .deps = &.{Packages.zmath} },
         .{ .name = "two-cubes", .deps = &.{Packages.zmath} },
@@ -56,6 +58,7 @@ pub fn build(b: *std.build.Builder) !void {
                 .res_dirs = if (example.has_assets) &.{example.name ++ "/assets"} else null,
                 .watch_paths = &.{example.name},
                 .use_freetype = if (example.use_freetype) "freetype" else null,
+                .use_model3d = example.use_model3d,
             },
         );
         app.setBuildMode(mode);
@@ -63,6 +66,7 @@ pub fn build(b: *std.build.Builder) !void {
         app.install();
 
         const compile_step = b.step(example.name, "Compile " ++ example.name);
+
         compile_step.dependOn(&app.getInstallStep().?.step);
 
         const run_cmd = try app.run();
@@ -99,6 +103,10 @@ const Packages = struct {
     const zigimg = Pkg{
         .name = "zigimg",
         .source = .{ .path = "libs/zigimg/zigimg.zig" },
+    };
+    const model3d = Pkg{
+        .name = "model3d",
+        .source = .{ .path = "libs/mach/libs/model3d/src/main.zig" },
     };
 };
 
