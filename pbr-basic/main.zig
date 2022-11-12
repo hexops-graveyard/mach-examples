@@ -21,10 +21,35 @@ const Model = struct {
     index_buffer: *gpu.Buffer,
 };
 
+const Material = struct {
+    const Params = extern struct {
+        roughness: f32,
+        metallic: f32,
+        color: Vec3,
+    };
+
+    name: []const u8,
+    params: Params,
+};
+
+const materials = [_]Material{
+    .{ .name = "Gold", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 1.0, 0.765557, 0.336057 } } },
+    .{ .name = "Copper", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 0.955008, 0.637427, 0.538163 } } },
+    .{ .name = "Chromium", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 0.549585, 0.556114, 0.554256 } } },
+    .{ .name = "Nickel", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 1.0, 0.608679, 0.525649 } } },
+    .{ .name = "Titanium", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 0.541931, 0.496791, 0.449419 } } },
+    .{ .name = "Cobalt", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 0.662124, 0.654864, 0.633732 } } },
+    .{ .name = "Platinum", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 0.672411, 0.637331, 0.585456 } } },
+    // Testing colors
+    .{ .name = "White", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 1.0, 1.0, 1.0 } } },
+    .{ .name = "Red", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 1.0, 0.0, 0.0 } } },
+    .{ .name = "Blue", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 0.0, 0.0, 1.0 } } },
+    .{ .name = "Black", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 0.0, 0.0, 0.0 } } },
+};
+
 var models: [4]Model = undefined;
 
 const model_paths = [_][]const u8{
-    projectRootPath() ++ "/assets/sphere_ascii.m3d",
     projectRootPath() ++ "/assets/sphere.m3d",
     projectRootPath() ++ "/assets/teapot.m3d",
     projectRootPath() ++ "/assets/torusknot.m3d",
@@ -294,7 +319,7 @@ fn updateDynamicUniformBuffer(encoder: *gpu.CommandEncoder) void {
             object_params_dynamic[index].position[2] = (@intToFloat(f32, y) - (grid_dimensions_float / 2)) * 2.5;
             material_params_dynamic[index].metallic = zm.clamp(@intToFloat(f32, x) / (grid_dimensions_float - 1), 0.1, 1.0);
             material_params_dynamic[index].roughness = zm.clamp(@intToFloat(f32, y) / (grid_dimensions_float - 1), 0.05, 1.0);
-            material_params_dynamic[index].color = material_params_dynamic[current_material_index].color;
+            material_params_dynamic[index].color = materials[current_material_index].params.color;
             index += 1;
         }
     }
@@ -558,7 +583,6 @@ fn setupRenderPass(app: *App, core: *mach.Core) void {
         .depth_load_op = .clear,
         .depth_store_op = .store,
         .depth_clear_value = 1.0,
-        .clear_depth = 1.0,
         .clear_stencil = 0,
         .stencil_load_op = .clear,
         .stencil_store_op = .store,
@@ -635,7 +659,6 @@ pub fn resize(app: *App, core: *mach.Core, width: u32, height: u32) !void {
         .depth_load_op = .clear,
         .depth_store_op = .store,
         .depth_clear_value = 1.0,
-        .clear_depth = 1.0,
         .clear_stencil = 0,
         .stencil_load_op = .clear,
         .stencil_store_op = .store,
@@ -692,7 +715,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         };
         defer model_file.close();
 
-        var model_data = try model_file.readToEndAllocOptions(allocator, 600 * 1024, 600 * 1024, @alignOf(u8), 0);
+        var model_data = try model_file.readToEndAllocOptions(allocator, 4048 * 1024, 4048 * 1024, @alignOf(u8), 0);
         defer allocator.free(model_data);
 
         const m3d_model = m3d.load(model_data, null, null, null) orelse return error.LoadModelFailed;
@@ -706,21 +729,20 @@ pub fn init(app: *App, core: *mach.Core) !void {
         model.vertices = try allocator.alloc(Vertex, vertex_count);
         model.indices = try allocator.alloc(u32, index_count);
 
+        const vertices = m3d_model.handle.vertex[0..vertex_count];
         var i: usize = 0;
         while (i < face_count) : (i += 1) {
             std.debug.assert(i < vertex_count);
 
-            const vertices = m3d_model.handle.vertex[0..vertex_count];
-            const face = m3d_model.handle.face;
-
-            model.indices[i + 0] = face.*.vertex[0];
-            model.indices[i + 1] = face.*.vertex[1];
-            model.indices[i + 2] = face.*.vertex[2];
+            const face = m3d_model.handle.face[i];
+            model.indices[(i * 3) + 0] = face.vertex[0];
+            model.indices[(i * 3) + 1] = face.vertex[1];
+            model.indices[(i * 3) + 2] = face.vertex[2];
             // TODO: memcpy ?
 
-            const normal0 = face.*.normal[0];
-            const normal1 = face.*.normal[1];
-            const normal2 = face.*.normal[2];
+            const normal0 = face.normal[0];
+            const normal1 = face.normal[1];
+            const normal2 = face.normal[2];
 
             if (normal0 == std.math.maxInt(u32)) {
                 std.log.warn("No normals", .{});
@@ -731,15 +753,15 @@ pub fn init(app: *App, core: *mach.Core) !void {
             std.debug.assert(normal1 < vertices.len);
             std.debug.assert(normal2 < vertices.len);
 
-            model.vertices[i].normal[0] = vertices[normal0].x;
-            model.vertices[i].normal[1] = vertices[normal0].y;
-            model.vertices[i].normal[2] = vertices[normal0].z;
-            model.vertices[i].normal[0] = vertices[normal1].x;
-            model.vertices[i].normal[1] = vertices[normal1].y;
-            model.vertices[i].normal[2] = vertices[normal1].z;
-            model.vertices[i].normal[0] = vertices[normal2].x;
-            model.vertices[i].normal[1] = vertices[normal2].y;
-            model.vertices[i].normal[2] = vertices[normal2].z;
+            model.vertices[i + 0].normal[0] = vertices[normal0].x;
+            model.vertices[i + 0].normal[1] = vertices[normal0].y;
+            model.vertices[i + 0].normal[2] = vertices[normal0].z;
+            model.vertices[i + 1].normal[0] = vertices[normal1].x;
+            model.vertices[i + 1].normal[1] = vertices[normal1].y;
+            model.vertices[i + 1].normal[2] = vertices[normal1].z;
+            model.vertices[i + 2].normal[0] = vertices[normal2].x;
+            model.vertices[i + 2].normal[1] = vertices[normal2].y;
+            model.vertices[i + 2].normal[2] = vertices[normal2].z;
         }
         i = 0;
         while (i < vertex_count) : (i += 1) {
