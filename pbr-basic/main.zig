@@ -233,7 +233,7 @@ inline fn roundToMultipleOf4(comptime T: type, value: T) T {
     return (value + 3) & ~@as(T, 3);
 }
 
-fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
+fn prepareUniformBuffers(app: *App, core: *mach.Core, encoder: *gpu.CommandEncoder) void {
     comptime {
         std.debug.assert(@sizeOf(ObjectParamsDynamic) == 256);
         std.debug.assert(@sizeOf(MaterialParamsDynamic) == 256);
@@ -246,7 +246,7 @@ fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
         .mapped_at_creation = true,
     });
 
-    uniform_buffers.ubo_params.size = roundToMultipleOf4(u32, @intCast(u32, @sizeOf(UniformBuffers.Params)));
+    uniform_buffers.ubo_params.size = roundToMultipleOf4(u32, @intCast(u32, @sizeOf(UboParams)));
     uniform_buffers.ubo_params.buffer = core.device.createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = uniform_buffers.ubo_params.size,
@@ -258,10 +258,11 @@ fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
     //
     uniform_buffers.material_params.model_size = @sizeOf(Vec2) + @sizeOf(Vec3);
     uniform_buffers.material_params.buffer_size = roundToMultipleOf4(u32, @intCast(u32, @sizeOf(MaterialParamsDynamicGrid)));
+    std.debug.assert(uniform_buffers.material_params.buffer_size >= uniform_buffers.material_params.model_size);
     uniform_buffers.material_params.buffer = core.device.createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = uniform_buffers.material_params.buffer_size,
-        .mapped_at_creation = false,
+        .mapped_at_creation = true,
     });
 
     //
@@ -269,18 +270,19 @@ fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
     //
     uniform_buffers.object_params.model_size = @sizeOf(Vec3);
     uniform_buffers.object_params.buffer_size = roundToMultipleOf4(u32, @intCast(u32, @sizeOf(MaterialParamsDynamicGrid)));
+    std.debug.assert(uniform_buffers.object_params.buffer_size >= uniform_buffers.object_params.model_size);
     uniform_buffers.object_params.buffer = core.device.createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = uniform_buffers.object_params.buffer_size,
-        .mapped_at_creation = false,
+        .mapped_at_creation = true,
     });
 
-    updateUniformBuffers(app, core);
-    app.updateDynamicUniformBuffer();
-    app.updateLights();
+    app.updateUniformBuffers(core, encoder);
+    updateDynamicUniformBuffer(encoder);
+    app.updateLights(encoder);
 }
 
-fn updateDynamicUniformBuffer(app: *App) void {
+fn updateDynamicUniformBuffer(encoder: *gpu.CommandEncoder) void {
     var index: u32 = 0;
     var y: usize = 0;
     while (y < grid_dimensions) : (y += 1) {
@@ -296,19 +298,21 @@ fn updateDynamicUniformBuffer(app: *App) void {
             index += 1;
         }
     }
-    app.queue.writeBuffer(
+    encoder.writeBuffer(
         uniform_buffers.object_params.buffer,
         0,
         &object_params_dynamic,
     );
-    app.queue.writeBuffer(
+    encoder.writeBuffer(
         uniform_buffers.material_params.buffer,
         0,
         &material_params_dynamic,
     );
+    uniform_buffers.object_params.buffer.unmap();
+    uniform_buffers.material_params.buffer.unmap();
 }
 
-fn updateUniformBuffers(app: *App, core: *mach.Core) void {
+fn updateUniformBuffers(app: *App, core: *mach.Core, encoder: *gpu.CommandEncoder) void {
     const time = app.timer.read();
     const model_vec = zm.mul(zm.rotationX(time * (std.math.pi / 2.0)), zm.rotationZ(time * (std.math.pi / 2.0)));
     ubo_matrices.model[0] = model_vec[0];
@@ -334,12 +338,11 @@ fn updateUniformBuffers(app: *App, core: *mach.Core) void {
     ubo_matrices.projection[1] = projection[1];
     ubo_matrices.projection[2] = projection[2];
     ubo_matrices.projection[3] = projection[3];
-
-    // TODO: Ensure format in buffer
-    app.queue.writeBuffer(uniform_buffers.ubo_matrices.buffer, 0, &[_]UboMatrices{ubo_matrices});
+    encoder.writeBuffer(uniform_buffers.ubo_matrices.buffer, 0, &[_]UboMatrices{ubo_matrices});
+    uniform_buffers.ubo_matrices.buffer.unmap();
 }
 
-fn updateLights(app: *App) void {
+fn updateLights(app: *App, encoder: *gpu.CommandEncoder) void {
     const p: f32 = 15.0;
     // TODO: Assigning directly triggers a compilation error
     //       with no message
@@ -360,11 +363,12 @@ fn updateLights(app: *App) void {
     ubo_params.lights[0][2] = @cos(time * 360.0) * 20.0;
     ubo_params.lights[1][0] = @cos(time * 360.0) * 20.0;
     ubo_params.lights[1][1] = @sin(time * 360.0) * 20.0;
-    app.queue.writeBuffer(
+    encoder.writeBuffer(
         uniform_buffers.ubo_params.buffer,
         0,
         &[_]UboParams{ubo_params},
     );
+    uniform_buffers.ubo_params.buffer.unmap();
 }
 
 fn setupPipeline(app: *App, core: *mach.Core) void {
@@ -431,19 +435,19 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
         },
     });
 
-    const fragment_shader_code = @embedFile("pbr.frag.spv");
-    const fragment_shader_module = core.device.createShaderModule(&.{
-        .next_in_chain = .{ .spirv_descriptor = &.{
-            .code = @ptrCast([*]const u32, @alignCast(@alignOf(u32), &fragment_shader_code.*[0])),
-            .code_size = fragment_shader_code.len,
-        } },
-    });
-
     const vertex_shader_code = @embedFile("pbr.vert.spv");
     const vertex_shader_module = core.device.createShaderModule(&.{
         .next_in_chain = .{ .spirv_descriptor = &.{
-            .code = @ptrCast([*]const u32, @alignCast(@alignOf(u32), &vertex_shader_code.*[0])),
-            .code_size = vertex_shader_code.len,
+            .code = @ptrCast([*]const u32, @alignCast(4, vertex_shader_code)),
+            .code_size = vertex_shader_code.len / 4,
+        } },
+    });
+
+    const fragment_shader_code = @embedFile("pbr.frag.spv");
+    const fragment_shader_module = core.device.createShaderModule(&.{
+        .next_in_chain = .{ .spirv_descriptor = &.{
+            .code = @ptrCast([*]const u32, @alignCast(4, fragment_shader_code)),
+            .code_size = fragment_shader_code.len / 4,
         } },
     });
 
@@ -484,6 +488,9 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
 
     app.render_pipeline = core.device.createRenderPipeline(&pipeline_descriptor);
 
+    vertex_shader_module.release();
+    fragment_shader_module.release();
+
     {
         const bind_group_entries = [_]gpu.BindGroup.Entry{
             .{
@@ -514,7 +521,6 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
             }),
         );
     }
-    // TODO: Free shader modules
 }
 
 fn setupRenderPass(app: *App, core: *mach.Core) void {
@@ -523,13 +529,13 @@ fn setupRenderPass(app: *App, core: *mach.Core) void {
             .r = 0.0,
             .g = 0.0,
             .b = 0.0,
-            .a = 1.0,
+            .a = 0.0,
         },
         .load_op = .clear,
         .store_op = .store,
     };
 
-    const depth_stencil_texture = core.device.createTexture(&.{
+    app.depth_texture = core.device.createTexture(&.{
         .usage = .{ .render_attachment = true, .copy_src = true },
         .format = .depth24_plus_stencil8,
         .sample_count = 1,
@@ -540,14 +546,14 @@ fn setupRenderPass(app: *App, core: *mach.Core) void {
         },
     });
 
-    const depth_texture_view = depth_stencil_texture.createView(&.{
+    const depth_texture_view = app.depth_texture.createView(&.{
         .format = .depth24_plus_stencil8,
         .dimension = .dimension_2d,
         .array_layer_count = 1,
         .aspect = .all,
     });
 
-    const depth_stencil_attachment_description = gpu.RenderPassDepthStencilAttachment{
+    app.depth_stencil_attachment_description = gpu.RenderPassDepthStencilAttachment{
         .view = depth_texture_view,
         .depth_load_op = .clear,
         .depth_store_op = .store,
@@ -557,45 +563,35 @@ fn setupRenderPass(app: *App, core: *mach.Core) void {
         .stencil_load_op = .clear,
         .stencil_store_op = .store,
     };
+}
 
+pub fn update(app: *App, core: *mach.Core) !void {
+    const back_buffer_view = core.swap_chain.?.getCurrentTextureView();
+    app.color_attachment.view = back_buffer_view;
     app.render_pass_descriptor = gpu.RenderPassDescriptor{
         .color_attachment_count = 1,
         .color_attachments = &[_]gpu.RenderPassColorAttachment{app.color_attachment},
-        .depth_stencil_attachment = &depth_stencil_attachment_description,
-    };
-}
-
-fn draw(app: *App, core: *mach.Core) void {
-    const back_buffer_view = core.swap_chain.?.getCurrentTextureView();
-    const color_attachment = gpu.RenderPassColorAttachment{
-        .view = back_buffer_view,
-        .clear_value = std.mem.zeroes(gpu.Color),
-        .load_op = .clear,
-        .store_op = .store,
+        .depth_stencil_attachment = &app.depth_stencil_attachment_description,
     };
     const encoder = core.device.createCommandEncoder(null);
-    const render_pass_descriptor = gpu.RenderPassDescriptor.init(.{
-        .color_attachments = &.{color_attachment},
-    });
-
     const current_model = models[current_object_index];
 
-    const pass = encoder.beginRenderPass(&render_pass_descriptor);
-    pass.setPipeline(app.pipeline);
+    const pass = encoder.beginRenderPass(&app.render_pass_descriptor);
+    pass.setPipeline(app.render_pipeline);
 
     var i: usize = 0;
     while (i < (grid_dimensions * grid_dimensions)) : (i += 1) {
         const alignment = 256;
-        const dynamic_offset: u32 = i * alignment;
+        const dynamic_offset: u32 = @intCast(u32, i) * alignment;
         const dynamic_offsets = [2]u32{ dynamic_offset, dynamic_offset };
-        pass.setBindGroup(0, app.bind_group, &.{dynamic_offsets});
+        pass.setBindGroup(0, app.bind_group, &dynamic_offsets);
         if (!app.buffers_bound) {
             pass.setVertexBuffer(0, current_model.vertex_buffer, 0, @sizeOf(Vertex) * current_model.vertices.len);
-            pass.setVertexBuffer(0, current_model.index_buffer, 0, @sizeOf(u32) * current_model.indices.len);
+            pass.setIndexBuffer(current_model.index_buffer, .uint32, 0, gpu.whole_size);
             app.buffers_bound = true;
         }
         pass.drawIndexed(
-            current_model.indices.len, // index_count
+            @intCast(u32, current_model.indices.len), // index_count
             1, // instance_count
             0, // first_index
             0, // base_vertex
@@ -613,6 +609,37 @@ fn draw(app: *App, core: *mach.Core) void {
     command.release();
     core.swap_chain.?.present();
     back_buffer_view.release();
+
+    app.buffers_bound = false;
+}
+
+pub fn resize(app: *App, core: *mach.Core, width: u32, height: u32) !void {
+    app.depth_texture = core.device.createTexture(&gpu.Texture.Descriptor{
+        .usage = .{ .render_attachment = true },
+        .format = .depth24_plus_stencil8,
+        .sample_count = 1,
+        .size = .{
+            .width = width,
+            .height = height,
+            .depth_or_array_layers = 1,
+        },
+    });
+    app.depth_view = app.depth_texture.createView(&gpu.TextureView.Descriptor{
+        .format = .depth24_plus_stencil8,
+        .dimension = .dimension_2d,
+        .array_layer_count = 1,
+        .aspect = .all,
+    });
+    app.depth_stencil_attachment_description = gpu.RenderPassDepthStencilAttachment{
+        .view = app.depth_view,
+        .depth_load_op = .clear,
+        .depth_store_op = .store,
+        .depth_clear_value = 1.0,
+        .clear_depth = 1.0,
+        .clear_stencil = 0,
+        .stencil_load_op = .clear,
+        .stencil_store_op = .store,
+    };
 }
 
 render_pipeline: *gpu.RenderPipeline,
@@ -621,16 +648,14 @@ bind_group: *gpu.BindGroup,
 frame_counter: usize,
 queue: *gpu.Queue,
 color_attachment: gpu.RenderPassColorAttachment,
+depth_stencil_attachment_description: gpu.RenderPassDepthStencilAttachment,
+depth_texture: *gpu.Texture,
+depth_view: *gpu.TextureView,
 timer: mach.Timer,
 prepared: bool = false,
 buffers_bound: bool = false,
 
 pub fn deinit(_: *App, _: *mach.Core) void {}
-
-pub fn update(app: *App, core: *mach.Core) !void {
-    _ = app;
-    _ = core;
-}
 
 pub fn init(app: *App, core: *mach.Core) !void {
     app.timer = try mach.Timer.start();
@@ -657,10 +682,9 @@ pub fn init(app: *App, core: *mach.Core) !void {
     // Load Assets
     //
 
-    var allocator = std.heap.c_allocator;
-    var path_buffer: [1024]u8 = undefined;
-    const current_path = try std.fs.cwd().realpath(".", &path_buffer);
+    const encoder = core.device.createCommandEncoder(null);
 
+    var allocator = std.heap.c_allocator;
     for (model_paths) |model_path, model_path_i| {
         var model_file = std.fs.openFileAbsolute(model_path, .{}) catch |err| {
             std.log.err("Failed to load model: '{s}' Error: {}", .{ model_path, err });
@@ -732,14 +756,32 @@ pub fn init(app: *App, core: *mach.Core) !void {
             .size = @sizeOf(Vertex) * model.vertices.len,
             .mapped_at_creation = true,
         });
+        encoder.writeBuffer(
+            model.vertex_buffer,
+            0,
+            model.vertices,
+        );
+        model.vertex_buffer.unmap();
+
         model.index_buffer = core.device.createBuffer(&.{
             .usage = .{ .copy_dst = true, .index = true },
             .size = @sizeOf(u32) * model.indices.len,
             .mapped_at_creation = true,
         });
+        encoder.writeBuffer(
+            model.index_buffer,
+            0,
+            model.indices,
+        );
+        model.index_buffer.unmap();
     }
 
-    prepareUniformBuffers(app, core);
+    prepareUniformBuffers(app, core, encoder);
+    var command = encoder.finish(null);
+    encoder.release();
+    app.queue.submit(&[_]*gpu.CommandBuffer{command});
+    command.release();
+
     setupPipeline(app, core);
     setupRenderPass(app, core);
 
