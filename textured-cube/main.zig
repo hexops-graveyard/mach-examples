@@ -26,7 +26,7 @@ pub const App = @This();
 pub fn init(app: *App, core: *mach.Core) !void {
     timer = try mach.Timer.start();
 
-    const vs_module = core.device.createShaderModuleWGSL("vert.wgsl", @embedFile("vert.wgsl"));
+    const shader_module = core.device.createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
 
     const vertex_attributes = [_]gpu.VertexAttribute{
         .{ .format = .float32x4, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
@@ -37,8 +37,6 @@ pub fn init(app: *App, core: *mach.Core) !void {
         .step_mode = .vertex,
         .attributes = &vertex_attributes,
     });
-
-    const fs_module = core.device.createShaderModuleWGSL("frag.wgsl", @embedFile("frag.wgsl"));
 
     const blend = gpu.BlendState{
         .color = .{
@@ -58,8 +56,8 @@ pub fn init(app: *App, core: *mach.Core) !void {
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
     const fragment = gpu.FragmentState.init(.{
-        .module = fs_module,
-        .entry_point = "main",
+        .module = shader_module,
+        .entry_point = "frag_main",
         .targets = &.{color_target},
     });
 
@@ -73,8 +71,8 @@ pub fn init(app: *App, core: *mach.Core) !void {
             .depth_compare = .less,
         },
         .vertex = gpu.VertexState.init(.{
-            .module = vs_module,
-            .entry_point = "main",
+            .module = shader_module,
+            .entry_point = "vertex_main",
             .buffers = &.{vertex_buffer_layout},
         }),
         .primitive = .{
@@ -152,8 +150,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
     app.depth_texture = null;
     app.depth_texture_view = undefined;
 
-    vs_module.release();
-    fs_module.release();
+    shader_module.release();
 }
 
 pub fn deinit(app: *App, _: *mach.Core) void {

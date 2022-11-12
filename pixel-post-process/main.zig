@@ -219,7 +219,7 @@ fn create_render_textures(app: *App, core: *mach.Core) void {
 }
 
 fn create_draw_pipeline(app: *App, core: *mach.Core) void {
-    const vs_module = core.device.createShaderModuleWGSL("vert.wgsl", @embedFile("vert.wgsl"));
+    const shader_module = core.device.createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
     const vertex_attributes = [_]gpu.VertexAttribute{
         .{ .format = .float32x3, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
         .{ .format = .float32x3, .offset = @offsetOf(Vertex, "normal"), .shader_location = 1 },
@@ -231,12 +231,11 @@ fn create_draw_pipeline(app: *App, core: *mach.Core) void {
         .attributes = &vertex_attributes,
     });
     const vertex = gpu.VertexState.init(.{
-        .module = vs_module,
-        .entry_point = "main",
+        .module = shader_module,
+        .entry_point = "vertex_main",
         .buffers = &.{vertex_buffer_layout},
     });
 
-    const fs_module = core.device.createShaderModuleWGSL("frag.wgsl", @embedFile("frag.wgsl"));
     const blend = gpu.BlendState{};
     const color_target = gpu.ColorTargetState{
         .format = core.swap_chain_format,
@@ -244,8 +243,8 @@ fn create_draw_pipeline(app: *App, core: *mach.Core) void {
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
     const fragment = gpu.FragmentState.init(.{
-        .module = fs_module,
-        .entry_point = "main",
+        .module = shader_module,
+        .entry_point = "frag_main",
         .targets = &.{color_target},
     });
 
@@ -327,8 +326,7 @@ fn create_draw_pipeline(app: *App, core: *mach.Core) void {
     app.uniform_buffer = uniform_buffer;
     app.bind_group = bind_group;
 
-    vs_module.release();
-    fs_module.release();
+    shader_module.release();
     pipeline_layout.release();
     bgl.release();
 }
