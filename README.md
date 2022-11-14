@@ -26,7 +26,7 @@ In your `build.zig`, use `mach.App`:
 
 ```zig
 const std = @import("std");
-const mach = @import("lib/mach/build.zig");
+const mach = @import("libs/mach/build.zig");
 
 pub fn build(b: *std.build.Builder) !void {
     const target = b.standardTargetOptions(.{});
