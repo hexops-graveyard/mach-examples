@@ -3,6 +3,7 @@ const mach = @import("mach");
 const gpu = @import("gpu");
 const zm = @import("zmath");
 const m3d = @import("model3d");
+const assets = @import("assets");
 
 pub const App = @This();
 
@@ -40,6 +41,17 @@ const PressedKeys = packed struct(u16) {
     up: bool = false,
     down: bool = false,
     padding: u12 = undefined,
+
+    pub inline fn areKeysPressed(self: @This()) bool {
+        return (self.up or self.down or self.left or self.right);
+    }
+
+    pub inline fn clear(self: *@This()) void {
+        self.right = false;
+        self.left = false;
+        self.up = false;
+        self.down = false;
+    }
 };
 
 const Camera = struct {
@@ -58,13 +70,6 @@ const Camera = struct {
         },
     };
 
-    const Keys = struct {
-        left: bool = false,
-        right: bool = false,
-        up: bool = false,
-        down: bool = false,
-    };
-
     rotation: Vec3 = .{ 0.0, 0.0, 0.0 },
     position: Vec3 = .{ 0.0, 0.0, 0.0 },
     view_position: Vec4 = .{ 0.0, 0.0, 0.0, 0.0 },
@@ -75,7 +80,62 @@ const Camera = struct {
     movement_speed: f32 = 0.0,
     updated: bool = false,
     matrices: Matrices = .{},
-    keys: Keys = .{},
+
+    pub fn calculateMovement(self: *@This(), pressed_keys: PressedKeys) void {
+        std.debug.assert(pressed_keys.areKeysPressed());
+        const rotation_radians = Vec3{
+            toRadians(self.rotation[0]),
+            toRadians(self.rotation[1]),
+            toRadians(self.rotation[2]),
+        };
+        var camera_front = zm.Vec{ -zm.cos(rotation_radians[0]) * zm.sin(rotation_radians[1]), zm.sin(rotation_radians[0]), zm.cos(rotation_radians[0]) * zm.cos(rotation_radians[1]), 0 };
+        camera_front = zm.normalize3(camera_front);
+        if (pressed_keys.up) {
+            camera_front[0] *= self.movement_speed;
+            camera_front[1] *= self.movement_speed;
+            camera_front[2] *= self.movement_speed;
+            self.position = Vec3{
+                self.position[0] + camera_front[0],
+                self.position[1] + camera_front[1],
+                self.position[2] + camera_front[2],
+            };
+        }
+        if (pressed_keys.down) {
+            camera_front[0] *= self.movement_speed;
+            camera_front[1] *= self.movement_speed;
+            camera_front[2] *= self.movement_speed;
+            self.position = Vec3{
+                self.position[0] - camera_front[0],
+                self.position[1] - camera_front[1],
+                self.position[2] - camera_front[2],
+            };
+        }
+        if (pressed_keys.right) {
+            camera_front = zm.cross3(.{ 0.0, 1.0, 0.0, 0.0 }, camera_front);
+            camera_front = zm.normalize3(camera_front);
+            camera_front[0] *= self.movement_speed;
+            camera_front[1] *= self.movement_speed;
+            camera_front[2] *= self.movement_speed;
+            self.position = Vec3{
+                self.position[0] - camera_front[0],
+                self.position[1] - camera_front[1],
+                self.position[2] - camera_front[2],
+            };
+        }
+        if (pressed_keys.left) {
+            camera_front = zm.cross3(.{ 0.0, 1.0, 0.0, 0.0 }, camera_front);
+            camera_front = zm.normalize3(camera_front);
+            camera_front[0] *= self.movement_speed;
+            camera_front[1] *= self.movement_speed;
+            camera_front[2] *= self.movement_speed;
+            self.position = Vec3{
+                self.position[0] + camera_front[0],
+                self.position[1] + camera_front[1],
+                self.position[2] + camera_front[2],
+            };
+        }
+        self.updateViewMatrix();
+    }
 
     fn updateViewMatrix(self: *@This()) void {
         const rotation_x = zm.rotationX(toRadians(self.rotation[2]));
@@ -201,10 +261,12 @@ const materials = [_]Material{
 
 const grid_dimensions = 7;
 const model_paths = [_][]const u8{
-    projectRootPath() ++ "/assets/sphere_ascii.m3d",
-    projectRootPath() ++ "/assets/teapot_ascii.m3d",
-    projectRootPath() ++ "/assets/torusknot_ascii.m3d",
-    projectRootPath() ++ "/assets/venus_ascii.m3d",
+    assets.teapot_ascii_path,
+    // TODO: Setup Imgui bindings and allow option to switch between models
+    //       Currently there is no point loading in the other models
+    // assets.sphere_ascii_path,
+    // assets.torusknot_ascii_path,
+    // assets.venus_ascii_path,
 };
 
 //
@@ -248,12 +310,10 @@ pub fn init(app: *App, core: *mach.Core) !void {
     //
     // Setup Camera
     //
-
     const aspect_ratio: f32 = @intToFloat(f32, core.current_desc.width) / @intToFloat(f32, core.current_desc.height);
-
     app.camera.setPosition(.{ 10.0, 13.0, 1.8 });
     app.camera.setRotation(.{ 62.5, 90.0, 0.0 });
-    app.camera.setMovementSpeed(4.0);
+    app.camera.setMovementSpeed(0.5);
     app.camera.setPerspective(60.0, aspect_ratio, 0.1, 256.0);
     app.camera.setRotationSpeed(0.25);
 
@@ -283,7 +343,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         model.vertices = try allocator.alloc(Vertex, vertex_count);
         model.indices = try allocator.alloc(u32, index_count);
 
-        const scale: f32 = 0.4;
+        const scale: f32 = 0.45;
         const vertices = m3d_model.handle.vertex[0..vertex_count];
         var i: usize = 0;
         while (i < face_count) : (i += 1) {
@@ -376,6 +436,12 @@ pub fn update(app: *App, core: *mach.Core) !void {
             else => {},
         }
     }
+    if (app.pressed_keys.areKeysPressed()) {
+        app.camera.calculateMovement(app.pressed_keys);
+        app.pressed_keys.clear();
+        updateUniformBuffers(app);
+    }
+
     const back_buffer_view = core.swap_chain.?.getCurrentTextureView();
     app.color_attachment.view = back_buffer_view;
     app.render_pass_descriptor = gpu.RenderPassDescriptor{
