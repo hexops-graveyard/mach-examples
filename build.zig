@@ -71,7 +71,6 @@ pub fn build(b: *std.build.Builder) !void {
         app.install();
 
         const compile_step = b.step(example.name, "Compile " ++ example.name);
-
         compile_step.dependOn(&app.getInstallStep().?.step);
 
         const run_cmd = try app.run();

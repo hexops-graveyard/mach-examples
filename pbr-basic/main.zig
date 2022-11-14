@@ -281,7 +281,7 @@ queue: *gpu.Queue,
 color_attachment: gpu.RenderPassColorAttachment,
 depth_stencil_attachment_description: gpu.RenderPassDepthStencilAttachment,
 depth_texture: *gpu.Texture,
-depth_view: *gpu.TextureView,
+depth_texture_view: *gpu.TextureView,
 timer: f32,
 pressed_keys: PressedKeys,
 models: [4]Model,
@@ -420,7 +420,16 @@ pub fn init(app: *App, core: *mach.Core) !void {
     setupRenderPass(app, core);
 }
 
-pub fn deinit(_: *App, _: *mach.Core) void {}
+pub fn deinit(app: *App, _: *mach.Core) void {
+    app.bind_group.release();
+    app.render_pipeline.release();
+    app.depth_texture_view.release();
+    app.depth_texture.release();
+    app.uniform_buffers.ubo_matrices.buffer.release();
+    app.uniform_buffers.ubo_params.buffer.release();
+    app.uniform_buffers.material_params.buffer.release();
+    app.uniform_buffers.object_params.buffer.release();
+}
 
 pub fn update(app: *App, core: *mach.Core) !void {
     const frame_start_sec = std.time.timestamp();
@@ -496,6 +505,8 @@ pub fn update(app: *App, core: *mach.Core) !void {
 }
 
 pub fn resize(app: *App, core: *mach.Core, width: u32, height: u32) !void {
+    app.depth_texture_view.release();
+    app.depth_texture.release();
     app.depth_texture = core.device.createTexture(&gpu.Texture.Descriptor{
         .usage = .{ .render_attachment = true },
         .format = .depth24_plus_stencil8,
@@ -506,14 +517,14 @@ pub fn resize(app: *App, core: *mach.Core, width: u32, height: u32) !void {
             .depth_or_array_layers = 1,
         },
     });
-    app.depth_view = app.depth_texture.createView(&gpu.TextureView.Descriptor{
+    app.depth_texture_view = app.depth_texture.createView(&gpu.TextureView.Descriptor{
         .format = .depth24_plus_stencil8,
         .dimension = .dimension_2d,
         .array_layer_count = 1,
         .aspect = .all,
     });
     app.depth_stencil_attachment_description = gpu.RenderPassDepthStencilAttachment{
-        .view = app.depth_view,
+        .view = app.depth_texture_view,
         .depth_load_op = .clear,
         .depth_store_op = .store,
         .depth_clear_value = 1.0,
@@ -818,7 +829,7 @@ fn setupRenderPass(app: *App, core: *mach.Core) void {
         },
     });
 
-    const depth_texture_view = app.depth_texture.createView(&.{
+    app.depth_texture_view = app.depth_texture.createView(&.{
         .format = .depth24_plus_stencil8,
         .dimension = .dimension_2d,
         .array_layer_count = 1,
@@ -826,7 +837,7 @@ fn setupRenderPass(app: *App, core: *mach.Core) void {
     });
 
     app.depth_stencil_attachment_description = gpu.RenderPassDepthStencilAttachment{
-        .view = depth_texture_view,
+        .view = app.depth_texture_view,
         .depth_load_op = .clear,
         .depth_store_op = .store,
         .depth_clear_value = 1.0,
