@@ -6,7 +6,7 @@ struct VertexOut {
     @location(1) uv: vec2<f32>,
 }
 
-@vertex fn main(
+@vertex fn vertex_main(
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32> 
@@ -18,3 +18,10 @@ struct VertexOut {
     return output;
 }
 
+@fragment fn frag_main(
+    @location(0) normal: vec3<f32>,
+    @location(1) uv: vec2<f32>,
+) -> @location(0) vec4<f32> {
+    var color = floor((uv * 0.5 + 0.25) * 32) / 32;
+    return vec4<f32>(color, 1, 1);
+}

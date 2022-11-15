@@ -7,7 +7,7 @@ struct VertexOutput {
 };
 
 @vertex
-fn main(@builtin(instance_index) instanceIdx : u32,
+fn vertex_main(@builtin(instance_index) instanceIdx : u32,
         @location(0) position : vec4<f32>,
         @location(1) uv : vec2<f32>) -> VertexOutput {
   var output : VertexOutput;
@@ -15,4 +15,11 @@ fn main(@builtin(instance_index) instanceIdx : u32,
   output.fragUV = uv;
   output.fragPosition = 0.5 * (position + vec4<f32>(1.0, 1.0, 1.0, 1.0));
   return output;
+}
+
+@fragment fn frag_main(
+    @location(0) fragUV: vec2<f32>,
+    @location(1) fragPosition: vec4<f32>
+) -> @location(0) vec4<f32> {
+    return fragPosition;
 }
