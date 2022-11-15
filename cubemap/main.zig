@@ -6,6 +6,7 @@ const zm = @import("zmath");
 const zigimg = @import("zigimg");
 const Vertex = @import("cube_mesh.zig").Vertex;
 const vertices = @import("cube_mesh.zig").vertices;
+const assets = @import("assets");
 
 const UniformBufferObject = struct {
     mat: zm.Mat,
@@ -111,17 +112,17 @@ pub fn init(app: *App, core: *mach.Core) !void {
 
     // WebGPU expects the cubemap textures in this order: (+X,-X,+Y,-Y,+Z,-Z)
     var images: [6]zigimg.Image = undefined;
-    images[0] = try zigimg.Image.fromMemory(core.allocator, @embedFile("posx.png"));
+    images[0] = try zigimg.Image.fromMemory(core.allocator, assets.skybox.posx_image);
     defer images[0].deinit();
-    images[1] = try zigimg.Image.fromMemory(core.allocator, @embedFile("negx.png"));
+    images[1] = try zigimg.Image.fromMemory(core.allocator, assets.skybox.negx_image);
     defer images[1].deinit();
-    images[2] = try zigimg.Image.fromMemory(core.allocator, @embedFile("posy.png"));
+    images[2] = try zigimg.Image.fromMemory(core.allocator, assets.skybox.posy_image);
     defer images[2].deinit();
-    images[3] = try zigimg.Image.fromMemory(core.allocator, @embedFile("negy.png"));
+    images[3] = try zigimg.Image.fromMemory(core.allocator, assets.skybox.negy_image);
     defer images[3].deinit();
-    images[4] = try zigimg.Image.fromMemory(core.allocator, @embedFile("posz.png"));
+    images[4] = try zigimg.Image.fromMemory(core.allocator, assets.skybox.posz_image);
     defer images[4].deinit();
-    images[5] = try zigimg.Image.fromMemory(core.allocator, @embedFile("negz.png"));
+    images[5] = try zigimg.Image.fromMemory(core.allocator, assets.skybox.negz_image);
     defer images[5].deinit();
 
     // Use the first image of the set for sizing

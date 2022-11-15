@@ -18,23 +18,30 @@ pub fn build(b: *std.build.Builder) !void {
         std_platform_only: bool = false,
         has_assets: bool = false,
         use_freetype: bool = false,
+        use_model3d: bool = false,
     }{
         .{ .name = "triangle" },
         .{ .name = "triangle-msaa" },
         .{ .name = "boids" },
+        .{ .name = "pbr-basic", .deps = &.{ Packages.zmath, Packages.model3d, Packages.assets }, .use_model3d = true },
         .{ .name = "rotating-cube", .deps = &.{Packages.zmath} },
         .{ .name = "pixel-post-process", .deps = &.{Packages.zmath} },
         .{ .name = "two-cubes", .deps = &.{Packages.zmath} },
         .{ .name = "instanced-cube", .deps = &.{Packages.zmath} },
         .{ .name = "advanced-gen-texture-light", .deps = &.{Packages.zmath} },
         .{ .name = "fractal-cube", .deps = &.{Packages.zmath} },
-        .{ .name = "textured-cube", .deps = &.{ Packages.zmath, Packages.zigimg } },
+        .{ .name = "textured-cube", .deps = &.{ Packages.zmath, Packages.zigimg, Packages.assets } },
         .{ .name = "ecs-app", .deps = &.{} },
-        .{ .name = "image-blur", .deps = &.{Packages.zigimg} },
-        .{ .name = "cubemap", .deps = &.{ Packages.zmath, Packages.zigimg } },
+        .{ .name = "image-blur", .deps = &.{Packages.zigimg, Packages.assets} },
+        .{ .name = "cubemap", .deps = &.{ Packages.zmath, Packages.zigimg, Packages.assets } },
         .{ .name = "map-async", .deps = &.{} },
         .{ .name = "sysaudio", .deps = &.{} },
-        .{ .name = "gkurve", .deps = &.{ Packages.zmath, Packages.zigimg }, .std_platform_only = true, .use_freetype = true },
+        .{
+            .name = "gkurve",
+            .deps = &.{ Packages.zmath, Packages.zigimg, Packages.assets },
+            .std_platform_only = true,
+            .use_freetype = true,
+        },
     }) |example| {
         // FIXME: this is workaround for a problem that some examples
         // (having the std_platform_only=true field) as well as zigimg
@@ -56,6 +63,7 @@ pub fn build(b: *std.build.Builder) !void {
                 .res_dirs = if (example.has_assets) &.{example.name ++ "/assets"} else null,
                 .watch_paths = &.{example.name},
                 .use_freetype = if (example.use_freetype) "freetype" else null,
+                .use_model3d = example.use_model3d,
             },
         );
         app.setBuildMode(mode);
@@ -73,17 +81,6 @@ pub fn build(b: *std.build.Builder) !void {
 
     // @embedFile can't embed files outside the source file's directory, so copy our assets into
     // those directories.
-    copyFile("assets/gotta-go-fast.png", "textured-cube/gotta-go-fast.png");
-    copyFile("assets/gotta-go-fast.png", "gkurve/gotta-go-fast.png");
-    copyFile("assets/gotta-go-fast.png", "image-blur/gotta-go-fast.png");
-
-    copyFile("assets/skybox/posx.png", "cubemap/posx.png");
-    copyFile("assets/skybox/negx.png", "cubemap/negx.png");
-    copyFile("assets/skybox/posy.png", "cubemap/posy.png");
-    copyFile("assets/skybox/negy.png", "cubemap/negy.png");
-    copyFile("assets/skybox/posz.png", "cubemap/posz.png");
-    copyFile("assets/skybox/negz.png", "cubemap/negz.png");
-
     copyFile("libs/mach/libs/freetype/upstream/assets/FiraSans-Regular.ttf", "gkurve/FiraSans-Regular.ttf");
 
     const compile_all = b.step("compile-all", "Compile all examples and applications");
@@ -99,6 +96,14 @@ const Packages = struct {
     const zigimg = Pkg{
         .name = "zigimg",
         .source = .{ .path = "libs/zigimg/zigimg.zig" },
+    };
+    const model3d = Pkg{
+        .name = "model3d",
+        .source = .{ .path = "libs/mach/libs/model3d/src/main.zig" },
+    };
+    const assets = Pkg{
+        .name = "assets",
+        .source = .{ .path = "assets/assets.zig" },
     };
 };
 

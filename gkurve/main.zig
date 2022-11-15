@@ -13,6 +13,7 @@ const Atlas = @import("atlas.zig").Atlas;
 const ft = @import("freetype");
 const Label = @import("label.zig");
 const ResizableLabel = @import("resizable_label.zig");
+const assets = @import("assets");
 
 pub const App = @This();
 
@@ -53,7 +54,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         .rows_per_image = @intCast(u32, atlas_size.height),
     };
 
-    var img = try zigimg.Image.fromMemory(core.allocator, @embedFile("gotta-go-fast.png"));
+    var img = try zigimg.Image.fromMemory(core.allocator, assets.gotta_go_fast_image);
     defer img.deinit();
 
     const atlas_img_region = try app.texture_atlas_data.reserve(core.allocator, @truncate(u32, img.width), @truncate(u32, img.height));
