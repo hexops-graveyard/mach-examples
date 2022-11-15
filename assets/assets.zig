@@ -1,17 +1,17 @@
 const std = @import("std");
 
-pub const sphere_ascii_path = root_path ++ "/sphere_ascii.m3d";
-pub const teapot_ascii_path = root_path ++ "/teapot_ascii.m3d";
-pub const torusknot_ascii_path = root_path ++ "/torusknot_ascii.m3d";
-pub const venus_ascii_path = root_path ++ "/venus_ascii.m3d";
+pub const sphere_path = root_path ++ "/sphere.m3d";
+pub const teapot_path = root_path ++ "/teapot.m3d";
+pub const torusknot_path = root_path ++ "/torusknot.m3d";
+pub const venus_path = root_path ++ "/venus.m3d";
 
-pub const sphere_model_m3d = @embedFile(sphere_ascii_path);
-pub const teapot_model_m3d = @embedFile(teapot_ascii_path);
-pub const torusknot_model_m3d = @embedFile(torusknot_ascii_path);
-pub const venus_model_m3d = @embedFile(venus_ascii_path);
+pub const sphere_model_m3d = @embedFile(sphere_path);
+pub const teapot_model_m3d = @embedFile(teapot_path);
+pub const torusknot_model_m3d = @embedFile(torusknot_path);
+pub const venus_model_m3d = @embedFile(venus_path);
 
 const gotta_go_fast_image_path = root_path ++ "/gotta-go-fast.png";
-pub const gotto_go_fast_image = @embedFile(gotta_go_fast_image_path);
+pub const gotta_go_fast_image = @embedFile(gotta_go_fast_image_path);
 
 pub const skybox = struct {
     const negx_image_path = root_path ++ "/skybox/negx.png";

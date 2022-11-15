@@ -56,18 +56,8 @@ const PressedKeys = packed struct(u16) {
 
 const Camera = struct {
     const Matrices = struct {
-        perspective: zm.Mat = .{
-            .{ 0.0, 0.0, 0.0, 0.0 },
-            .{ 0.0, 0.0, 0.0, 0.0 },
-            .{ 0.0, 0.0, 0.0, 0.0 },
-            .{ 0.0, 0.0, 0.0, 0.0 },
-        },
-        view: zm.Mat = .{
-            .{ 0.0, 0.0, 0.0, 0.0 },
-            .{ 0.0, 0.0, 0.0, 0.0 },
-            .{ 0.0, 0.0, 0.0, 0.0 },
-            .{ 0.0, 0.0, 0.0, 0.0 },
-        },
+        perspective: Mat4 = [1]Vec4{[1]f32{0.0} ** 4} ** 4,
+        view: Mat4 = [1]Vec4{[1]f32{0.0} ** 4} ** 4,
     };
 
     rotation: Vec3 = .{ 0.0, 0.0, 0.0 },
@@ -149,8 +139,11 @@ const Camera = struct {
             self.position[2],
             0,
         });
-
-        self.matrices.view = zm.mul(translation_matrix, rotation_matrix);
+        const view = zm.mul(translation_matrix, rotation_matrix);
+        self.matrices.view[0] = view[0];
+        self.matrices.view[1] = view[1];
+        self.matrices.view[2] = view[2];
+        self.matrices.view[3] = view[3];
         self.view_position = .{
             -self.position[0],
             self.position[1],
@@ -261,12 +254,12 @@ const materials = [_]Material{
 
 const grid_dimensions = 7;
 const model_paths = [_][]const u8{
-    assets.teapot_ascii_path,
+    assets.teapot_path,
     // TODO: Setup Imgui bindings and allow option to switch between models
     //       Currently there is no point loading in the other models
-    // assets.sphere_ascii_path,
-    // assets.torusknot_ascii_path,
-    // assets.venus_ascii_path,
+    // assets.sphere_path,
+    // assets.torusknot_path,
+    // assets.venus_path,
 };
 
 //
@@ -311,7 +304,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
     // Setup Camera
     //
     const aspect_ratio: f32 = @intToFloat(f32, core.current_desc.width) / @intToFloat(f32, core.current_desc.height);
-    app.camera.setPosition(.{ 10.0, 13.0, 1.8 });
+    app.camera.setPosition(.{ 10.0, 6.0, 6.0 });
     app.camera.setRotation(.{ 62.5, 90.0, 0.0 });
     app.camera.setMovementSpeed(0.5);
     app.camera.setPerspective(60.0, aspect_ratio, 0.1, 256.0);
@@ -347,8 +340,6 @@ pub fn init(app: *App, core: *mach.Core) !void {
         const vertices = m3d_model.handle.vertex[0..vertex_count];
         var i: usize = 0;
         while (i < face_count) : (i += 1) {
-            std.debug.assert(i < vertex_count);
-
             const face = m3d_model.handle.face[i];
             const src_base_index: usize = (i * 3);
             model.indices[src_base_index + 0] = face.vertex[0];
@@ -612,16 +603,8 @@ fn updateDynamicUniformBuffer(app: *App) void {
 }
 
 fn updateUniformBuffers(app: *App) void {
-    const projection = app.camera.matrices.perspective;
-    zm.storeArr4(&app.ubo_matrices.projection[0], projection[0]);
-    zm.storeArr4(&app.ubo_matrices.projection[1], projection[1]);
-    zm.storeArr4(&app.ubo_matrices.projection[2], projection[2]);
-    zm.storeArr4(&app.ubo_matrices.projection[3], projection[3]);
-
-    zm.storeArr4(&app.ubo_matrices.view[0], app.camera.matrices.view[0]);
-    zm.storeArr4(&app.ubo_matrices.view[1], app.camera.matrices.view[1]);
-    zm.storeArr4(&app.ubo_matrices.view[2], app.camera.matrices.view[2]);
-    zm.storeArr4(&app.ubo_matrices.view[3], app.camera.matrices.view[3]);
+    app.ubo_matrices.projection = app.camera.matrices.perspective;
+    app.ubo_matrices.view = app.camera.matrices.view;
     const rotation_degrees = if (app.current_object_index == 1) @as(f32, -45.0) else @as(f32, -90.0);
     const model = zm.rotationY(rotation_degrees);
     zm.storeArr4(&app.ubo_matrices.model[0], model[0]);
@@ -845,12 +828,6 @@ fn setupRenderPass(app: *App, core: *mach.Core) void {
         .stencil_load_op = .clear,
         .stencil_store_op = .store,
     };
-}
-
-fn projectRootPath() []const u8 {
-    comptime {
-        return std.fs.path.dirname(@src().file).?;
-    }
 }
 
 inline fn roundToMultipleOf4(comptime T: type, value: T) T {

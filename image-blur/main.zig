@@ -2,6 +2,7 @@ const std = @import("std");
 const mach = @import("mach");
 const gpu = @import("gpu");
 const zigimg = @import("zigimg");
+const assets = @import("assets");
 
 queue: *gpu.Queue,
 blur_pipeline: *gpu.ComputePipeline,
@@ -79,7 +80,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         .min_filter = .linear,
     });
 
-    var img = try zigimg.Image.fromMemory(core.allocator, @embedFile("gotta-go-fast.png"));
+    var img = try zigimg.Image.fromMemory(core.allocator, assets.gotta_go_fast_image);
     defer img.deinit();
 
     const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
