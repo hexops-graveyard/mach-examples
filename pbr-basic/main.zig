@@ -12,6 +12,13 @@ const Vec3 = [3]f32;
 const Vec2 = [2]f32;
 const Mat4 = [4]Vec4;
 
+fn Dimensions2D(comptime T: type) type {
+    return struct {
+        width: T,
+        height: T,
+    };
+}
+
 const Vertex = extern struct {
     position: Vec3,
     normal: Vec3,
@@ -283,6 +290,7 @@ ubo_matrices: UboMatrices,
 uniform_buffers: UniformBuffers,
 material_params_dynamic: MaterialParamsDynamicGrid = [1]MaterialParamsDynamic{.{}} ** grid_element_count,
 object_params_dynamic: ObjectParamsDynamicGrid = [1]ObjectParamsDynamic{.{}} ** grid_element_count,
+uniform_buffers_dirty: bool,
 buffers_bound: bool,
 current_material_index: usize,
 current_object_index: usize,
@@ -295,6 +303,8 @@ pub fn init(app: *App, core: *mach.Core) !void {
     app.queue = core.device.getQueue();
     app.current_material_index = 0;
     app.buffers_bound = false;
+    app.uniform_buffers_dirty = false;
+
     app.camera = Camera{
         .rotation_speed = 1.0,
         .movement_speed = 1.0,
@@ -439,7 +449,12 @@ pub fn update(app: *App, core: *mach.Core) !void {
     if (app.pressed_keys.areKeysPressed()) {
         app.camera.calculateMovement(app.pressed_keys);
         app.pressed_keys.clear();
+        app.uniform_buffers_dirty = true;
+    }
+
+    if (app.uniform_buffers_dirty) {
         updateUniformBuffers(app);
+        app.uniform_buffers_dirty = false;
     }
 
     const back_buffer_view = core.swap_chain.?.getCurrentTextureView();
@@ -453,6 +468,20 @@ pub fn update(app: *App, core: *mach.Core) !void {
     const current_model = app.models[app.current_object_index];
 
     const pass = encoder.beginRenderPass(&app.render_pass_descriptor);
+
+    const dimensions = Dimensions2D(f32){
+        .width = @intToFloat(f32, core.current_desc.width),
+        .height = @intToFloat(f32, core.current_desc.height),
+    };
+    pass.setViewport(
+        0,
+        0,
+        dimensions.width,
+        dimensions.height,
+        0.0,
+        1.0,
+    );
+    pass.setScissorRect(0, 0, core.current_desc.width, core.current_desc.height);
     pass.setPipeline(app.render_pipeline);
 
     var i: usize = 0;
@@ -523,6 +552,10 @@ pub fn resize(app: *App, core: *mach.Core, width: u32, height: u32) !void {
         .stencil_load_op = .clear,
         .stencil_store_op = .store,
     };
+
+    const aspect_ratio = @intToFloat(f32, width) / @intToFloat(f32, height);
+    app.camera.setPerspective(60.0, aspect_ratio, 0.1, 256.0);
+    app.uniform_buffers_dirty = true;
 }
 
 fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
