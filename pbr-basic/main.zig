@@ -241,9 +241,6 @@ const ObjectParamsDynamicGrid = [grid_element_count]ObjectParamsDynamic;
 // Globals
 //
 
-const vertex_shader_path = "pbr.vert.spv";
-const fragment_shader_path = "pbr.frag.spv";
-
 const materials = [_]Material{
     .{ .name = "Gold", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 1.0, 0.765557, 0.336057 } } },
     .{ .name = "Copper", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 0.955008, 0.637427, 0.538163 } } },
@@ -734,22 +731,6 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
         },
     });
 
-    const vertex_shader_code = @embedFile(vertex_shader_path);
-    const vertex_shader_module = core.device.createShaderModule(&.{
-        .next_in_chain = .{ .spirv_descriptor = &.{
-            .code = @ptrCast([*]const u32, @alignCast(4, vertex_shader_code)),
-            .code_size = vertex_shader_code.len / 4,
-        } },
-    });
-
-    const fragment_shader_code = @embedFile(fragment_shader_path);
-    const fragment_shader_module = core.device.createShaderModule(&.{
-        .next_in_chain = .{ .spirv_descriptor = &.{
-            .code = @ptrCast([*]const u32, @alignCast(4, fragment_shader_code)),
-            .code_size = fragment_shader_code.len / 4,
-        } },
-    });
-
     const blend_component_descriptor = gpu.BlendComponent{
         .operation = .add,
         .src_factor = .one,
@@ -764,6 +745,7 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
         },
     };
 
+    const shader_module = core.device.createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
     const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
         .layout = pipeline_layout,
         .primitive = .{
@@ -774,21 +756,18 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
             .depth_write_enabled = true,
         },
         .fragment = &gpu.FragmentState.init(.{
-            .module = fragment_shader_module,
-            .entry_point = "main",
+            .module = shader_module,
+            .entry_point = "frag_main",
             .targets = &.{color_target_state},
         }),
         .vertex = gpu.VertexState.init(.{
-            .module = vertex_shader_module,
-            .entry_point = "main",
+            .module = shader_module,
+            .entry_point = "vertex_main",
             .buffers = &.{vertex_buffer_layout},
         }),
     };
-
     app.render_pipeline = core.device.createRenderPipeline(&pipeline_descriptor);
-
-    vertex_shader_module.release();
-    fragment_shader_module.release();
+    shader_module.release();
 
     {
         const bind_group_entries = [_]gpu.BindGroup.Entry{
