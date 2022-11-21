@@ -13,6 +13,13 @@ pub const venus_model_m3d = @embedFile(venus_path);
 const gotta_go_fast_image_path = root_path ++ "/gotta-go-fast.png";
 pub const gotta_go_fast_image = @embedFile(gotta_go_fast_image_path);
 
+pub const fonts = struct {
+    pub const roboto_medium = struct {
+        pub const path = root_path ++ "/fonts/Roboto-Medium.ttf";
+        pub const bytes = @embedFile(path);
+    };
+};
+
 pub const skybox = struct {
     const negx_image_path = root_path ++ "/skybox/negx.png";
     const negy_image_path = root_path ++ "/skybox/negy.png";

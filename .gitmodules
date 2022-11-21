@@ -8,3 +8,6 @@
 	path = libs/zigimg
 	url = https://github.com/zigimg/zigimg
 	branch = stage2_compat
+[submodule "libs/imgui"]
+	path = libs/imgui
+	url = https://github.com/machlibs/imgui
