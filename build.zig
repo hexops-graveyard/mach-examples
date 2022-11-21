@@ -1,5 +1,6 @@
 const std = @import("std");
 const mach = @import("libs/mach/build.zig");
+const mach_imgui = @import("libs/imgui/build.zig");
 const Pkg = std.build.Pkg;
 
 pub fn build(b: *std.build.Builder) !void {
@@ -19,11 +20,13 @@ pub fn build(b: *std.build.Builder) !void {
         has_assets: bool = false,
         use_freetype: bool = false,
         use_model3d: bool = false,
+        use_imgui: bool = false,
     }{
         .{ .name = "triangle" },
         .{ .name = "triangle-msaa" },
         .{ .name = "boids" },
         .{ .name = "pbr-basic", .deps = &.{ Packages.zmath, Packages.model3d, Packages.assets }, .use_model3d = true },
+        .{ .name = "imgui", .deps = &.{ Packages.mach_imgui, Packages.assets }, .use_imgui = true },
         .{ .name = "rotating-cube", .deps = &.{Packages.zmath} },
         .{ .name = "pixel-post-process", .deps = &.{Packages.zmath} },
         .{ .name = "two-cubes", .deps = &.{Packages.zmath} },
@@ -32,7 +35,7 @@ pub fn build(b: *std.build.Builder) !void {
         .{ .name = "fractal-cube", .deps = &.{Packages.zmath} },
         .{ .name = "textured-cube", .deps = &.{ Packages.zmath, Packages.zigimg, Packages.assets } },
         .{ .name = "ecs-app", .deps = &.{} },
-        .{ .name = "image-blur", .deps = &.{Packages.zigimg, Packages.assets} },
+        .{ .name = "image-blur", .deps = &.{ Packages.zigimg, Packages.assets } },
         .{ .name = "cubemap", .deps = &.{ Packages.zmath, Packages.zigimg, Packages.assets } },
         .{ .name = "map-async", .deps = &.{} },
         .{ .name = "sysaudio", .deps = &.{} },
@@ -66,6 +69,11 @@ pub fn build(b: *std.build.Builder) !void {
                 .use_model3d = example.use_model3d,
             },
         );
+
+        if (example.use_imgui) {
+            mach_imgui.link(app.step);
+        }
+
         app.setBuildMode(mode);
         try app.link(options);
         app.install();
@@ -100,6 +108,10 @@ const Packages = struct {
     const model3d = Pkg{
         .name = "model3d",
         .source = .{ .path = "libs/mach/libs/model3d/src/main.zig" },
+    };
+    const mach_imgui = Pkg{
+        .name = "mach-imgui",
+        .source = .{ .path = "libs/imgui/src/main.zig" },
     };
     const assets = Pkg{
         .name = "assets",
