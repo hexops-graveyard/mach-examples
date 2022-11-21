@@ -343,6 +343,8 @@ pub fn init(app: *App, core: *mach.Core) !void {
         model.vertices = try allocator.alloc(Vertex, vertex_count);
         model.indices = try allocator.alloc(u32, index_count);
 
+        var vertices_updated = std.AutoHashMap(usize, void).init(allocator);
+
         const scale: f32 = 0.45;
         const vertices = m3d_model.handle.vertex[0..vertex_count];
         var i: usize = 0;
@@ -379,6 +381,18 @@ pub fn init(app: *App, core: *mach.Core) !void {
             vertex2.normal[0] = vertices[normal2].x;
             vertex2.normal[1] = vertices[normal2].y;
             vertex2.normal[2] = vertices[normal2].z;
+
+            var k: usize = 0;
+            while (k < 3) : (k += 1) {
+                var v = try vertices_updated.getOrPut(face.vertex[k]);
+                if (v.found_existing) {
+                    // We're clobbering an entry!
+                    std.debug.print("CLOBBERING: {}\n", .{face.vertex[k]});
+                }
+                v.value_ptr.* = {};
+
+                std.debug.print("set vertices[{}] to normal={}\n", .{face.vertex[k], face.normal[k]});
+            }
         }
         i = 0;
         while (i < vertex_count) : (i += 1) {
