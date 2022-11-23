@@ -26,8 +26,8 @@ const Vertex = extern struct {
 };
 
 const Model = struct {
-    vertices: []Vertex,
-    indices: []u32,
+    vertex_count: u32,
+    index_count: u32,
     vertex_buffer: *gpu.Buffer,
     index_buffer: *gpu.Buffer,
 };
@@ -608,12 +608,12 @@ pub fn update(app: *App, core: *mach.Core) !void {
         const dynamic_offsets = [2]u32{ dynamic_offset, dynamic_offset };
         pass.setBindGroup(0, app.bind_group, &dynamic_offsets);
         if (!app.buffers_bound) {
-            pass.setVertexBuffer(0, current_model.vertex_buffer, 0, @sizeOf(Vertex) * current_model.vertices.len);
+            pass.setVertexBuffer(0, current_model.vertex_buffer, 0, @sizeOf(Vertex) * current_model.vertex_count);
             pass.setIndexBuffer(current_model.index_buffer, .uint32, 0, gpu.whole_size);
             app.buffers_bound = true;
         }
         pass.drawIndexed(
-            @intCast(u32, current_model.indices.len), // index_count
+            current_model.index_count, // index_count
             1, // instance_count
             0, // first_index
             0, // base_vertex
@@ -983,14 +983,19 @@ fn loadModels(allocator: std.mem.Allocator, app: *App, core: *mach.Core) !void {
 
         const vertex_count = m3d_model.handle.numvertex;
         const face_count = m3d_model.handle.numface;
-        const index_count = face_count * 3;
 
         var model: *Model = &app.models[model_path_i];
 
-        model.indices = try allocator.alloc(u32, index_count);
-        model.vertices = try allocator.alloc(Vertex, vertex_count);
+        model.index_count = face_count * 3;
 
-        var vertex_indexer = try VertexIndexer.init(allocator, vertex_count, face_count * 3);
+        var indices_buffer = try allocator.alloc(u32, model.index_count);
+        var vertices_buffer = try allocator.alloc(Vertex, face_count * 3);
+        defer allocator.free(indices_buffer);
+        defer allocator.free(vertices_buffer);
+
+        var vertex_indexer = try VertexIndexer.init(allocator, vertex_count, face_count * 2);
+        defer vertex_indexer.deinit(allocator);
+
         const scale: f32 = 0.45;
         const vertices = m3d_model.handle.vertex[0..vertex_count];
         var i: usize = 0;
@@ -1010,38 +1015,39 @@ fn loadModels(allocator: std.mem.Allocator, app: *App, core: *mach.Core) !void {
                     },
                 };
                 const result = vertex_indexer.indexFor(vertex_index, vertex.normal);
-                model.indices[src_base_index + x] = result.index;
+                indices_buffer[src_base_index + x] = result.index;
                 if (result.new_vertex) {
                     vertex.position = .{
                         vertices[vertex_index].x * scale,
                         vertices[vertex_index].y * scale,
                         vertices[vertex_index].z * scale,
                     };
-                    model.vertices[result.index] = vertex;
+                    vertices_buffer[result.index] = vertex;
                 }
             }
         }
-        model.vertices = model.vertices[0..vertex_indexer.next_packed_index];
+        model.vertex_count = vertex_indexer.next_packed_index;
+
         model.vertex_buffer = core.device.createBuffer(&.{
             .usage = .{ .copy_dst = true, .vertex = true },
-            .size = @sizeOf(Vertex) * model.vertices.len,
+            .size = @sizeOf(Vertex) * model.vertex_count,
             .mapped_at_creation = false,
         });
         app.queue.writeBuffer(
             model.vertex_buffer,
             0,
-            model.vertices,
+            vertices_buffer[0..model.vertex_count],
         );
 
         model.index_buffer = core.device.createBuffer(&.{
             .usage = .{ .copy_dst = true, .index = true },
-            .size = @sizeOf(u32) * model.indices.len,
+            .size = @sizeOf(u32) * model.index_count,
             .mapped_at_creation = false,
         });
         app.queue.writeBuffer(
             model.index_buffer,
             0,
-            model.indices,
+            indices_buffer,
         );
     }
 }
