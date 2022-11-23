@@ -25,7 +25,12 @@ pub fn build(b: *std.build.Builder) !void {
         .{ .name = "triangle" },
         .{ .name = "triangle-msaa" },
         .{ .name = "boids" },
-        .{ .name = "pbr-basic", .deps = &.{ Packages.zmath, Packages.model3d, Packages.assets }, .use_model3d = true },
+        .{
+            .name = "pbr-basic",
+            .deps = &.{ Packages.zmath, Packages.model3d, Packages.mach_imgui, Packages.assets },
+            .use_model3d = true,
+            .use_imgui = true,
+        },
         .{ .name = "imgui", .deps = &.{ Packages.mach_imgui, Packages.assets }, .use_imgui = true },
         .{ .name = "rotating-cube", .deps = &.{Packages.zmath} },
         .{ .name = "pixel-post-process", .deps = &.{Packages.zmath} },
