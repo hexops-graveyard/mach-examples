@@ -4,6 +4,7 @@ const gpu = @import("gpu");
 const zm = @import("zmath");
 const m3d = @import("model3d");
 const assets = @import("assets");
+const imgui = @import("mach-imgui").MachImgui(mach);
 
 pub const App = @This();
 
@@ -41,6 +42,216 @@ const Material = struct {
     name: []const u8,
     params: Params,
 };
+
+/// The imported model contains an array of vectors that are either positions or normals. Due to the fact that
+/// we combine positions and normals into our `Vertex` structure, we need to "repack" all the indices so
+/// that they reference a contigious array of Vertex value (Containing both the position and normal)
+/// VertexIndexer takes the original "sparse" index (As indices to normals are ignored) and returns a unique index for
+/// this new packed / contingious space.
+const VertexIndexer = struct {
+    const null_index: u32 = std.math.maxInt(u32);
+    const null_normal = Vec3{
+        std.math.floatMax(f32),
+        std.math.floatMax(f32),
+        std.math.floatMax(f32),
+    };
+
+    const Record = struct {
+        normal: Vec3,
+        next: u32,
+
+        pub inline fn isNull(self: @This()) bool {
+            return std.mem.eql(f32, &self.normal, &null_normal); // self.normal0] == std.math.floatMax(f32);
+        }
+    };
+
+    const Result = struct {
+        index: u32,
+        new_vertex: bool,
+    };
+
+    buffer: []Record,
+
+    /// Map index from sparse -> packed
+    /// Sparse indices are used to fast lookup of stored normal values, but
+    /// need to be converted to indices that reference a packed buffer of vertices
+    index_map: []u32,
+
+    /// Next index outside of the 1:1 mapping range for storing
+    /// position -> normal collisions
+    next_collision_index: u32,
+
+    /// Next packed index
+    next_packed_index: u32,
+
+    pub fn init(allocator: std.mem.Allocator, collision_index_start: u32, capacity: usize) !@This() {
+        var result = VertexIndexer{
+            .buffer = try allocator.alloc(Record, capacity),
+            .index_map = try allocator.alloc(u32, capacity),
+            .next_collision_index = collision_index_start,
+            .next_packed_index = 0,
+        };
+        std.mem.set(Record, result.buffer, Record{ .normal = null_normal, .next = null_index });
+        return result;
+    }
+
+    pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+        allocator.free(self.buffer);
+        allocator.free(self.index_map);
+    }
+
+    pub inline fn nextRecord(self: @This(), record: Record) ?Record {
+        return if (record.next == null_index) null else self.buffer[record.next];
+    }
+
+    pub inline fn indexFor(self: *@This(), sparse_index: u32, normal: Vec3) Result {
+        if (self.buffer[sparse_index].isNull()) {
+            // New start of chain, reserve a new packed index and add entry to `index_map`
+            self.buffer[sparse_index].normal = normal;
+            self.index_map[sparse_index] = self.next_packed_index;
+            self.next_packed_index += 1;
+            return Result{ .index = self.index_map[sparse_index], .new_vertex = true };
+        }
+        var record_opt: ?Record = self.buffer[sparse_index];
+        var current_index: u32 = sparse_index;
+        var previous_index: u32 = undefined;
+        while (record_opt) |record| {
+            if (std.mem.eql(f32, &record.normal, &normal)) {
+                // We already have a record for this normal in our chain
+                // Return the related packed index and specify that the vertex doesn't
+                // need to be re-written to buffer
+                return Result{ .index = self.index_map[current_index], .new_vertex = false };
+            }
+            previous_index = current_index;
+            current_index = record.next;
+            record_opt = self.nextRecord(record);
+        }
+        //
+        // No match for normal value in our chain
+        //  1. Reserve a new sparse index in the "collision" range
+        //  2. Reserve new packed index for sparse index
+        //  3. Create new record with normal & append to chain
+        //
+        const packed_index = self.next_packed_index;
+        const remapped_sparse_index = self.next_collision_index;
+        self.index_map[remapped_sparse_index] = packed_index;
+        self.buffer[remapped_sparse_index].normal = normal;
+        self.buffer[previous_index].next = remapped_sparse_index;
+        self.next_packed_index += 1;
+        self.next_collision_index += 1;
+        return Result{
+            .index = packed_index,
+            .new_vertex = true,
+        };
+    }
+};
+
+test "VertexIndexer" {
+    const expect = std.testing.expect;
+    const allocator = std.testing.allocator;
+
+    const Face = struct {
+        position: [3]u16,
+        normal: [3]u16,
+    };
+
+    const vertices = [_]Vec3{
+        Vec3{ 1.0, 0.0, 0.0 }, // 0: Position
+        Vec3{ 2.0, 0.0, 0.0 }, // 1: Position
+        Vec3{ 3.0, 0.0, 0.0 }, // 2: Position
+        Vec3{ 1.0, 0.0, 0.0 }, // 3: Normal
+        Vec3{ 4.0, 0.0, 0.0 }, // 4: Position
+        Vec3{ 0.0, 1.0, 0.0 }, // 5: Normal
+        Vec3{ 5.0, 0.0, 0.0 }, // 6: Position
+        Vec3{ 0.0, 0.0, 1.0 }, // 7: Normal
+        Vec3{ 1.0, 0.0, 1.0 }, // 8: Normal
+        Vec3{ 6.0, 0.0, 0.0 }, // 9: Position
+    };
+
+    const faces = [_]Face{
+        .{ .position = .{ 0, 4, 2 }, .normal = .{ 7, 5, 3 } },
+        .{ .position = .{ 2, 3, 9 }, .normal = .{ 3, 7, 8 } },
+        .{ .position = .{ 9, 2, 4 }, .normal = .{ 8, 7, 5 } },
+        .{ .position = .{ 2, 6, 1 }, .normal = .{ 3, 5, 7 } },
+        .{ .position = .{ 9, 6, 0 }, .normal = .{ 5, 7, 8 } },
+    };
+
+    var indexer = try VertexIndexer.init(allocator, vertices.len, faces.len * 3);
+    defer indexer.deinit(allocator);
+
+    {
+        const face = faces[0];
+        const r0 = indexer.indexFor(face.position[0], vertices[face.normal[0]]);
+        const r1 = indexer.indexFor(face.position[1], vertices[face.normal[1]]);
+        const r2 = indexer.indexFor(face.position[2], vertices[face.normal[2]]);
+
+        try expect(r0.index == 0); // (0, 7) New
+        try expect(r1.index == 1); // (4, 5) New
+        try expect(r2.index == 2); // (2, 3) New
+
+        try expect(r0.new_vertex == true);
+        try expect(r1.new_vertex == true);
+        try expect(r2.new_vertex == true);
+    }
+    {
+        const face = faces[1];
+        const r0 = indexer.indexFor(face.position[0], vertices[face.normal[0]]);
+        const r1 = indexer.indexFor(face.position[1], vertices[face.normal[1]]);
+        const r2 = indexer.indexFor(face.position[2], vertices[face.normal[2]]);
+
+        try expect(r0.index == 2); // (2, 3) Duplicate - Reuse index
+        try expect(r1.index == 3); // (3, 7) New
+        try expect(r2.index == 4); // (9, 8) New
+
+        try expect(r0.new_vertex == false);
+        try expect(r1.new_vertex == true);
+        try expect(r2.new_vertex == true);
+    }
+    {
+        const face = faces[2];
+        const r0 = indexer.indexFor(face.position[0], vertices[face.normal[0]]);
+        const r1 = indexer.indexFor(face.position[1], vertices[face.normal[1]]);
+        const r2 = indexer.indexFor(face.position[2], vertices[face.normal[2]]);
+
+        try expect(r0.index == 4); // (9, 8) Duplicate - Reuse index
+        try expect(r1.index == 5); // (2, 7) New normal mapping (Don't clobber)
+        try expect(r2.index == 1); // (4, 5) Duplicate - Reuse Index
+
+        try expect(r0.new_vertex == false);
+        try expect(r1.new_vertex == true);
+        try expect(r2.new_vertex == false);
+    }
+
+    {
+        const face = faces[3];
+        const r0 = indexer.indexFor(face.position[0], vertices[face.normal[0]]);
+        const r1 = indexer.indexFor(face.position[1], vertices[face.normal[1]]);
+        const r2 = indexer.indexFor(face.position[2], vertices[face.normal[2]]);
+
+        try expect(r0.index == 2); // (2, 3) Duplicate - Reuse index
+        try expect(r1.index == 6); // (6, 5) New
+        try expect(r2.index == 7); // (1, 7) New
+
+        try expect(r0.new_vertex == false);
+        try expect(r1.new_vertex == true);
+        try expect(r2.new_vertex == true);
+    }
+    {
+        const face = faces[4];
+        const r0 = indexer.indexFor(face.position[0], vertices[face.normal[0]]);
+        const r1 = indexer.indexFor(face.position[1], vertices[face.normal[1]]);
+        const r2 = indexer.indexFor(face.position[2], vertices[face.normal[2]]);
+
+        try expect(r0.index == 8); // (9, 5) New normal mapping (Don't clobber)
+        try expect(r1.index == 9); // (6, 7) New normal mapping (Don't clobber)
+        try expect(r2.index == 10); // (0, 8) New normal mapping (Don't clobber)
+
+        try expect(r0.new_vertex == true);
+        try expect(r1.new_vertex == true);
+        try expect(r2.new_vertex == true);
+    }
+    try expect(indexer.next_packed_index == 11);
+}
 
 const PressedKeys = packed struct(u16) {
     right: bool = false,
@@ -241,6 +452,16 @@ const ObjectParamsDynamicGrid = [grid_element_count]ObjectParamsDynamic;
 // Globals
 //
 
+const material_names = [11][:0]const u8{
+    "Gold",  "Copper", "Chromium", "Nickel", "Titanium", "Cobalt", "Platinum",
+    // Testing materials
+    "White", "Red",    "Blue",     "Black",
+};
+
+const object_names = [4][:0]const u8{
+    "Sphere", "Teapot", "Torusknot", "Venus",
+};
+
 const materials = [_]Material{
     .{ .name = "Gold", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 1.0, 0.765557, 0.336057 } } },
     .{ .name = "Copper", .params = .{ .roughness = 0.1, .metallic = 1.0, .color = .{ 0.955008, 0.637427, 0.538163 } } },
@@ -258,12 +479,10 @@ const materials = [_]Material{
 
 const grid_dimensions = 7;
 const model_paths = [_][]const u8{
+    assets.sphere_path,
     assets.teapot_path,
-    // TODO: Setup Imgui bindings and allow option to switch between models
-    //       Currently there is no point loading in the other models
-    // assets.sphere_path,
-    // assets.torusknot_path,
-    // assets.venus_path,
+    assets.torusknot_path,
+    assets.venus_path,
 };
 
 //
@@ -279,7 +498,7 @@ color_attachment: gpu.RenderPassColorAttachment,
 depth_stencil_attachment_description: gpu.RenderPassDepthStencilAttachment,
 depth_texture: *gpu.Texture,
 depth_texture_view: *gpu.TextureView,
-timer: f32,
+timer: mach.Timer,
 pressed_keys: PressedKeys,
 models: [4]Model,
 ubo_params: UboParams,
@@ -289,133 +508,29 @@ material_params_dynamic: MaterialParamsDynamicGrid = [1]MaterialParamsDynamic{.{
 object_params_dynamic: ObjectParamsDynamicGrid = [1]ObjectParamsDynamic{.{}} ** grid_element_count,
 uniform_buffers_dirty: bool,
 buffers_bound: bool,
+is_paused: bool,
 current_material_index: usize,
 current_object_index: usize,
+imgui_render_pipeline: *gpu.RenderPipeline,
 
 //
 // Functions
 //
 
 pub fn init(app: *App, core: *mach.Core) !void {
+    app.timer = try mach.Timer.start();
+
     app.queue = core.device.getQueue();
     app.current_material_index = 0;
     app.buffers_bound = false;
     app.uniform_buffers_dirty = false;
 
-    app.camera = Camera{
-        .rotation_speed = 1.0,
-        .movement_speed = 1.0,
-    };
-
-    //
-    // Setup Camera
-    //
-    const aspect_ratio: f32 = @intToFloat(f32, core.current_desc.width) / @intToFloat(f32, core.current_desc.height);
-    app.camera.setPosition(.{ 10.0, 6.0, 6.0 });
-    app.camera.setRotation(.{ 62.5, 90.0, 0.0 });
-    app.camera.setMovementSpeed(0.5);
-    app.camera.setPerspective(60.0, aspect_ratio, 0.1, 256.0);
-    app.camera.setRotationSpeed(0.25);
-
-    //
-    // Load Assets
-    //
-
-    var allocator = std.heap.c_allocator;
-    for (model_paths) |model_path, model_path_i| {
-        var model_file = std.fs.openFileAbsolute(model_path, .{}) catch |err| {
-            std.log.err("Failed to load model: '{s}' Error: {}", .{ model_path, err });
-            return error.LoadModelFileFailed;
-        };
-        defer model_file.close();
-
-        var model_data = try model_file.readToEndAllocOptions(allocator, 4048 * 1024, 4048 * 1024, @alignOf(u8), 0);
-        defer allocator.free(model_data);
-
-        const m3d_model = m3d.load(model_data, null, null, null) orelse return error.LoadModelFailed;
-
-        const vertex_count = m3d_model.handle.numvertex;
-        const face_count = m3d_model.handle.numface;
-        const index_count = face_count * 3;
-
-        var model: *Model = &app.models[model_path_i];
-
-        model.vertices = try allocator.alloc(Vertex, vertex_count);
-        model.indices = try allocator.alloc(u32, index_count);
-
-        const scale: f32 = 0.45;
-        const vertices = m3d_model.handle.vertex[0..vertex_count];
-        var i: usize = 0;
-        while (i < face_count) : (i += 1) {
-            const face = m3d_model.handle.face[i];
-            const src_base_index: usize = (i * 3);
-            model.indices[src_base_index + 0] = face.vertex[0];
-            model.indices[src_base_index + 1] = face.vertex[1];
-            model.indices[src_base_index + 2] = face.vertex[2];
-
-            const normal0 = face.normal[0];
-            const normal1 = face.normal[1];
-            const normal2 = face.normal[2];
-
-            if (normal0 == std.math.maxInt(u32)) {
-                std.log.warn("No normals", .{});
-                continue;
-            }
-
-            std.debug.assert(normal0 < vertices.len);
-            std.debug.assert(normal1 < vertices.len);
-            std.debug.assert(normal2 < vertices.len);
-
-            var vertex0 = &model.vertices[face.vertex[0]];
-            var vertex1 = &model.vertices[face.vertex[1]];
-            var vertex2 = &model.vertices[face.vertex[2]];
-
-            vertex0.normal[0] = vertices[normal0].x;
-            vertex0.normal[1] = vertices[normal0].y;
-            vertex0.normal[2] = vertices[normal0].z;
-            vertex1.normal[0] = vertices[normal1].x;
-            vertex1.normal[1] = vertices[normal1].y;
-            vertex1.normal[2] = vertices[normal1].z;
-            vertex2.normal[0] = vertices[normal2].x;
-            vertex2.normal[1] = vertices[normal2].y;
-            vertex2.normal[2] = vertices[normal2].z;
-        }
-        i = 0;
-        while (i < vertex_count) : (i += 1) {
-            const vertex = m3d_model.handle.vertex[i];
-            model.vertices[i].position[0] = vertex.x * scale;
-            model.vertices[i].position[1] = vertex.y * scale;
-            model.vertices[i].position[2] = vertex.z * scale;
-        }
-        //
-        // Load vertex and index data into webgpu buffers
-        //
-        model.vertex_buffer = core.device.createBuffer(&.{
-            .usage = .{ .copy_dst = true, .vertex = true },
-            .size = @sizeOf(Vertex) * model.vertices.len,
-            .mapped_at_creation = false,
-        });
-        app.queue.writeBuffer(
-            model.vertex_buffer,
-            0,
-            model.vertices,
-        );
-
-        model.index_buffer = core.device.createBuffer(&.{
-            .usage = .{ .copy_dst = true, .index = true },
-            .size = @sizeOf(u32) * model.indices.len,
-            .mapped_at_creation = false,
-        });
-        app.queue.writeBuffer(
-            model.index_buffer,
-            0,
-            model.indices,
-        );
-    }
-
+    setupCamera(app, core);
+    try loadModels(std.heap.c_allocator, app, core);
     prepareUniformBuffers(app, core);
     setupPipeline(app, core);
     setupRenderPass(app, core);
+    setupImgui(app, core);
 }
 
 pub fn deinit(app: *App, _: *mach.Core) void {
@@ -427,11 +542,12 @@ pub fn deinit(app: *App, _: *mach.Core) void {
     app.uniform_buffers.ubo_params.buffer.release();
     app.uniform_buffers.material_params.buffer.release();
     app.uniform_buffers.object_params.buffer.release();
+    imgui.backend.deinit();
 }
 
 pub fn update(app: *App, core: *mach.Core) !void {
-    const frame_start_sec = std.time.timestamp();
     while (core.pollEvent()) |event| {
+        imgui.backend.passEvent(event);
         switch (event) {
             .key_press => |ev| {
                 const key = ev.key;
@@ -481,6 +597,10 @@ pub fn update(app: *App, core: *mach.Core) !void {
     pass.setScissorRect(0, 0, core.current_desc.width, core.current_desc.height);
     pass.setPipeline(app.render_pipeline);
 
+    if (!app.is_paused) {
+        app.updateLights();
+    }
+
     var i: usize = 0;
     while (i < (grid_dimensions * grid_dimensions)) : (i += 1) {
         const alignment = 256;
@@ -501,6 +621,18 @@ pub fn update(app: *App, core: *mach.Core) !void {
         );
     }
 
+    pass.setPipeline(app.imgui_render_pipeline);
+
+    const window_size = core.getWindowSize();
+    imgui.backend.newFrame(
+        core,
+        window_size.width,
+        window_size.height,
+    );
+
+    drawUI(app);
+    imgui.backend.draw(pass);
+
     pass.end();
     pass.release();
 
@@ -512,12 +644,6 @@ pub fn update(app: *App, core: *mach.Core) !void {
     command.release();
     core.swap_chain.?.present();
     back_buffer_view.release();
-    const frame_end_sec = std.time.timestamp();
-    const frame_duration_sec = @intToFloat(f32, frame_end_sec) - @intToFloat(f32, frame_start_sec);
-    app.timer = @mod(frame_duration_sec + app.timer, 1.0);
-    std.debug.assert(app.timer >= 0.0);
-    std.debug.assert(app.timer < 1.0);
-    app.updateLights();
     app.buffers_bound = false;
 }
 
@@ -655,7 +781,7 @@ fn updateLights(app: *App) void {
     app.ubo_params.lights[1] = Vec4{ -p, -p * 0.5, p, 1.0 };
     app.ubo_params.lights[2] = Vec4{ p, -p * 0.5, p, 1.0 };
     app.ubo_params.lights[3] = Vec4{ p, -p * 0.5, -p, 1.0 };
-    const base_value = toRadians(app.timer * 360.0);
+    const base_value = toRadians(@mod(app.timer.read() * 0.1, 1.0) * 360.0);
     app.ubo_params.lights[0][0] = @sin(base_value) * 20.0;
     app.ubo_params.lights[0][2] = @cos(base_value) * 20.0;
     app.ubo_params.lights[1][0] = @cos(base_value) * 20.0;
@@ -840,6 +966,180 @@ fn setupRenderPass(app: *App, core: *mach.Core) void {
         .stencil_load_op = .clear,
         .stencil_store_op = .store,
     };
+}
+
+fn loadModels(allocator: std.mem.Allocator, app: *App, core: *mach.Core) !void {
+    for (model_paths) |model_path, model_path_i| {
+        var model_file = std.fs.openFileAbsolute(model_path, .{}) catch |err| {
+            std.log.err("Failed to load model: '{s}' Error: {}", .{ model_path, err });
+            return error.LoadModelFileFailed;
+        };
+        defer model_file.close();
+
+        var model_data = try model_file.readToEndAllocOptions(allocator, 4048 * 1024, 4048 * 1024, @alignOf(u8), 0);
+        defer allocator.free(model_data);
+
+        const m3d_model = m3d.load(model_data, null, null, null) orelse return error.LoadModelFailed;
+
+        const vertex_count = m3d_model.handle.numvertex;
+        const face_count = m3d_model.handle.numface;
+        const index_count = face_count * 3;
+
+        var model: *Model = &app.models[model_path_i];
+
+        model.indices = try allocator.alloc(u32, index_count);
+        model.vertices = try allocator.alloc(Vertex, vertex_count);
+
+        var vertex_indexer = try VertexIndexer.init(allocator, vertex_count, face_count * 3);
+        const scale: f32 = 0.45;
+        const vertices = m3d_model.handle.vertex[0..vertex_count];
+        var i: usize = 0;
+        while (i < face_count) : (i += 1) {
+            const face = m3d_model.handle.face[i];
+            const src_base_index: usize = (i * 3);
+            var x: usize = 0;
+            while (x < 3) : (x += 1) {
+                const vertex_index = face.vertex[x];
+                const normal_index = face.normal[x];
+                var vertex = Vertex{
+                    .position = undefined,
+                    .normal = .{
+                        vertices[normal_index].x,
+                        vertices[normal_index].y,
+                        vertices[normal_index].z,
+                    },
+                };
+                const result = vertex_indexer.indexFor(vertex_index, vertex.normal);
+                model.indices[src_base_index + x] = result.index;
+                if (result.new_vertex) {
+                    vertex.position = .{
+                        vertices[vertex_index].x * scale,
+                        vertices[vertex_index].y * scale,
+                        vertices[vertex_index].z * scale,
+                    };
+                    model.vertices[result.index] = vertex;
+                }
+            }
+        }
+        model.vertices = model.vertices[0..vertex_indexer.next_packed_index];
+        model.vertex_buffer = core.device.createBuffer(&.{
+            .usage = .{ .copy_dst = true, .vertex = true },
+            .size = @sizeOf(Vertex) * model.vertices.len,
+            .mapped_at_creation = false,
+        });
+        app.queue.writeBuffer(
+            model.vertex_buffer,
+            0,
+            model.vertices,
+        );
+
+        model.index_buffer = core.device.createBuffer(&.{
+            .usage = .{ .copy_dst = true, .index = true },
+            .size = @sizeOf(u32) * model.indices.len,
+            .mapped_at_creation = false,
+        });
+        app.queue.writeBuffer(
+            model.index_buffer,
+            0,
+            model.indices,
+        );
+    }
+}
+
+fn drawUI(app: *App) void {
+    imgui.setNextWindowPos(.{ .x = 0, .y = 0 });
+    if (!imgui.begin("Settings", .{})) {
+        imgui.end();
+        return;
+    }
+
+    _ = imgui.checkbox("Paused", .{ .v = &app.is_paused });
+    var update_uniform_buffers: bool = false;
+    if (imgui.beginCombo("Material", .{ .preview_value = material_names[app.current_material_index] })) {
+        for (material_names) |material, material_i| {
+            const i = @intCast(u32, material_i);
+            if (imgui.selectable(material, .{ .selected = app.current_material_index == i })) {
+                update_uniform_buffers = true;
+                app.current_material_index = i;
+            }
+        }
+        imgui.endCombo();
+    }
+    if (imgui.beginCombo("Object type", .{ .preview_value = object_names[app.current_object_index] })) {
+        for (object_names) |object, object_i| {
+            const i = @intCast(u32, object_i);
+            if (imgui.selectable(object, .{ .selected = app.current_object_index == i })) {
+                update_uniform_buffers = true;
+                app.current_object_index = i;
+            }
+        }
+        imgui.endCombo();
+    }
+    if (update_uniform_buffers) {
+        updateDynamicUniformBuffer(app);
+    }
+    imgui.end();
+}
+
+fn setupImgui(app: *App, core: *mach.Core) void {
+    imgui.init();
+    const font_normal = imgui.io.addFontFromFile(assets.fonts.roboto_medium.path, 18.0);
+    const blend_component_descriptor = gpu.BlendComponent{
+        .operation = .add,
+        .src_factor = .one,
+        .dst_factor = .zero,
+    };
+
+    const color_target_state = gpu.ColorTargetState{
+        .format = core.swap_chain_format,
+        .blend = &.{
+            .color = blend_component_descriptor,
+            .alpha = blend_component_descriptor,
+        },
+    };
+
+    const shader_module = core.device.createShaderModuleWGSL("imgui.wgsl", @embedFile("imgui.wgsl"));
+
+    const imgui_pipeline_descriptor = gpu.RenderPipeline.Descriptor{
+        .depth_stencil = &.{
+            .format = .depth24_plus_stencil8,
+            .depth_write_enabled = true,
+        },
+        .fragment = &gpu.FragmentState.init(.{
+            .module = shader_module,
+            .entry_point = "frag_main",
+            .targets = &.{color_target_state},
+        }),
+        .vertex = gpu.VertexState.init(.{
+            .module = shader_module,
+            .entry_point = "vert_main",
+        }),
+    };
+
+    app.imgui_render_pipeline = core.device.createRenderPipeline(&imgui_pipeline_descriptor);
+
+    shader_module.release();
+
+    imgui.io.setDefaultFont(font_normal);
+    imgui.backend.init(core.device, core.swap_chain_format, .depth24_plus_stencil8);
+
+    const style = imgui.getStyle();
+    style.window_min_size = .{ 350.0, 150.0 };
+    style.window_border_size = 8.0;
+    style.scrollbar_size = 6.0;
+}
+
+fn setupCamera(app: *App, core: *mach.Core) void {
+    app.camera = Camera{
+        .rotation_speed = 1.0,
+        .movement_speed = 1.0,
+    };
+    const aspect_ratio: f32 = @intToFloat(f32, core.current_desc.width) / @intToFloat(f32, core.current_desc.height);
+    app.camera.setPosition(.{ 10.0, 6.0, 6.0 });
+    app.camera.setRotation(.{ 62.5, 90.0, 0.0 });
+    app.camera.setMovementSpeed(0.5);
+    app.camera.setPerspective(60.0, aspect_ratio, 0.1, 256.0);
+    app.camera.setRotationSpeed(0.25);
 }
 
 inline fn roundToMultipleOf4(comptime T: type, value: T) T {
