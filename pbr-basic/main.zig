@@ -43,110 +43,99 @@ const Material = struct {
     params: Params,
 };
 
-/// The imported model contains an array of vectors that are either positions or normals. Due to the fact that
-/// we combine positions and normals into our `Vertex` structure, we need to "repack" all the indices so
-/// that they reference a contigious array of Vertex value (Containing both the position and normal)
-/// VertexIndexer takes the original "sparse" index (As indices to normals are ignored) and returns a unique index for
-/// this new packed / contingious space.
-const VertexIndexer = struct {
-    const null_index: u32 = std.math.maxInt(u32);
-    const null_normal = Vec3{
-        std.math.floatMax(f32),
-        std.math.floatMax(f32),
-        std.math.floatMax(f32),
-    };
-
-    const Record = struct {
-        normal: Vec3,
-        next: u32,
-
-        pub inline fn isNull(self: @This()) bool {
-            return std.mem.eql(f32, &self.normal, &null_normal); // self.normal0] == std.math.floatMax(f32);
-        }
-    };
-
-    const Result = struct {
-        index: u32,
-        new_vertex: bool,
-    };
-
-    buffer: []Record,
-
-    /// Map index from sparse -> packed
-    /// Sparse indices are used to fast lookup of stored normal values, but
-    /// need to be converted to indices that reference a packed buffer of vertices
-    index_map: []u32,
-
-    /// Next index outside of the 1:1 mapping range for storing
-    /// position -> normal collisions
-    next_collision_index: u32,
-
-    /// Next packed index
-    next_packed_index: u32,
-
-    pub fn init(allocator: std.mem.Allocator, collision_index_start: u32, capacity: usize) !@This() {
-        var result = VertexIndexer{
-            .buffer = try allocator.alloc(Record, capacity),
-            .index_map = try allocator.alloc(u32, capacity),
-            .next_collision_index = collision_index_start,
-            .next_packed_index = 0,
+/// Vertex writer manages the placement of vertices by tracking which are unique. If a duplicate vertex is added
+/// with `put`, only it's index will be written to the index buffer.
+fn VertexWriter(comptime VertexType: type, comptime IndexType: type) type {
+    return struct {
+        const MapEntry = struct {
+            packed_index: IndexType = null_index,
+            next_sparse: IndexType = null_index,
         };
-        std.mem.set(Record, result.buffer, Record{ .normal = null_normal, .next = null_index });
-        return result;
-    }
 
-    pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
-        allocator.free(self.buffer);
-        allocator.free(self.index_map);
-    }
+        const null_index: IndexType = std.math.maxInt(IndexType);
 
-    pub inline fn nextRecord(self: @This(), record: Record) ?Record {
-        return if (record.next == null_index) null else self.buffer[record.next];
-    }
+        vertices: []VertexType,
+        indices: []IndexType,
+        sparse_to_packed_map: []MapEntry,
 
-    pub inline fn indexFor(self: *@This(), sparse_index: u32, normal: Vec3) Result {
-        if (self.buffer[sparse_index].isNull()) {
-            // New start of chain, reserve a new packed index and add entry to `index_map`
-            self.buffer[sparse_index].normal = normal;
-            self.index_map[sparse_index] = self.next_packed_index;
-            self.next_packed_index += 1;
-            return Result{ .index = self.index_map[sparse_index], .new_vertex = true };
+        /// Next index outside of the 1:1 mapping range for storing
+        /// position -> normal collisions
+        next_collision_index: u32,
+
+        /// Next packed index
+        next_packed_index: u32,
+        written_indices_count: u32,
+
+        pub fn init(
+            allocator: std.mem.Allocator,
+            indices_count: IndexType,
+            sparse_vertices_count: IndexType,
+            max_vertex_count: IndexType,
+        ) !@This() {
+            var result: @This() = undefined;
+            result.vertices = try allocator.alloc(Vertex, max_vertex_count);
+            result.indices = try allocator.alloc(IndexType, indices_count);
+            result.sparse_to_packed_map = try allocator.alloc(MapEntry, max_vertex_count);
+            result.next_collision_index = sparse_vertices_count;
+            result.next_packed_index = 0;
+            result.written_indices_count = 0;
+            std.mem.set(MapEntry, result.sparse_to_packed_map, .{});
+            return result;
         }
-        var record_opt: ?Record = self.buffer[sparse_index];
-        var current_index: u32 = sparse_index;
-        var previous_index: u32 = undefined;
-        while (record_opt) |record| {
-            if (std.mem.eql(f32, &record.normal, &normal)) {
-                // We already have a record for this normal in our chain
-                // Return the related packed index and specify that the vertex doesn't
-                // need to be re-written to buffer
-                return Result{ .index = self.index_map[current_index], .new_vertex = false };
+
+        pub fn put(self: *@This(), vertex: Vertex, sparse_index: u32) void {
+            if (self.sparse_to_packed_map[sparse_index].packed_index == null_index) {
+                // New start of chain, reserve a new packed index and add entry to `index_map`
+                const packed_index = self.next_packed_index;
+                self.sparse_to_packed_map[sparse_index].packed_index = packed_index;
+                self.vertices[packed_index] = vertex;
+                self.indices[self.written_indices_count] = packed_index;
+                self.written_indices_count += 1;
+                self.next_packed_index += 1;
+                return;
             }
-            previous_index = current_index;
-            current_index = record.next;
-            record_opt = self.nextRecord(record);
+            var previous_sparse_index: IndexType = undefined;
+            var current_sparse_index = sparse_index;
+            while (current_sparse_index != null_index) {
+                const packed_index = self.sparse_to_packed_map[current_sparse_index].packed_index;
+                if (std.mem.eql(u8, &std.mem.toBytes(self.vertices[packed_index]), &std.mem.toBytes(vertex))) {
+                    // We already have a record for this vertex in our chain
+                    self.indices[self.written_indices_count] = packed_index;
+                    self.written_indices_count += 1;
+                    return;
+                }
+                previous_sparse_index = current_sparse_index;
+                current_sparse_index = self.sparse_to_packed_map[current_sparse_index].next_sparse;
+            }
+            // This is a new mapping for the given sparse index
+            const packed_index = self.next_packed_index;
+            const remapped_sparse_index = self.next_collision_index;
+            self.indices[self.written_indices_count] = packed_index;
+            self.vertices[packed_index] = vertex;
+            self.sparse_to_packed_map[previous_sparse_index].next_sparse = remapped_sparse_index;
+            self.sparse_to_packed_map[remapped_sparse_index].packed_index = packed_index;
+            self.next_packed_index += 1;
+            self.next_collision_index += 1;
+            self.written_indices_count += 1;
         }
-        //
-        // No match for normal value in our chain
-        //  1. Reserve a new sparse index in the "collision" range
-        //  2. Reserve new packed index for sparse index
-        //  3. Create new record with normal & append to chain
-        //
-        const packed_index = self.next_packed_index;
-        const remapped_sparse_index = self.next_collision_index;
-        self.index_map[remapped_sparse_index] = packed_index;
-        self.buffer[remapped_sparse_index].normal = normal;
-        self.buffer[previous_index].next = remapped_sparse_index;
-        self.next_packed_index += 1;
-        self.next_collision_index += 1;
-        return Result{
-            .index = packed_index,
-            .new_vertex = true,
-        };
-    }
-};
 
-test "VertexIndexer" {
+        pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+            allocator.free(self.vertices);
+            allocator.free(self.indices);
+            allocator.free(self.sparse_to_packed_map);
+        }
+
+        pub fn indexBuffer(self: @This()) []IndexType {
+            return self.indices[0..self.written_indices_count];
+        }
+
+        pub fn vertexBuffer(self: @This()) []Vertex {
+            return self.vertices[0..self.next_packed_index];
+        }
+    };
+}
+
+test "VertexWriter" {
     const expect = std.testing.expect;
     const allocator = std.testing.allocator;
 
@@ -176,81 +165,57 @@ test "VertexIndexer" {
         .{ .position = .{ 9, 6, 0 }, .normal = .{ 5, 7, 8 } },
     };
 
-    var indexer = try VertexIndexer.init(allocator, vertices.len, faces.len * 3);
-    defer indexer.deinit(allocator);
+    var writer = try VertexWriter(Vertex, u32).init(
+        allocator,
+        faces.len * 3, // indices count
+        vertices.len, // original vertices count
+        faces.len * 3, // maximum vertices count
+    );
+    defer writer.deinit(allocator);
 
-    {
-        const face = faces[0];
-        const r0 = indexer.indexFor(face.position[0], vertices[face.normal[0]]);
-        const r1 = indexer.indexFor(face.position[1], vertices[face.normal[1]]);
-        const r2 = indexer.indexFor(face.position[2], vertices[face.normal[2]]);
-
-        try expect(r0.index == 0); // (0, 7) New
-        try expect(r1.index == 1); // (4, 5) New
-        try expect(r2.index == 2); // (2, 3) New
-
-        try expect(r0.new_vertex == true);
-        try expect(r1.new_vertex == true);
-        try expect(r2.new_vertex == true);
-    }
-    {
-        const face = faces[1];
-        const r0 = indexer.indexFor(face.position[0], vertices[face.normal[0]]);
-        const r1 = indexer.indexFor(face.position[1], vertices[face.normal[1]]);
-        const r2 = indexer.indexFor(face.position[2], vertices[face.normal[2]]);
-
-        try expect(r0.index == 2); // (2, 3) Duplicate - Reuse index
-        try expect(r1.index == 3); // (3, 7) New
-        try expect(r2.index == 4); // (9, 8) New
-
-        try expect(r0.new_vertex == false);
-        try expect(r1.new_vertex == true);
-        try expect(r2.new_vertex == true);
-    }
-    {
-        const face = faces[2];
-        const r0 = indexer.indexFor(face.position[0], vertices[face.normal[0]]);
-        const r1 = indexer.indexFor(face.position[1], vertices[face.normal[1]]);
-        const r2 = indexer.indexFor(face.position[2], vertices[face.normal[2]]);
-
-        try expect(r0.index == 4); // (9, 8) Duplicate - Reuse index
-        try expect(r1.index == 5); // (2, 7) New normal mapping (Don't clobber)
-        try expect(r2.index == 1); // (4, 5) Duplicate - Reuse Index
-
-        try expect(r0.new_vertex == false);
-        try expect(r1.new_vertex == true);
-        try expect(r2.new_vertex == false);
+    for (faces) |face| {
+        var x: usize = 0;
+        while (x < 3) : (x += 1) {
+            const position_index = face.position[x];
+            const position = vertices[position_index];
+            const normal = vertices[face.normal[x]];
+            const vertex = Vertex{
+                .position = position,
+                .normal = normal,
+            };
+            writer.put(vertex, position_index);
+        }
     }
 
-    {
-        const face = faces[3];
-        const r0 = indexer.indexFor(face.position[0], vertices[face.normal[0]]);
-        const r1 = indexer.indexFor(face.position[1], vertices[face.normal[1]]);
-        const r2 = indexer.indexFor(face.position[2], vertices[face.normal[2]]);
+    const indices = writer.indexBuffer();
+    try expect(indices.len == faces.len * 3);
 
-        try expect(r0.index == 2); // (2, 3) Duplicate - Reuse index
-        try expect(r1.index == 6); // (6, 5) New
-        try expect(r2.index == 7); // (1, 7) New
+    // Face 0
+    try expect(indices[0] == 0); // (0, 7) New
+    try expect(indices[1] == 1); // (4, 5) New
+    try expect(indices[2] == 2); // (2, 3) New
 
-        try expect(r0.new_vertex == false);
-        try expect(r1.new_vertex == true);
-        try expect(r2.new_vertex == true);
-    }
-    {
-        const face = faces[4];
-        const r0 = indexer.indexFor(face.position[0], vertices[face.normal[0]]);
-        const r1 = indexer.indexFor(face.position[1], vertices[face.normal[1]]);
-        const r2 = indexer.indexFor(face.position[2], vertices[face.normal[2]]);
+    // Face 1
+    try expect(indices[3 + 0] == 2); // (2, 3) Duplicate - Reuse index
+    try expect(indices[3 + 1] == 3); // (3, 7) New
+    try expect(indices[3 + 2] == 4); // (9, 8) New
 
-        try expect(r0.index == 8); // (9, 5) New normal mapping (Don't clobber)
-        try expect(r1.index == 9); // (6, 7) New normal mapping (Don't clobber)
-        try expect(r2.index == 10); // (0, 8) New normal mapping (Don't clobber)
+    // Face 2
+    try expect(indices[6 + 0] == 4); // (9, 8) Duplicate - Reuse index
+    try expect(indices[6 + 1] == 5); // (2, 7) New normal mapping (Don't clobber)
+    try expect(indices[6 + 2] == 1); // (4, 5) Duplicate - Reuse Index
 
-        try expect(r0.new_vertex == true);
-        try expect(r1.new_vertex == true);
-        try expect(r2.new_vertex == true);
-    }
-    try expect(indexer.next_packed_index == 11);
+    // Face 3
+    try expect(indices[9 + 0] == 2); // (2, 3) Duplicate - Reuse index
+    try expect(indices[9 + 1] == 6); // (6, 5) New
+    try expect(indices[9 + 2] == 7); // (1, 7) New
+
+    // Face 4
+    try expect(indices[12 + 0] == 8); // (9, 5) New normal mapping (Don't clobber)
+    try expect(indices[12 + 1] == 9); // (6, 7) New normal mapping (Don't clobber)
+    try expect(indices[12 + 2] == 10); // (0, 8) New normal mapping (Don't clobber)
+
+    try expect(writer.vertexBuffer().len == 11);
 }
 
 const PressedKeys = packed struct(u16) {
@@ -988,67 +953,52 @@ fn loadModels(allocator: std.mem.Allocator, app: *App, core: *mach.Core) !void {
 
         model.index_count = face_count * 3;
 
-        var indices_buffer = try allocator.alloc(u32, model.index_count);
-        var vertices_buffer = try allocator.alloc(Vertex, face_count * 3);
-        defer allocator.free(indices_buffer);
-        defer allocator.free(vertices_buffer);
-
-        var vertex_indexer = try VertexIndexer.init(allocator, vertex_count, face_count * 2);
-        defer vertex_indexer.deinit(allocator);
+        var vertex_writer = try VertexWriter(Vertex, u32).init(allocator, face_count * 3, vertex_count, face_count * 3);
+        defer vertex_writer.deinit(allocator);
 
         const scale: f32 = 0.45;
         const vertices = m3d_model.handle.vertex[0..vertex_count];
         var i: usize = 0;
         while (i < face_count) : (i += 1) {
             const face = m3d_model.handle.face[i];
-            const src_base_index: usize = (i * 3);
             var x: usize = 0;
             while (x < 3) : (x += 1) {
                 const vertex_index = face.vertex[x];
                 const normal_index = face.normal[x];
                 var vertex = Vertex{
-                    .position = undefined,
+                    .position = .{
+                        vertices[vertex_index].x * scale,
+                        vertices[vertex_index].y * scale,
+                        vertices[vertex_index].z * scale,
+                    },
                     .normal = .{
                         vertices[normal_index].x,
                         vertices[normal_index].y,
                         vertices[normal_index].z,
                     },
                 };
-                const result = vertex_indexer.indexFor(vertex_index, vertex.normal);
-                indices_buffer[src_base_index + x] = result.index;
-                if (result.new_vertex) {
-                    vertex.position = .{
-                        vertices[vertex_index].x * scale,
-                        vertices[vertex_index].y * scale,
-                        vertices[vertex_index].z * scale,
-                    };
-                    vertices_buffer[result.index] = vertex;
-                }
+                vertex_writer.put(vertex, vertex_index);
             }
         }
-        model.vertex_count = vertex_indexer.next_packed_index;
+
+        const vertex_buffer = vertex_writer.vertexBuffer();
+        const index_buffer = vertex_writer.indexBuffer();
+
+        model.vertex_count = @intCast(u32, vertex_buffer.len);
 
         model.vertex_buffer = core.device.createBuffer(&.{
             .usage = .{ .copy_dst = true, .vertex = true },
             .size = @sizeOf(Vertex) * model.vertex_count,
             .mapped_at_creation = false,
         });
-        app.queue.writeBuffer(
-            model.vertex_buffer,
-            0,
-            vertices_buffer[0..model.vertex_count],
-        );
+        app.queue.writeBuffer(model.vertex_buffer, 0, vertex_buffer);
 
         model.index_buffer = core.device.createBuffer(&.{
             .usage = .{ .copy_dst = true, .index = true },
             .size = @sizeOf(u32) * model.index_count,
             .mapped_at_creation = false,
         });
-        app.queue.writeBuffer(
-            model.index_buffer,
-            0,
-            indices_buffer,
-        );
+        app.queue.writeBuffer(model.index_buffer, 0, index_buffer);
     }
 }
 
