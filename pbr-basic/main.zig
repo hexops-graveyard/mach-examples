@@ -845,6 +845,7 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
         .depth_stencil = &.{
             .format = .depth24_plus_stencil8,
             .depth_write_enabled = true,
+            .depth_compare = .less,
         },
         .fragment = &gpu.FragmentState.init(.{
             .module = shader_module,
