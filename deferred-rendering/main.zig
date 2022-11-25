@@ -4,6 +4,7 @@ const gpu = @import("gpu");
 const zm = @import("zmath");
 const m3d = @import("model3d");
 const assets = @import("assets");
+const imgui = @import("mach-imgui").MachImgui(mach);
 
 pub const App = @This();
 
@@ -142,26 +143,7 @@ const RenderMode = enum(u32) {
 
 const Settings = struct {
     render_mode: RenderMode,
-    lights_count: u32,
-};
-
-const PressedKeys = packed struct(u16) {
-    right: bool = false,
-    left: bool = false,
-    up: bool = false,
-    down: bool = false,
-    padding: u12 = undefined,
-
-    pub inline fn areKeysPressed(self: @This()) bool {
-        return (self.up or self.down or self.left or self.right);
-    }
-
-    pub inline fn clear(self: *@This()) void {
-        self.right = false;
-        self.left = false;
-        self.up = false;
-        self.down = false;
-    }
+    lights_count: i32,
 };
 
 //
@@ -200,7 +182,6 @@ queue: *gpu.Queue,
 timer: mach.Timer,
 depth_texture: *gpu.Texture,
 depth_texture_view: *gpu.TextureView,
-pressed_keys: PressedKeys,
 vertex_buffer: *gpu.Buffer,
 vertex_count: u32,
 index_buffer: *gpu.Buffer,
@@ -227,6 +208,7 @@ write_gbuffers_pipeline: *gpu.RenderPipeline,
 gbuffers_debug_view_pipeline: *gpu.RenderPipeline,
 deferred_render_pipeline: *gpu.RenderPipeline,
 light_update_compute_pipeline: *gpu.ComputePipeline,
+imgui_render_pipeline: *gpu.RenderPipeline,
 
 // Pipeline layouts
 write_gbuffers_pipeline_layout: *gpu.PipelineLayout,
@@ -240,7 +222,7 @@ texture_quad_pass: TextureQuadPass,
 settings: Settings,
 
 screen_dimensions: Dimensions2D(u32),
-uniform_buffers_dirty: bool,
+is_paused: bool,
 
 //
 // Functions
@@ -249,7 +231,7 @@ uniform_buffers_dirty: bool,
 pub fn init(app: *App, core: *mach.Core) !void {
     app.queue = core.device.getQueue();
     app.timer = try mach.Timer.start();
-    app.uniform_buffers_dirty = false;
+    app.is_paused = false;
     app.settings.render_mode = .rendering;
     app.settings.lights_count = 128;
 
@@ -272,26 +254,57 @@ pub fn init(app: *App, core: *mach.Core) !void {
     prepareLightUpdateComputePipeline(app, core);
     prepareLights(app, core);
     prepareViewMatrices(app);
+
+    setupImgui(app, core);
 }
 
-// TODO: Proper deinit
 pub fn deinit(app: *App, _: *mach.Core) void {
+    app.write_gbuffers_pipeline.release();
+    app.gbuffers_debug_view_pipeline.release();
+    app.deferred_render_pipeline.release();
+    app.light_update_compute_pipeline.release();
+
+    app.write_gbuffers_pipeline_layout.release();
+    app.gbuffers_debug_view_pipeline_layout.release();
+    app.deferred_render_pipeline_layout.release();
+    app.light_update_compute_pipeline_layout.release();
+
+    app.scene_uniform_bind_group.release();
+    app.surface_size_uniform_bind_group.release();
+    app.gbuffer_textures_bind_group.release();
+
+    app.lights.buffer.release();
+    app.lights.extent_buffer.release();
+    app.lights.config_uniform_buffer.release();
+    app.lights.buffer_bind_group.release();
+    app.lights.buffer_bind_group_layout.release();
+    app.lights.buffer_compute_bind_group.release();
+    app.lights.buffer_compute_bind_group_layout.release();
+
+    app.gbuffer.texture_views[0].release();
+    app.gbuffer.texture_views[1].release();
+    app.gbuffer.texture_views[2].release();
+
+    app.gbuffer.texture_2d_float.release();
+    app.gbuffer.texture_albedo.release();
+
+    app.scene_uniform_bind_group_layout.release();
+    app.surface_size_uniform_bind_group_layout.release();
+    app.gbuffer_textures_bind_group_layout.release();
+
     app.depth_texture_view.release();
     app.depth_texture.release();
+    app.vertex_buffer.release();
+    app.index_buffer.release();
+    app.model_uniform_buffer.release();
+    app.camera_uniform_buffer.release();
+
+    imgui.backend.deinit();
 }
 
 pub fn update(app: *App, core: *mach.Core) !void {
     while (core.pollEvent()) |event| {
-        switch (event) {
-            .key_press => |ev| {
-                const key = ev.key;
-                if (key == .up or key == .w) app.pressed_keys.up = true;
-                if (key == .down or key == .s) app.pressed_keys.down = true;
-                if (key == .left or key == .a) app.pressed_keys.left = true;
-                if (key == .right or key == .d) app.pressed_keys.right = true;
-            },
-            else => {},
-        }
+        imgui.backend.passEvent(event);
     }
 
     const command = buildCommandBuffer(app, core);
@@ -301,7 +314,9 @@ pub fn update(app: *App, core: *mach.Core) !void {
     core.swap_chain.?.present();
     core.swap_chain.?.getCurrentTextureView().release();
 
-    updateUniformBuffers(app);
+    if (!app.is_paused) {
+        updateUniformBuffers(app);
+    }
 }
 
 pub fn resize(app: *App, core: *mach.Core, width: u32, height: u32) !void {
@@ -408,7 +423,7 @@ fn loadMeshFromFile(app: *App, core: *mach.Core, allocator: std.mem.Allocator, m
     }
 
     //
-    // Manually write ground plane mesh data to end
+    // Manually append ground plane to mesh
     //
     {
         const last_vertex_index: u16 = @intCast(u16, vertex_buffer.len - 4);
@@ -422,7 +437,6 @@ fn loadMeshFromFile(app: *App, core: *mach.Core, allocator: std.mem.Allocator, m
     }
 
     {
-        // Push vertex attributes for an additional ground plane
         const index_base = vertex_buffer.len - 4;
         vertex_buffer[index_base + 0].position = .{ -100.0, 20.0, -100.0 };
         vertex_buffer[index_base + 1].position = .{ 100.0, 20.0, 100.0 };
@@ -639,12 +653,18 @@ fn prepareWriteGBuffersPipeline(app: *App, core: *mach.Core) void {
         },
     });
 
-    const vertex_shader_module = core.device.createShaderModuleWGSL("vertexWriteGBuffers.wgsl", @embedFile("vertexWriteGBuffers.wgsl"));
-    const fragment_shader_module = core.device.createShaderModuleWGSL("fragmentWriteGBuffers.wgsl", @embedFile("fragmentWriteGBuffers.wgsl"));
+    const vertex_shader_module = core.device.createShaderModuleWGSL(
+        "vertexWriteGBuffers.wgsl",
+        @embedFile("vertexWriteGBuffers.wgsl"),
+    );
+    const fragment_shader_module = core.device.createShaderModuleWGSL(
+        "fragmentWriteGBuffers.wgsl",
+        @embedFile("fragmentWriteGBuffers.wgsl"),
+    );
 
     const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
         .layout = app.write_gbuffers_pipeline_layout,
-        .primitive = .{ .cull_mode = .back, .front_face = .ccw },
+        .primitive = .{ .cull_mode = .back },
         .depth_stencil = &.{
             .format = .depth24_plus,
             .depth_write_enabled = true,
@@ -831,13 +851,13 @@ fn setupRenderPasses(app: *App) void {
 fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
     {
         // Config uniform buffer
-        app.lights.config_uniform_buffer_size = @sizeOf(u32);
+        app.lights.config_uniform_buffer_size = @sizeOf(i32);
         app.lights.config_uniform_buffer = core.device.createBuffer(&.{
             .usage = .{ .copy_dst = true, .uniform = true },
             .size = app.lights.config_uniform_buffer_size,
             .mapped_at_creation = true,
         });
-        var config_data = app.lights.config_uniform_buffer.getMappedRange(u32, 0, 1).?;
+        var config_data = app.lights.config_uniform_buffer.getMappedRange(i32, 0, 1).?;
         config_data[0] = app.settings.lights_count;
         app.lights.config_uniform_buffer.unmap();
     }
@@ -1147,8 +1167,8 @@ fn buildCommandBuffer(app: *App, core: *mach.Core) *gpu.CommandBuffer {
         .color_attachment_count = 1,
         .color_attachments = &[_]gpu.RenderPassColorAttachment{app.texture_quad_pass.color_attachment},
     };
-    const pass = encoder.beginRenderPass(&app.texture_quad_pass.descriptor);
 
+    const pass = encoder.beginRenderPass(&app.texture_quad_pass.descriptor);
     switch (app.settings.render_mode) {
         .gbuffer_view => {
             // GBuffers debug view
@@ -1169,10 +1189,95 @@ fn buildCommandBuffer(app: *App, core: *mach.Core) *gpu.CommandBuffer {
             pass.draw(6, 1, 0, 0);
         },
     }
+
+    pass.setPipeline(app.imgui_render_pipeline);
+    const window_size = core.getWindowSize();
+    imgui.backend.newFrame(
+        core,
+        window_size.width,
+        window_size.height,
+    );
+    drawUI(app);
+    imgui.backend.draw(pass);
+
     pass.end();
     pass.release();
 
     return encoder.finish(null);
+}
+
+fn setupImgui(app: *App, core: *mach.Core) void {
+    imgui.init();
+    const font_normal = imgui.io.addFontFromFile(assets.fonts.roboto_medium.path, 16.0);
+
+    const blend_component_descriptor = gpu.BlendComponent{
+        .operation = .add,
+        .src_factor = .one,
+        .dst_factor = .zero,
+    };
+
+    const color_target_state = gpu.ColorTargetState{
+        .format = core.swap_chain_format,
+        .blend = &.{
+            .color = blend_component_descriptor,
+            .alpha = blend_component_descriptor,
+        },
+    };
+
+    const shader_module = core.device.createShaderModuleWGSL("imgui", assets.shaders.imgui.bytes);
+    const imgui_pipeline_descriptor = gpu.RenderPipeline.Descriptor{
+        .fragment = &gpu.FragmentState.init(.{
+            .module = shader_module,
+            .entry_point = "frag_main",
+            .targets = &.{color_target_state},
+        }),
+        .vertex = gpu.VertexState.init(.{
+            .module = shader_module,
+            .entry_point = "vert_main",
+        }),
+    };
+
+    app.imgui_render_pipeline = core.device.createRenderPipeline(&imgui_pipeline_descriptor);
+
+    shader_module.release();
+
+    imgui.io.setDefaultFont(font_normal);
+    imgui.backend.init(core.device, core.swap_chain_format, null);
+
+    const style = imgui.getStyle();
+    style.window_min_size = .{ 300.0, 100.0 };
+    style.window_border_size = 4.0;
+    style.scrollbar_size = 3.0;
+}
+
+fn drawUI(app: *App) void {
+    imgui.setNextWindowPos(.{ .x = 10, .y = 10 });
+    if (!imgui.begin("Settings", .{})) {
+        imgui.end();
+        return;
+    }
+    _ = imgui.checkbox("Paused", .{ .v = &app.is_paused });
+    var update_uniform_buffers: bool = false;
+    const modes = [_][:0]const u8{ "rendering", "gbuffers view" };
+    const mode_index = @enumToInt(app.settings.render_mode);
+    if (imgui.beginCombo("Mode", .{ .preview_value = modes[mode_index] })) {
+        for (modes) |mode, mode_i| {
+            const i = @intCast(u32, mode_i);
+            if (imgui.selectable(mode, .{ .selected = mode_index == i })) {
+                update_uniform_buffers = true;
+                app.settings.render_mode = @intToEnum(RenderMode, mode_i);
+            }
+        }
+        imgui.endCombo();
+    }
+    if (imgui.sliderInt("Light count", .{ .v = &app.settings.lights_count, .min = 1, .max = max_num_lights })) {
+        app.queue.writeBuffer(
+            app.lights.config_uniform_buffer,
+            0,
+            &[1]i32{app.settings.lights_count},
+        );
+    }
+    imgui.end();
 }
 
 fn updateUniformBuffers(app: *App) void {

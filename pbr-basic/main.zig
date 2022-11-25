@@ -1055,7 +1055,7 @@ fn setupImgui(app: *App, core: *mach.Core) void {
         },
     };
 
-    const shader_module = core.device.createShaderModuleWGSL("imgui.wgsl", @embedFile("imgui.wgsl"));
+    const shader_module = core.device.createShaderModuleWGSL("imgui", assets.shaders.imgui.bytes);
 
     const imgui_pipeline_descriptor = gpu.RenderPipeline.Descriptor{
         .depth_stencil = &.{

@@ -24,6 +24,13 @@ pub const stanford_dragon = struct {
     pub const path = root_path ++ "/stanford_dragon.m3d";
 };
 
+pub const shaders = struct {
+    pub const imgui = struct {
+        pub const path = root_path ++ "/shaders/imgui.wgsl";
+        pub const bytes = @embedFile(path);
+    };
+};
+
 pub const skybox = struct {
     const negx_image_path = root_path ++ "/skybox/negx.png";
     const negy_image_path = root_path ++ "/skybox/negy.png";
