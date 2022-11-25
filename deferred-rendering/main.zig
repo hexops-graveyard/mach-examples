@@ -817,8 +817,6 @@ fn setupRenderPasses(app: *App) void {
             .depth_load_op = .clear,
             .depth_store_op = .store,
             .depth_clear_value = 1.0,
-            .clear_depth = 1.0,
-            .clear_stencil = 1.0,
             .stencil_clear_value = 1.0,
         };
 
