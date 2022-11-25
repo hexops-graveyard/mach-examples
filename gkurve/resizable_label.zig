@@ -201,8 +201,8 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                         try ctx.label.tessellator.process(ctx.label.allocator, polygon.items, null, 2);
 
                         for (ctx.label.tessellator.triangles.items) |idx| {
-                            try all_outlines.append(Vec2{polygon.items[idx*2], polygon.items[(idx*2)+1]});
-                            try all_indices.append(@intCast(u16, (idx*2) + idx_offset));
+                            try all_outlines.append(Vec2{ polygon.items[idx * 2], polygon.items[(idx * 2) + 1] });
+                            try all_indices.append(@intCast(u16, (idx * 2) + idx_offset));
                         }
                         idx_offset += @intCast(u16, ctx.label.tessellator.triangles.items.len);
                     }
