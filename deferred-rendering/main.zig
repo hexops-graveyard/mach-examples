@@ -12,6 +12,98 @@ const Vec3 = [3]f32;
 const Vec4 = [4]f32;
 const Mat4 = [4]Vec4;
 
+/// Vertex writer manages the placement of vertices by tracking which are unique. If a duplicate vertex is added
+/// with `put`, only it's index will be written to the index buffer.
+fn VertexWriter(comptime VertexType: type, comptime IndexType: type) type {
+    return struct {
+        const MapEntry = struct {
+            packed_index: IndexType = null_index,
+            next_sparse: IndexType = null_index,
+        };
+
+        const null_index: IndexType = std.math.maxInt(IndexType);
+
+        vertices: []VertexType,
+        indices: []IndexType,
+        sparse_to_packed_map: []MapEntry,
+
+        /// Next index outside of the 1:1 mapping range for storing
+        /// position -> normal collisions
+        next_collision_index: IndexType,
+
+        /// Next packed index
+        next_packed_index: IndexType,
+        written_indices_count: IndexType,
+
+        pub fn init(
+            allocator: std.mem.Allocator,
+            indices_count: IndexType,
+            sparse_vertices_count: IndexType,
+            max_vertex_count: IndexType,
+        ) !@This() {
+            var result: @This() = undefined;
+            result.vertices = try allocator.alloc(Vertex, max_vertex_count);
+            result.indices = try allocator.alloc(IndexType, indices_count);
+            result.sparse_to_packed_map = try allocator.alloc(MapEntry, max_vertex_count);
+            result.next_collision_index = sparse_vertices_count;
+            result.next_packed_index = 0;
+            result.written_indices_count = 0;
+            std.mem.set(MapEntry, result.sparse_to_packed_map, .{});
+            return result;
+        }
+
+        pub fn put(self: *@This(), vertex: Vertex, sparse_index: IndexType) void {
+            if (self.sparse_to_packed_map[sparse_index].packed_index == null_index) {
+                // New start of chain, reserve a new packed index and add entry to `index_map`
+                const packed_index = self.next_packed_index;
+                self.sparse_to_packed_map[sparse_index].packed_index = packed_index;
+                self.vertices[packed_index] = vertex;
+                self.indices[self.written_indices_count] = packed_index;
+                self.written_indices_count += 1;
+                self.next_packed_index += 1;
+                return;
+            }
+            var previous_sparse_index: IndexType = undefined;
+            var current_sparse_index = sparse_index;
+            while (current_sparse_index != null_index) {
+                const packed_index = self.sparse_to_packed_map[current_sparse_index].packed_index;
+                if (std.mem.eql(u8, &std.mem.toBytes(self.vertices[packed_index]), &std.mem.toBytes(vertex))) {
+                    // We already have a record for this vertex in our chain
+                    self.indices[self.written_indices_count] = packed_index;
+                    self.written_indices_count += 1;
+                    return;
+                }
+                previous_sparse_index = current_sparse_index;
+                current_sparse_index = self.sparse_to_packed_map[current_sparse_index].next_sparse;
+            }
+            // This is a new mapping for the given sparse index
+            const packed_index = self.next_packed_index;
+            const remapped_sparse_index = self.next_collision_index;
+            self.indices[self.written_indices_count] = packed_index;
+            self.vertices[packed_index] = vertex;
+            self.sparse_to_packed_map[previous_sparse_index].next_sparse = remapped_sparse_index;
+            self.sparse_to_packed_map[remapped_sparse_index].packed_index = packed_index;
+            self.next_packed_index += 1;
+            self.next_collision_index += 1;
+            self.written_indices_count += 1;
+        }
+
+        pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+            allocator.free(self.vertices);
+            allocator.free(self.indices);
+            allocator.free(self.sparse_to_packed_map);
+        }
+
+        pub fn indexBuffer(self: @This()) []IndexType {
+            return self.indices;
+        }
+
+        pub fn vertexBuffer(self: @This()) []Vertex {
+            return self.vertices[0..self.next_packed_index];
+        }
+    };
+}
+
 fn Dimensions2D(comptime T: type) type {
     return struct {
         width: T,
@@ -19,10 +111,7 @@ fn Dimensions2D(comptime T: type) type {
     };
 }
 
-const dragon_vertex_count = 5205;
-const dragon_cell_count = 11102;
-
-const DragonVertex = extern struct {
+const Vertex = extern struct {
     position: Vec3,
     normal: Vec3,
     uv: Vec2,
@@ -75,139 +164,6 @@ const PressedKeys = packed struct(u16) {
     }
 };
 
-const Camera = struct {
-    const Matrices = struct {
-        perspective: Mat4 = [1]Vec4{[1]f32{0.0} ** 4} ** 4,
-        view: Mat4 = [1]Vec4{[1]f32{0.0} ** 4} ** 4,
-    };
-
-    rotation: Vec3 = .{ 0.0, 0.0, 0.0 },
-    position: Vec3 = .{ 0.0, 0.0, 0.0 },
-    view_position: Vec4 = .{ 0.0, 0.0, 0.0, 0.0 },
-    fov: f32 = 0.0,
-    znear: f32 = 0.0,
-    zfar: f32 = 0.0,
-    rotation_speed: f32 = 0.0,
-    movement_speed: f32 = 0.0,
-    updated: bool = false,
-    matrices: Matrices = .{},
-
-    pub fn calculateMovement(self: *@This(), pressed_keys: PressedKeys) void {
-        std.debug.assert(pressed_keys.areKeysPressed());
-        const rotation_radians = Vec3{
-            toRadians(self.rotation[0]),
-            toRadians(self.rotation[1]),
-            toRadians(self.rotation[2]),
-        };
-        var camera_front = zm.Vec{ -zm.cos(rotation_radians[0]) * zm.sin(rotation_radians[1]), zm.sin(rotation_radians[0]), zm.cos(rotation_radians[0]) * zm.cos(rotation_radians[1]), 0 };
-        camera_front = zm.normalize3(camera_front);
-        if (pressed_keys.up) {
-            camera_front[0] *= self.movement_speed;
-            camera_front[1] *= self.movement_speed;
-            camera_front[2] *= self.movement_speed;
-            self.position = Vec3{
-                self.position[0] + camera_front[0],
-                self.position[1] + camera_front[1],
-                self.position[2] + camera_front[2],
-            };
-        }
-        if (pressed_keys.down) {
-            camera_front[0] *= self.movement_speed;
-            camera_front[1] *= self.movement_speed;
-            camera_front[2] *= self.movement_speed;
-            self.position = Vec3{
-                self.position[0] - camera_front[0],
-                self.position[1] - camera_front[1],
-                self.position[2] - camera_front[2],
-            };
-        }
-        if (pressed_keys.right) {
-            camera_front = zm.cross3(.{ 0.0, 1.0, 0.0, 0.0 }, camera_front);
-            camera_front = zm.normalize3(camera_front);
-            camera_front[0] *= self.movement_speed;
-            camera_front[1] *= self.movement_speed;
-            camera_front[2] *= self.movement_speed;
-            self.position = Vec3{
-                self.position[0] - camera_front[0],
-                self.position[1] - camera_front[1],
-                self.position[2] - camera_front[2],
-            };
-        }
-        if (pressed_keys.left) {
-            camera_front = zm.cross3(.{ 0.0, 1.0, 0.0, 0.0 }, camera_front);
-            camera_front = zm.normalize3(camera_front);
-            camera_front[0] *= self.movement_speed;
-            camera_front[1] *= self.movement_speed;
-            camera_front[2] *= self.movement_speed;
-            self.position = Vec3{
-                self.position[0] + camera_front[0],
-                self.position[1] + camera_front[1],
-                self.position[2] + camera_front[2],
-            };
-        }
-        self.updateViewMatrix();
-    }
-
-    fn updateViewMatrix(self: *@This()) void {
-        const rotation_x = zm.rotationX(toRadians(self.rotation[2]));
-        const rotation_y = zm.rotationY(toRadians(self.rotation[1]));
-        const rotation_z = zm.rotationZ(toRadians(self.rotation[0]));
-        const rotation_matrix = zm.mul(rotation_z, zm.mul(rotation_x, rotation_y));
-
-        const translation_matrix: zm.Mat = zm.translationV(.{
-            self.position[0],
-            self.position[1],
-            self.position[2],
-            0,
-        });
-        const view = zm.mul(translation_matrix, rotation_matrix);
-        self.matrices.view[0] = view[0];
-        self.matrices.view[1] = view[1];
-        self.matrices.view[2] = view[2];
-        self.matrices.view[3] = view[3];
-        self.view_position = .{
-            -self.position[0],
-            self.position[1],
-            -self.position[2],
-            0.0,
-        };
-        self.updated = true;
-    }
-
-    pub fn setMovementSpeed(self: *@This(), speed: f32) void {
-        self.movement_speed = speed;
-    }
-
-    pub fn setPerspective(self: *@This(), fov: f32, aspect: f32, znear: f32, zfar: f32) void {
-        self.fov = fov;
-        self.znear = znear;
-        self.zfar = zfar;
-        const perspective = zm.perspectiveFovRhGl(toRadians(fov), aspect, znear, zfar);
-        self.matrices.perspective[0] = perspective[0];
-        self.matrices.perspective[1] = perspective[1];
-        self.matrices.perspective[2] = perspective[2];
-        self.matrices.perspective[3] = perspective[3];
-    }
-
-    pub fn setRotationSpeed(self: *@This(), speed: f32) void {
-        self.rotation_speed = speed;
-    }
-
-    pub fn setRotation(self: *@This(), rotation: Vec3) void {
-        self.rotation = rotation;
-        self.updateViewMatrix();
-    }
-
-    pub fn setPosition(self: *@This(), position: Vec3) void {
-        self.position = .{
-            position[0],
-            -position[1],
-            position[2],
-        };
-        self.updateViewMatrix();
-    }
-};
-
 //
 // Constants
 //
@@ -240,13 +196,15 @@ const Lights = struct {
     buffer_compute_bind_group_layout: *gpu.BindGroupLayout,
 };
 
-camera: Camera,
 queue: *gpu.Queue,
+timer: mach.Timer,
 depth_texture: *gpu.Texture,
 depth_texture_view: *gpu.TextureView,
 pressed_keys: PressedKeys,
-dragon_model: []DragonVertex,
 vertex_buffer: *gpu.Buffer,
+vertex_count: u32,
+index_buffer: *gpu.Buffer,
+index_count: u32,
 gbuffer: GBuffer,
 model_uniform_buffer: *gpu.Buffer,
 camera_uniform_buffer: *gpu.Buffer,
@@ -290,6 +248,7 @@ uniform_buffers_dirty: bool,
 
 pub fn init(app: *App, core: *mach.Core) !void {
     app.queue = core.device.getQueue();
+    app.timer = try mach.Timer.start();
     app.uniform_buffers_dirty = false;
     app.settings.render_mode = .rendering;
     app.settings.lights_count = 128;
@@ -299,27 +258,8 @@ pub fn init(app: *App, core: *mach.Core) !void {
         .height = core.current_desc.height,
     };
 
-    app.camera = Camera{
-        .rotation_speed = 1.0,
-        .movement_speed = 1.0,
-    };
-
-    //
-    // Setup Camera
-    //
-    const aspect_ratio: f32 = @intToFloat(f32, core.current_desc.width) / @intToFloat(f32, core.current_desc.height);
-    app.camera.setPosition(.{ 10.0, 6.0, 6.0 });
-    app.camera.setRotation(.{ 62.5, 90.0, 0.0 });
-    app.camera.setMovementSpeed(0.5);
-    app.camera.setPerspective(60.0, aspect_ratio, 0.1, 256.0);
-    app.camera.setRotationSpeed(0.25);
-
-    //
-    // Load Assets
-    //
-    app.dragon_model = try loadModelFromFile(std.heap.c_allocator, assets.stanford_dragon.path);
-    prepareMeshBuffers(app, core);
-    prepareGBufferTextureRenderTargets(app, core, core.current_desc.width, core.current_desc.height);
+    try loadMeshFromFile(app, core, std.heap.c_allocator, assets.stanford_dragon.path);
+    prepareGBufferTextureRenderTargets(app, core);
     prepareDepthTexture(app, core);
     prepareBindGroupLayouts(app, core);
     prepareRenderPipelineLayouts(app, core);
@@ -331,9 +271,10 @@ pub fn init(app: *App, core: *mach.Core) !void {
     prepareComputePipelineLayout(app, core);
     prepareLightUpdateComputePipeline(app, core);
     prepareLights(app, core);
-    prepareViewMatrices(app, core);
+    prepareViewMatrices(app);
 }
 
+// TODO: Proper deinit
 pub fn deinit(app: *App, _: *mach.Core) void {
     app.depth_texture_view.release();
     app.depth_texture.release();
@@ -353,15 +294,14 @@ pub fn update(app: *App, core: *mach.Core) !void {
         }
     }
 
-    std.debug.assert(app.screen_dimensions.width == core.current_desc.width);
-    std.debug.assert(app.screen_dimensions.height == core.current_desc.height);
-
     const command = buildCommandBuffer(app, core);
     app.queue.submit(&[_]*gpu.CommandBuffer{command});
 
     command.release();
     core.swap_chain.?.present();
     core.swap_chain.?.getCurrentTextureView().release();
+
+    updateUniformBuffers(app);
 }
 
 pub fn resize(app: *App, core: *mach.Core, width: u32, height: u32) !void {
@@ -370,88 +310,33 @@ pub fn resize(app: *App, core: *mach.Core, width: u32, height: u32) !void {
 
     app.depth_texture_view.release();
     app.depth_texture.release();
-    app.depth_texture = core.device.createTexture(&gpu.Texture.Descriptor{
-        .usage = .{ .render_attachment = true },
-        .format = .depth24_plus,
-        .sample_count = 1,
-        .size = .{
-            .width = width,
-            .height = height,
-            .depth_or_array_layers = 1,
-        },
-    });
-    app.depth_texture_view = app.depth_texture.createView(&gpu.TextureView.Descriptor{
-        .format = .depth24_plus,
-        .dimension = .dimension_2d,
-        .array_layer_count = 1,
-        .aspect = .all,
-    });
-    app.write_gbuffer_pass.depth_stencil_attachment = gpu.RenderPassDepthStencilAttachment{
-        .view = app.depth_texture_view,
-        .depth_load_op = .clear,
-        .depth_store_op = .store,
-        .depth_clear_value = 1.0,
-        .clear_stencil = 1.0,
-        .stencil_clear_value = 1.0,
-    };
 
     app.gbuffer.texture_2d_float.release();
     app.gbuffer.texture_albedo.release();
     app.gbuffer.texture_views[0].release();
     app.gbuffer.texture_views[1].release();
     app.gbuffer.texture_views[2].release();
-    prepareGBufferTextureRenderTargets(app, core, width, height);
 
-    const aspect_ratio = @intToFloat(f32, width) / @intToFloat(f32, height);
-    app.camera.setPerspective(60.0, aspect_ratio, 0.1, 256.0);
-    app.uniform_buffers_dirty = true;
+    prepareGBufferTextureRenderTargets(app, core);
+    prepareDepthTexture(app, core);
+    setupRenderPasses(app);
 
-    app.write_gbuffer_pass.color_attachments = [3]gpu.RenderPassColorAttachment{
-        .{
-            .view = app.gbuffer.texture_views[0],
-            .clear_value = .{
-                .r = std.math.floatMax(f32),
-                .g = std.math.floatMax(f32),
-                .b = std.math.floatMax(f32),
-                .a = 1.0,
-            },
-            .load_op = .clear,
-            .store_op = .store,
-        },
-        .{
-            .view = app.gbuffer.texture_views[1],
-            .clear_value = .{
-                .r = 0.0,
-                .g = 0.0,
-                .b = 1.0,
-                .a = 1.0,
-            },
-            .load_op = .clear,
-            .store_op = .store,
-        },
-        .{
-            .view = app.gbuffer.texture_views[2],
-            .clear_value = .{
-                .r = 0.0,
-                .g = 0.0,
-                .b = 0.0,
-                .a = 1.0,
-            },
-            .load_op = .clear,
-            .store_op = .store,
-        },
+    const bind_group_entries = [_]gpu.BindGroup.Entry{
+        gpu.BindGroup.Entry.textureView(0, app.gbuffer.texture_views[0]),
+        gpu.BindGroup.Entry.textureView(1, app.gbuffer.texture_views[1]),
+        gpu.BindGroup.Entry.textureView(2, app.gbuffer.texture_views[2]),
     };
+    app.gbuffer_textures_bind_group = core.device.createBindGroup(
+        &gpu.BindGroup.Descriptor.init(.{
+            .layout = app.gbuffer_textures_bind_group_layout,
+            .entries = &bind_group_entries,
+        }),
+    );
 
-    app.write_gbuffer_pass.descriptor = gpu.RenderPassDescriptor{
-        .color_attachment_count = 3,
-        .color_attachments = &app.write_gbuffer_pass.color_attachments,
-        .depth_stencil_attachment = &app.write_gbuffer_pass.depth_stencil_attachment,
-    };
-
-    prepareViewMatrices(app, core);
+    prepareViewMatrices(app);
 }
 
-fn loadModelFromFile(allocator: std.mem.Allocator, model_path: []const u8) ![]DragonVertex {
+fn loadMeshFromFile(app: *App, core: *mach.Core, allocator: std.mem.Allocator, model_path: []const u8) !void {
     var model_file = std.fs.openFileAbsolute(model_path, .{}) catch |err| {
         std.log.err("Failed to load model: '{s}' Error: {}", .{ model_path, err });
         return error.LoadModelFileFailed;
@@ -466,92 +351,121 @@ fn loadModelFromFile(allocator: std.mem.Allocator, model_path: []const u8) ![]Dr
     const vertex_count = m3d_model.handle.numvertex;
     const vertices = m3d_model.handle.vertex[0..vertex_count];
 
-    const texture_map_count = m3d_model.handle.numtmap;
-    const texture_map = m3d_model.handle.tmap[0..texture_map_count];
-
     const face_count = m3d_model.handle.numface;
-    var model = try allocator.alloc(DragonVertex, face_count + 4);
+    app.index_count = (face_count * 3) + 6;
 
-    const scale: f32 = 500.0;
-    // TODO: m3d_model.handle.scale
+    var vertex_writer = try VertexWriter(Vertex, u16).init(
+        allocator,
+        @intCast(u16, app.index_count),
+        @intCast(u16, vertex_count),
+        @intCast(u16, face_count * 3),
+    );
+    defer vertex_writer.deinit(allocator);
+
+    const scale: f32 = 80.0;
+    const plane_xy = [2]usize{ 0, 1 };
+    var extent_min = [2]f32{ std.math.floatMax(f32), std.math.floatMax(f32) };
+    var extent_max = [2]f32{ std.math.floatMin(f32), std.math.floatMin(f32) };
+
     var i: usize = 0;
     while (i < face_count) : (i += 1) {
         const face = m3d_model.handle.face[i];
-        const j: usize = i * 3;
-
-        model[j] = DragonVertex{ .position = .{
-            vertices[face.vertex[0]].x * scale,
-            vertices[face.vertex[0]].y * scale,
-            vertices[face.vertex[0]].z * scale,
-        }, .normal = .{
-            vertices[face.normal[0]].x,
-            vertices[face.normal[0]].y,
-            vertices[face.normal[0]].z,
-        }, .uv = .{
-            texture_map[face.texcoord[0]].u,
-            texture_map[face.texcoord[0]].v,
-        } };
-        model[j + 1] = DragonVertex{ .position = .{
-            vertices[face.vertex[1]].x * scale,
-            vertices[face.vertex[1]].y * scale,
-            vertices[face.vertex[1]].z * scale,
-        }, .normal = .{
-            vertices[face.normal[1]].x,
-            vertices[face.normal[1]].y,
-            vertices[face.normal[1]].z,
-        }, .uv = .{
-            texture_map[face.texcoord[1]].u,
-            texture_map[face.texcoord[1]].v,
-        } };
-        model[j + 2] = DragonVertex{ .position = .{
-            vertices[face.vertex[2]].x * scale,
-            vertices[face.vertex[2]].y * scale,
-            vertices[face.vertex[2]].z * scale,
-        }, .normal = .{
-            vertices[face.normal[2]].x,
-            vertices[face.normal[2]].y,
-            vertices[face.normal[2]].z,
-        }, .uv = .{
-            texture_map[face.texcoord[2]].u,
-            texture_map[face.texcoord[2]].v,
-        } };
+        var x: usize = 0;
+        while (x < 3) : (x += 1) {
+            const vertex_index = face.vertex[x];
+            const normal_index = face.normal[x];
+            const position = Vec3{
+                vertices[vertex_index].x * scale,
+                vertices[vertex_index].y * scale,
+                vertices[vertex_index].z * scale,
+            };
+            extent_min[0] = @min(position[plane_xy[0]], extent_min[0]);
+            extent_min[1] = @min(position[plane_xy[1]], extent_min[1]);
+            extent_max[0] = @max(position[plane_xy[0]], extent_max[0]);
+            extent_max[1] = @max(position[plane_xy[1]], extent_max[1]);
+            const vertex = Vertex{ .position = position, .normal = .{
+                vertices[normal_index].x,
+                vertices[normal_index].y,
+                vertices[normal_index].z,
+            }, .uv = .{ position[plane_xy[0]], position[plane_xy[1]] } };
+            vertex_writer.put(vertex, @intCast(u16, vertex_index));
+        }
     }
 
-    // Push vertex attributes for an additional ground plane
-    model[face_count + 0].position = .{ -100.0, 20.0, -100.0 };
-    model[face_count + 1].position = .{ 100.0, 20.0, 100.0 };
-    model[face_count + 2].position = .{ -100.0, 20.0, 100.0 };
-    model[face_count + 3].position = .{ 100.0, 20.0, -100.0 };
-    model[face_count + 0].normal = .{ 0.0, 1.0, 0.0 };
-    model[face_count + 1].normal = .{ 0.0, 1.0, 0.0 };
-    model[face_count + 2].normal = .{ 0.0, 1.0, 0.0 };
-    model[face_count + 3].normal = .{ 0.0, 1.0, 0.0 };
-    model[face_count + 0].uv = .{ 0.0, 0.0 };
-    model[face_count + 1].uv = .{ 1.0, 1.0 };
-    model[face_count + 2].uv = .{ 0.0, 1.0 };
-    model[face_count + 3].uv = .{ 1.0, 0.0 };
+    const vertex_buffer = vertex_writer.vertices[0 .. vertex_writer.next_packed_index + 4];
+    const index_buffer = vertex_writer.indices;
 
-    std.log.info("Model loaded: {d} faces", .{face_count});
-    return model;
+    app.vertex_count = @intCast(u32, vertex_buffer.len);
+
+    //
+    // Compute UV values
+    //
+    for (vertex_buffer) |*vertex| {
+        vertex.uv = .{
+            (vertex.uv[0] - extent_min[0]) / (extent_max[0] - extent_min[0]),
+            (vertex.uv[1] - extent_min[1]) / (extent_max[1] - extent_min[1]),
+        };
+    }
+
+    //
+    // Manually write ground plane mesh data to end
+    //
+    {
+        const last_vertex_index: u16 = @intCast(u16, vertex_buffer.len - 4);
+        const index_base = index_buffer.len - 6;
+        index_buffer[index_base + 0] = last_vertex_index;
+        index_buffer[index_base + 1] = last_vertex_index + 2;
+        index_buffer[index_base + 2] = last_vertex_index + 1;
+        index_buffer[index_base + 3] = last_vertex_index;
+        index_buffer[index_base + 4] = last_vertex_index + 1;
+        index_buffer[index_base + 5] = last_vertex_index + 3;
+    }
+
+    {
+        // Push vertex attributes for an additional ground plane
+        const index_base = vertex_buffer.len - 4;
+        vertex_buffer[index_base + 0].position = .{ -100.0, 20.0, -100.0 };
+        vertex_buffer[index_base + 1].position = .{ 100.0, 20.0, 100.0 };
+        vertex_buffer[index_base + 2].position = .{ -100.0, 20.0, 100.0 };
+        vertex_buffer[index_base + 3].position = .{ 100.0, 20.0, -100.0 };
+        vertex_buffer[index_base + 0].normal = .{ 0.0, 1.0, 0.0 };
+        vertex_buffer[index_base + 1].normal = .{ 0.0, 1.0, 0.0 };
+        vertex_buffer[index_base + 2].normal = .{ 0.0, 1.0, 0.0 };
+        vertex_buffer[index_base + 3].normal = .{ 0.0, 1.0, 0.0 };
+        vertex_buffer[index_base + 0].uv = .{ 0.0, 0.0 };
+        vertex_buffer[index_base + 1].uv = .{ 1.0, 1.0 };
+        vertex_buffer[index_base + 2].uv = .{ 0.0, 1.0 };
+        vertex_buffer[index_base + 3].uv = .{ 1.0, 0.0 };
+    }
+
+    {
+        const buffer_size = vertex_buffer.len * @sizeOf(Vertex);
+        app.vertex_buffer = core.device.createBuffer(&.{
+            .usage = .{ .vertex = true },
+            .size = roundToMultipleOf4(u64, buffer_size),
+            .mapped_at_creation = true,
+        });
+        var mapping = app.vertex_buffer.getMappedRange(Vertex, 0, vertex_buffer.len).?;
+        std.mem.copy(Vertex, mapping[0..vertex_buffer.len], vertex_buffer);
+        app.vertex_buffer.unmap();
+    }
+    {
+        const buffer_size = index_buffer.len * @sizeOf(u16);
+        app.index_buffer = core.device.createBuffer(&.{
+            .usage = .{ .index = true },
+            .size = roundToMultipleOf4(u64, buffer_size),
+            .mapped_at_creation = true,
+        });
+        var mapping = app.index_buffer.getMappedRange(u16, 0, index_buffer.len).?;
+        std.mem.copy(u16, mapping[0..index_buffer.len], index_buffer);
+        app.index_buffer.unmap();
+    }
 }
 
-fn prepareMeshBuffers(app: *App, core: *mach.Core) void {
-    const dragon_model = app.dragon_model;
-    const buffer_size = dragon_model.len * @sizeOf(DragonVertex);
-    app.vertex_buffer = core.device.createBuffer(&.{
-        .usage = .{ .vertex = true },
-        .size = roundToMultipleOf4(u64, buffer_size),
-        .mapped_at_creation = true,
-    });
-    var mapping = app.vertex_buffer.getMappedRange(DragonVertex, 0, dragon_model.len).?;
-    std.mem.copy(DragonVertex, mapping[0..dragon_model.len], dragon_model);
-    app.vertex_buffer.unmap();
-}
-
-fn prepareGBufferTextureRenderTargets(app: *App, core: *mach.Core, width: u32, height: u32) void {
+fn prepareGBufferTextureRenderTargets(app: *App, core: *mach.Core) void {
     var screen_extent = gpu.Extent3D{
-        .width = width,
-        .height = height,
+        .width = app.screen_dimensions.width,
+        .height = app.screen_dimensions.height,
         .depth_or_array_layers = 2,
     };
     app.gbuffer.texture_2d_float = core.device.createTexture(&.{
@@ -590,8 +504,8 @@ fn prepareGBufferTextureRenderTargets(app: *App, core: *mach.Core, width: u32, h
 
 fn prepareDepthTexture(app: *App, core: *mach.Core) void {
     const screen_extent = gpu.Extent3D{
-        .width = core.current_desc.width,
-        .height = core.current_desc.height,
+        .width = app.screen_dimensions.width,
+        .height = app.screen_dimensions.height,
     };
     app.depth_texture = core.device.createTexture(&.{
         .usage = .{ .render_attachment = true },
@@ -716,24 +630,21 @@ fn prepareWriteGBuffersPipeline(app: *App, core: *mach.Core) void {
     };
 
     const write_gbuffers_vertex_buffer_layout = gpu.VertexBufferLayout.init(.{
-        .array_stride = @sizeOf(DragonVertex),
+        .array_stride = @sizeOf(Vertex),
         .step_mode = .vertex,
         .attributes = &.{
-            .{ .format = .float32x3, .offset = @offsetOf(DragonVertex, "position"), .shader_location = 0 },
-            .{ .format = .float32x3, .offset = @offsetOf(DragonVertex, "normal"), .shader_location = 1 },
-            .{ .format = .float32x2, .offset = @offsetOf(DragonVertex, "uv"), .shader_location = 2 },
+            .{ .format = .float32x3, .offset = @offsetOf(Vertex, "position"), .shader_location = 0 },
+            .{ .format = .float32x3, .offset = @offsetOf(Vertex, "normal"), .shader_location = 1 },
+            .{ .format = .float32x2, .offset = @offsetOf(Vertex, "uv"), .shader_location = 2 },
         },
     });
 
     const vertex_shader_module = core.device.createShaderModuleWGSL("vertexWriteGBuffers.wgsl", @embedFile("vertexWriteGBuffers.wgsl"));
-
     const fragment_shader_module = core.device.createShaderModuleWGSL("fragmentWriteGBuffers.wgsl", @embedFile("fragmentWriteGBuffers.wgsl"));
 
     const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
         .layout = app.write_gbuffers_pipeline_layout,
-        .primitive = .{
-            .cull_mode = .back,
-        },
+        .primitive = .{ .cull_mode = .back, .front_face = .ccw },
         .depth_stencil = &.{
             .format = .depth24_plus,
             .depth_write_enabled = true,
@@ -969,7 +880,7 @@ fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
         // Surface size uniform buffer
         app.surface_size_uniform_buffer = core.device.createBuffer(&.{
             .usage = .{ .copy_dst = true, .uniform = true },
-            .size = @sizeOf(f32) * 4, // TODO: Verify type
+            .size = @sizeOf(f32) * 4,
         });
     }
     {
@@ -978,7 +889,7 @@ fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
             .{
                 .binding = 0,
                 .buffer = app.surface_size_uniform_buffer,
-                .size = @sizeOf(f32) * 2, // TODO: Verify type
+                .size = @sizeOf(f32) * 2,
             },
         };
         app.surface_size_uniform_bind_group = core.device.createBindGroup(
@@ -1012,7 +923,10 @@ fn prepareComputePipelineLayout(app: *App, core: *mach.Core) void {
 }
 
 fn prepareLightUpdateComputePipeline(app: *App, core: *mach.Core) void {
-    const shader_module = core.device.createShaderModuleWGSL("lightUpdate.wgsl", @embedFile("lightUpdate.wgsl"));
+    const shader_module = core.device.createShaderModuleWGSL(
+        "lightUpdate.wgsl",
+        @embedFile("lightUpdate.wgsl"),
+    );
     app.light_update_compute_pipeline = core.device.createComputePipeline(&gpu.ComputePipeline.Descriptor{
         .compute = gpu.ProgrammableStageDescriptor{
             .module = shader_module,
@@ -1038,8 +952,7 @@ fn prepareLights(app: *App, core: *mach.Core) void {
         .mapped_at_creation = true,
     });
     // We randomly populate lights randomly in a box range
-    // And simply move them along y-axis per frame to show they are dynamic
-    // lightings
+    // And simply move them along y-axis per frame to show they are dynamic lightings
     var light_data = app.lights.buffer.getMappedRange(f32, 0, light_data_stride * max_num_lights).?;
 
     var xoroshiro = std.rand.Xoroshiro128.init(9273853284918);
@@ -1133,18 +1046,17 @@ fn prepareLights(app: *App, core: *mach.Core) void {
     }
 }
 
-fn prepareViewMatrices(app: *App, core: *mach.Core) void {
+fn prepareViewMatrices(app: *App) void {
     const screen_dimensions = Dimensions2D(f32){
-        .width = @intToFloat(f32, core.current_desc.width),
-        .height = @intToFloat(f32, core.current_desc.height),
+        .width = @intToFloat(f32, app.screen_dimensions.width),
+        .height = @intToFloat(f32, app.screen_dimensions.height),
     };
-    // Scene matrices
     const aspect: f32 = screen_dimensions.width / screen_dimensions.height;
     const fov: f32 = 2.0 * std.math.pi / 5.0;
     const znear: f32 = 1.0;
     const zfar: f32 = 2000.0;
     app.view_matrices.projection_matrix = zm.perspectiveFovRhGl(fov, aspect, znear, zfar);
-    const eye_position = zm.Vec{ 0.0, 50.0, -100.0, 1.0 };
+    const eye_position = zm.Vec{ 0.0, 50.0, -100.0, 0.0 };
     app.view_matrices.up_vector = zm.Vec{ 0.0, 1.0, 0.0, 0.0 };
     app.view_matrices.origin = zm.Vec{ 0.0, 0.0, 0.0, 0.0 };
     const view_matrix = zm.lookAtRh(
@@ -1152,11 +1064,11 @@ fn prepareViewMatrices(app: *App, core: *mach.Core) void {
         app.view_matrices.origin,
         app.view_matrices.up_vector,
     );
-    const view_proj_matrix: zm.Mat = zm.mul(app.view_matrices.projection_matrix, view_matrix);
+    const view_proj_matrix: zm.Mat = zm.mul(view_matrix, app.view_matrices.projection_matrix);
     // Move the model so it's centered.
     const vec1 = zm.Vec{ 0.0, -5.0, 0.0, 0.0 };
     const vec2 = zm.Vec{ 0.0, -40.0, 0.0, 0.0 };
-    const model_matrix = zm.mul(zm.translationV(vec1), zm.translationV(vec2));
+    const model_matrix = zm.mul(zm.translationV(vec2), zm.translationV(vec1));
     app.queue.writeBuffer(
         app.camera_uniform_buffer,
         0,
@@ -1167,7 +1079,6 @@ fn prepareViewMatrices(app: *App, core: *mach.Core) void {
         0,
         &model_matrix,
     );
-    // Normal model data
     const invert_transpose_model_matrix = zm.transpose(zm.inverse(model_matrix));
     app.queue.writeBuffer(
         app.model_uniform_buffer,
@@ -1198,7 +1109,6 @@ fn buildCommandBuffer(app: *App, core: *mach.Core) *gpu.CommandBuffer {
 
     {
         // Write position, normal, albedo etc. data to gBuffers
-        // app.write_gbuffer_pass.descriptor.view = back_buffer_view;
         const pass = encoder.beginRenderPass(&app.write_gbuffer_pass.descriptor);
         pass.setViewport(
             0,
@@ -1211,15 +1121,15 @@ fn buildCommandBuffer(app: *App, core: *mach.Core) *gpu.CommandBuffer {
         pass.setScissorRect(0, 0, core.current_desc.width, core.current_desc.height);
         pass.setPipeline(app.write_gbuffers_pipeline);
         pass.setBindGroup(0, app.scene_uniform_bind_group, null);
-        pass.setVertexBuffer(0, app.vertex_buffer, 0, @sizeOf(DragonVertex) * app.dragon_model.len);
-        pass.draw(@intCast(u32, app.dragon_model.len), 1, 0, 0);
-        // pass.drawIndexed(
-        //     app.index_count,
-        //     1, // instance_count
-        //     0, // first_index
-        //     0, // base_vertex
-        //     0, // first_instance
-        // );
+        pass.setVertexBuffer(0, app.vertex_buffer, 0, @sizeOf(Vertex) * app.vertex_count);
+        pass.setIndexBuffer(app.index_buffer, .uint16, 0, @sizeOf(u16) * app.index_count);
+        pass.drawIndexed(
+            app.index_count,
+            1, // instance_count
+            0, // first_index
+            0, // base_vertex
+            0, // first_instance
+        );
         pass.end();
         pass.release();
     }
@@ -1262,14 +1172,20 @@ fn buildCommandBuffer(app: *App, core: *mach.Core) *gpu.CommandBuffer {
     pass.end();
     pass.release();
 
-    // TODO: Draw UI
     return encoder.finish(null);
 }
 
-fn computeNormals(app: *App, core: *mach.Core) void {
-    _ = app;
-    _ = core;
-    // TODO: Implement
+fn updateUniformBuffers(app: *App) void {
+    const radians = std.math.pi * (app.timer.read() / 5.0);
+    const rotation = zm.rotationY(radians);
+    const eye_position = zm.mul(rotation, zm.Vec{ 0, 50, -100, 0 });
+    const view_matrix = zm.lookAtRh(eye_position, app.view_matrices.origin, app.view_matrices.up_vector);
+    app.view_matrices.view_proj_matrix = zm.mul(view_matrix, app.view_matrices.projection_matrix);
+    app.queue.writeBuffer(
+        app.camera_uniform_buffer,
+        0,
+        &app.view_matrices.view_proj_matrix,
+    );
 }
 
 inline fn roundToMultipleOf4(comptime T: type, value: T) T {
