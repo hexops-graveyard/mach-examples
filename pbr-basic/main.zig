@@ -636,7 +636,7 @@ pub fn resize(app: *App, core: *mach.Core, width: u32, height: u32) !void {
         .depth_load_op = .clear,
         .depth_store_op = .store,
         .depth_clear_value = 1.0,
-        .clear_stencil = 0,
+        .stencil_clear_value = 0,
         .stencil_load_op = .clear,
         .stencil_store_op = .store,
     };
@@ -928,7 +928,7 @@ fn setupRenderPass(app: *App, core: *mach.Core) void {
         .depth_load_op = .clear,
         .depth_store_op = .store,
         .depth_clear_value = 1.0,
-        .clear_stencil = 0,
+        .stencil_clear_value = 0,
         .stencil_load_op = .clear,
         .stencil_store_op = .store,
     };
