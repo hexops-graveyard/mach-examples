@@ -179,7 +179,7 @@ const Lights = struct {
 };
 
 queue: *gpu.Queue,
-timer: mach.Timer,
+camera_rotation: f32,
 depth_texture: *gpu.Texture,
 depth_texture_view: *gpu.TextureView,
 vertex_buffer: *gpu.Buffer,
@@ -230,7 +230,7 @@ is_paused: bool,
 
 pub fn init(app: *App, core: *mach.Core) !void {
     app.queue = core.device.getQueue();
-    app.timer = try mach.Timer.start();
+    app.camera_rotation = 0.0;
     app.is_paused = false;
     app.settings.render_mode = .rendering;
     app.settings.lights_count = 128;
@@ -315,7 +315,7 @@ pub fn update(app: *App, core: *mach.Core) !void {
     core.swap_chain.?.getCurrentTextureView().release();
 
     if (!app.is_paused) {
-        updateUniformBuffers(app);
+        updateUniformBuffers(app, core);
     }
 }
 
@@ -1278,9 +1278,9 @@ fn drawUI(app: *App) void {
     imgui.end();
 }
 
-fn updateUniformBuffers(app: *App) void {
-    const radians = std.math.pi * (app.timer.read() / 5.0);
-    const rotation = zm.rotationY(radians);
+fn updateUniformBuffers(app: *App, core: *mach.Core) void {
+    app.camera_rotation += toRadians(360.0) * (core.delta_time / 5.0); // one rotation every 5s
+    const rotation = zm.rotationY(app.camera_rotation);
     const eye_position = zm.mul(rotation, zm.Vec{ 0, 50, -100, 0 });
     const view_matrix = zm.lookAtRh(eye_position, app.view_matrices.origin, app.view_matrices.up_vector);
     app.view_matrices.view_proj_matrix = zm.mul(view_matrix, app.view_matrices.projection_matrix);
