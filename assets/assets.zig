@@ -13,15 +13,15 @@ pub const venus_model_m3d = @embedFile(venus_path);
 const gotta_go_fast_image_path = root_path ++ "/gotta-go-fast.png";
 pub const gotta_go_fast_image = @embedFile(gotta_go_fast_image_path);
 
+pub const stanford_dragon = struct {
+    pub const path = root_path ++ "/stanford_dragon.m3d";
+};
+
 pub const fonts = struct {
     pub const roboto_medium = struct {
         pub const path = root_path ++ "/fonts/Roboto-Medium.ttf";
         pub const bytes = @embedFile(path);
     };
-};
-
-pub const stanford_dragon = struct {
-    pub const path = root_path ++ "/stanford_dragon.m3d";
 };
 
 pub const shaders = struct {
