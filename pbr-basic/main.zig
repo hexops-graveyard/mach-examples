@@ -360,6 +360,12 @@ const Camera = struct {
         self.updateViewMatrix();
     }
 
+    pub fn rotate(self: *@This(), delta: Vec2) void {
+        self.rotation[0] -= delta[1];
+        self.rotation[1] -= delta[0];
+        self.updateViewMatrix();
+    }
+
     pub fn setPosition(self: *@This(), position: Vec3) void {
         self.position = .{
             position[0],
@@ -477,6 +483,8 @@ is_paused: bool,
 current_material_index: usize,
 current_object_index: usize,
 imgui_render_pipeline: *gpu.RenderPipeline,
+mouse_position: mach.WindowPos,
+is_rotating: bool,
 
 //
 // Functions
@@ -489,6 +497,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
     app.current_material_index = 0;
     app.buffers_bound = false;
     app.uniform_buffers_dirty = false;
+    app.is_rotating = false;
 
     setupCamera(app, core);
     try loadModels(std.heap.c_allocator, app, core);
@@ -514,7 +523,29 @@ pub fn update(app: *App, core: *mach.Core) !void {
     while (core.pollEvent()) |event| {
         imgui.backend.passEvent(event);
         switch (event) {
-            .key_press => |ev| {
+            .mouse_motion => |ev| {
+                if (app.is_rotating) {
+                    const delta = Vec2{
+                        @floatCast(f32, (app.mouse_position.x - ev.pos.x) * app.camera.rotation_speed),
+                        @floatCast(f32, (app.mouse_position.y - ev.pos.y) * app.camera.rotation_speed),
+                    };
+                    app.mouse_position = ev.pos;
+                    app.camera.rotate(delta);
+                    app.uniform_buffers_dirty = true;
+                }
+            },
+            .mouse_press => |ev| {
+                if (ev.button == .left) {
+                    app.is_rotating = true;
+                    app.mouse_position = ev.pos;
+                }
+            },
+            .mouse_release => |ev| {
+                if (ev.button == .left) {
+                    app.is_rotating = false;
+                }
+            },
+            .key_press, .key_repeat => |ev| {
                 const key = ev.key;
                 if (key == .up or key == .w) app.pressed_keys.up = true;
                 if (key == .down or key == .s) app.pressed_keys.down = true;
