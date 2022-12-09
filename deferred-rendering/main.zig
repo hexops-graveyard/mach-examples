@@ -5,6 +5,7 @@ const zm = @import("zmath");
 const m3d = @import("model3d");
 const assets = @import("assets");
 const imgui = @import("mach-imgui").MachImgui(mach);
+const VertexWriter = mach.gfx.VertexWriter;
 
 pub const App = @This();
 
@@ -12,98 +13,6 @@ const Vec2 = [2]f32;
 const Vec3 = [3]f32;
 const Vec4 = [4]f32;
 const Mat4 = [4]Vec4;
-
-/// Vertex writer manages the placement of vertices by tracking which are unique. If a duplicate vertex is added
-/// with `put`, only it's index will be written to the index buffer.
-fn VertexWriter(comptime VertexType: type, comptime IndexType: type) type {
-    return struct {
-        const MapEntry = struct {
-            packed_index: IndexType = null_index,
-            next_sparse: IndexType = null_index,
-        };
-
-        const null_index: IndexType = std.math.maxInt(IndexType);
-
-        vertices: []VertexType,
-        indices: []IndexType,
-        sparse_to_packed_map: []MapEntry,
-
-        /// Next index outside of the 1:1 mapping range for storing
-        /// position -> normal collisions
-        next_collision_index: IndexType,
-
-        /// Next packed index
-        next_packed_index: IndexType,
-        written_indices_count: IndexType,
-
-        pub fn init(
-            allocator: std.mem.Allocator,
-            indices_count: IndexType,
-            sparse_vertices_count: IndexType,
-            max_vertex_count: IndexType,
-        ) !@This() {
-            var result: @This() = undefined;
-            result.vertices = try allocator.alloc(Vertex, max_vertex_count);
-            result.indices = try allocator.alloc(IndexType, indices_count);
-            result.sparse_to_packed_map = try allocator.alloc(MapEntry, max_vertex_count);
-            result.next_collision_index = sparse_vertices_count;
-            result.next_packed_index = 0;
-            result.written_indices_count = 0;
-            std.mem.set(MapEntry, result.sparse_to_packed_map, .{});
-            return result;
-        }
-
-        pub fn put(self: *@This(), vertex: Vertex, sparse_index: IndexType) void {
-            if (self.sparse_to_packed_map[sparse_index].packed_index == null_index) {
-                // New start of chain, reserve a new packed index and add entry to `index_map`
-                const packed_index = self.next_packed_index;
-                self.sparse_to_packed_map[sparse_index].packed_index = packed_index;
-                self.vertices[packed_index] = vertex;
-                self.indices[self.written_indices_count] = packed_index;
-                self.written_indices_count += 1;
-                self.next_packed_index += 1;
-                return;
-            }
-            var previous_sparse_index: IndexType = undefined;
-            var current_sparse_index = sparse_index;
-            while (current_sparse_index != null_index) {
-                const packed_index = self.sparse_to_packed_map[current_sparse_index].packed_index;
-                if (std.mem.eql(u8, &std.mem.toBytes(self.vertices[packed_index]), &std.mem.toBytes(vertex))) {
-                    // We already have a record for this vertex in our chain
-                    self.indices[self.written_indices_count] = packed_index;
-                    self.written_indices_count += 1;
-                    return;
-                }
-                previous_sparse_index = current_sparse_index;
-                current_sparse_index = self.sparse_to_packed_map[current_sparse_index].next_sparse;
-            }
-            // This is a new mapping for the given sparse index
-            const packed_index = self.next_packed_index;
-            const remapped_sparse_index = self.next_collision_index;
-            self.indices[self.written_indices_count] = packed_index;
-            self.vertices[packed_index] = vertex;
-            self.sparse_to_packed_map[previous_sparse_index].next_sparse = remapped_sparse_index;
-            self.sparse_to_packed_map[remapped_sparse_index].packed_index = packed_index;
-            self.next_packed_index += 1;
-            self.next_collision_index += 1;
-            self.written_indices_count += 1;
-        }
-
-        pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
-            allocator.free(self.vertices);
-            allocator.free(self.indices);
-            allocator.free(self.sparse_to_packed_map);
-        }
-
-        pub fn indexBuffer(self: @This()) []IndexType {
-            return self.indices;
-        }
-
-        pub fn vertexBuffer(self: @This()) []Vertex {
-            return self.vertices[0..self.next_packed_index];
-        }
-    };
-}
 
 fn Dimensions2D(comptime T: type) type {
     return struct {
