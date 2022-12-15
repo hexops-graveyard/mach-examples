@@ -143,11 +143,11 @@ pub fn init(app: *App, core: *mach.Core) !void {
         },
     }
 
-    const vert_wgsl = try std.fs.cwd().readFileAllocOptions(core.allocator, "gkurve/vert.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
+    const vert_wgsl = try std.fs.cwd().readFileAllocOptions(core.allocator, "engine/gkurve/vert.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
     defer core.allocator.free(vert_wgsl);
     const vs_module = core.device.createShaderModuleWGSL("gkurve/vert.wgsl", vert_wgsl);
 
-    const frag_wgsl = try std.fs.cwd().readFileAllocOptions(core.allocator, "gkurve/frag.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
+    const frag_wgsl = try std.fs.cwd().readFileAllocOptions(core.allocator, "engine/gkurve/frag.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
     defer core.allocator.free(frag_wgsl);
     const fs_module = core.device.createShaderModuleWGSL("gkurve/frag.wgsl", frag_wgsl);
 

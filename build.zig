@@ -21,6 +21,7 @@ pub fn build(b: *std.build.Builder) !void {
         use_freetype: bool = false,
         use_model3d: bool = false,
         use_imgui: bool = false,
+        mach_engine_example: bool = false,
     }{
         .{ .name = "triangle" },
         .{ .name = "triangle-msaa" },
@@ -45,16 +46,17 @@ pub fn build(b: *std.build.Builder) !void {
         .{ .name = "advanced-gen-texture-light", .deps = &.{Packages.zmath} },
         .{ .name = "fractal-cube", .deps = &.{Packages.zmath} },
         .{ .name = "textured-cube", .deps = &.{ Packages.zmath, Packages.zigimg, Packages.assets } },
-        .{ .name = "ecs-app", .deps = &.{} },
+        .{ .name = "ecs-app", .deps = &.{}, .mach_engine_example = true },
         .{ .name = "image-blur", .deps = &.{ Packages.zigimg, Packages.assets } },
         .{ .name = "cubemap", .deps = &.{ Packages.zmath, Packages.zigimg, Packages.assets } },
         .{ .name = "map-async", .deps = &.{} },
-        .{ .name = "sysaudio", .deps = &.{} },
+        .{ .name = "sysaudio", .deps = &.{}, .mach_engine_example = true },
         .{
             .name = "gkurve",
             .deps = &.{ Packages.zmath, Packages.zigimg, Packages.assets },
             .std_platform_only = true,
             .use_freetype = true,
+            .mach_engine_example = true,
         },
     }) |example| {
         // FIXME: this is workaround for a problem that some examples
@@ -67,11 +69,12 @@ pub fn build(b: *std.build.Builder) !void {
             if (target.getCpuArch() == .wasm32)
                 break;
 
+        const path_suffix = if (example.mach_engine_example) "engine/" else "core/";
         const app = try mach.App.init(
             b,
             .{
                 .name = example.name,
-                .src = example.name ++ "/main.zig",
+                .src = path_suffix ++ example.name ++ "/main.zig",
                 .target = target,
                 .deps = example.deps,
                 .res_dirs = if (example.has_assets) &.{example.name ++ "/assets"} else null,
