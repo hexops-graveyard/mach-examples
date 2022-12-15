@@ -261,7 +261,7 @@ pub fn resize(app: *App, core: *mach.Core, width: u32, height: u32) !void {
 }
 
 fn loadMeshFromFile(app: *App, core: *mach.Core, allocator: std.mem.Allocator, model_path: []const u8) !void {
-    var model_file = std.fs.openFileAbsolute(model_path, .{}) catch |err| {
+    var model_file = std.fs.cwd().openFile(model_path, .{}) catch |err| {
         std.log.err("Failed to load model: '{s}' Error: {}", .{ model_path, err });
         return error.LoadModelFileFailed;
     };

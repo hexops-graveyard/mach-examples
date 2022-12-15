@@ -793,7 +793,7 @@ fn setupRenderPass(app: *App, core: *mach.Core) void {
 
 fn loadModels(allocator: std.mem.Allocator, app: *App, core: *mach.Core) !void {
     for (model_paths) |model_path, model_path_i| {
-        var model_file = std.fs.openFileAbsolute(model_path, .{}) catch |err| {
+        var model_file = std.fs.cwd().openFile(model_path, .{}) catch |err| {
             std.log.err("Failed to load model: '{s}' Error: {}", .{ model_path, err });
             return error.LoadModelFileFailed;
         };
