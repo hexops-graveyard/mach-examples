@@ -120,7 +120,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
             // const character = "Gotta-go-fast!\n0123456789\n~!@#$%^&*()_+è\n:\"<>?`-=[];',./";
             // const character = "ABCDEFGHIJ\nKLMNOPQRST\nUVWXYZ";
             const size_multiplier = 5;
-            var label = try Label.init(lib, "gkurve/FiraSans-Regular.ttf", 0, 110 * size_multiplier, core.allocator);
+            var label = try Label.init(lib, assets.fonts.firasans_regular.path, 0, 110 * size_multiplier, core.allocator);
             defer label.deinit();
             try label.print(app, "All your game's bases are belong to us èçòà", .{}, @Vector(2, f32){ 0, 420 }, @Vector(4, f32){ 1, 1, 1, 1 });
             try label.print(app, "wow!", .{}, @Vector(2, f32){ 70 * size_multiplier, 70 }, @Vector(4, f32){ 1, 1, 1, 1 });
@@ -130,7 +130,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
             const size_multiplier = 5;
 
             var resizable_label: ResizableLabel = undefined;
-            try resizable_label.init(lib, "gkurve/FiraSans-Regular.ttf", 0, core.allocator, white_texture_uv_data);
+            try resizable_label.init(lib, assets.fonts.firasans_regular.path, 0, core.allocator, white_texture_uv_data);
             defer resizable_label.deinit();
             try resizable_label.print(app, character, .{}, @Vector(4, f32){ 20, 300, 0, 0 }, @Vector(4, f32){ 1, 1, 1, 1 }, 20 * size_multiplier);
             // try resizable_label.print(app, "@", .{}, @Vector(4, f32){ 20, 150, 0, 0 }, @Vector(4, f32){ 1, 1, 1, 1 }, 130 * size_multiplier);

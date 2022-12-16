@@ -26,6 +26,11 @@ pub const fonts = struct {
         pub const path = root_path ++ "fonts/Roboto-Medium.ttf";
         pub const bytes = @embedFile("fonts/Roboto-Medium.ttf");
     };
+
+    pub const firasans_regular = struct {
+        // Font part of Freetype lib
+        pub const path = "libs/mach/libs/freetype/upstream/assets/FiraSans-Regular.ttf";
+    };
 };
 
 pub const shaders = struct {
