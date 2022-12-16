@@ -101,10 +101,6 @@ pub fn build(b: *std.build.Builder) !void {
         run_step.dependOn(run_cmd);
     }
 
-    // @embedFile can't embed files outside the source file's directory, so copy our assets into
-    // those directories.
-    copyFile("libs/mach/libs/freetype/upstream/assets/FiraSans-Regular.ttf", "gkurve/FiraSans-Regular.ttf");
-
     const compile_all = b.step("compile-all", "Compile all examples and applications");
     compile_all.dependOn(b.getInstallStep());
 }
