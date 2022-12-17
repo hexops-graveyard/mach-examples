@@ -7,43 +7,40 @@ const builtin = @import("builtin");
 
 pub const App = @This();
 
-audio: sysaudio,
-device: *sysaudio.Device,
+audio_ctx: sysaudio.Context,
+player: sysaudio.Player,
 tone_engine: ToneEngine = .{},
 
 pub fn init(app: *App, core: *mach.Core) !void {
-    const audio = try sysaudio.init();
-    errdefer audio.deinit();
+    app.audio_ctx = try sysaudio.Context.init(null, core.allocator, .{});
+    errdefer app.audio_ctx.deinit();
+    try app.audio_ctx.refresh();
 
-    var device = try audio.requestDevice(core.allocator, .{ .mode = .output, .channels = 2 });
-    errdefer device.deinit(core.allocator);
+    const device = app.audio_ctx.defaultDevice(.playback) orelse return error.NoDeviceFound;
+    app.player = try app.audio_ctx.createPlayer(device, callback, .{ .userdata = app });
 
-    device.setCallback(callback, app);
-    try device.start();
-
-    app.audio = audio;
-    app.device = device;
+    try app.player.start();
 }
 
-fn callback(device: *sysaudio.Device, user_data: ?*anyopaque, buffer: []u8) void {
+fn callback(player_op: *anyopaque, frames: usize) void {
     // TODO(sysaudio): should make user_data pointer type-safe
-    const app: *App = @ptrCast(*App, @alignCast(@alignOf(App), user_data));
-
-    // Where the magic happens: fill our audio buffer with PCM dat.
-    app.tone_engine.render(device.properties, buffer);
+    var player = @ptrCast(*sysaudio.Player, @alignCast(@alignOf(*sysaudio.Player), player_op));
+    const app: *App = @ptrCast(*App, @alignCast(@alignOf(App), player.userdata));
+    // Where the magic happens: fill our audio_ctx buffer with PCM dat.
+    app.tone_engine.render(player, frames);
 }
 
 pub fn deinit(app: *App, core: *mach.Core) void {
-    app.device.deinit(core.allocator);
-    app.audio.deinit();
+    _ = core;
+    app.player.deinit();
+    app.audio_ctx.deinit();
 }
 
 pub fn update(app: *App, engine: *mach.Core) !void {
     while (engine.pollEvent()) |event| {
         switch (event) {
             .key_press => |ev| {
-                try app.device.start();
-                app.tone_engine.play(app.device.properties, ToneEngine.keyToFrequency(ev.key));
+                app.tone_engine.fillTone(app.player, ToneEngine.keyToFrequency(ev.key));
             },
             else => {},
         }
@@ -78,35 +75,10 @@ pub const ToneEngine = struct {
         duration: usize,
     };
 
-    pub fn render(engine: *ToneEngine, properties: sysaudio.Device.Properties, buffer: []u8) void {
-        switch (properties.format) {
-            .U8 => renderWithType(u8, engine, properties, buffer),
-            .S16 => {
-                const buf = @ptrCast([*]i16, @alignCast(@alignOf(i16), buffer.ptr))[0 .. buffer.len / @sizeOf(i16)];
-                renderWithType(i16, engine, properties, buf);
-            },
-            .S24 => {
-                const buf = @ptrCast([*]i24, @alignCast(@alignOf(i24), buffer.ptr))[0 .. buffer.len / @sizeOf(i24)];
-                renderWithType(i24, engine, properties, buf);
-            },
-            .S32 => {
-                const buf = @ptrCast([*]i32, @alignCast(@alignOf(i32), buffer.ptr))[0 .. buffer.len / @sizeOf(i32)];
-                renderWithType(i32, engine, properties, buf);
-            },
-            .F32 => {
-                const buf = @ptrCast([*]f32, @alignCast(@alignOf(f32), buffer.ptr))[0 .. buffer.len / @sizeOf(f32)];
-                renderWithType(f32, engine, properties, buf);
-            },
-        }
-    }
-
-    pub fn renderWithType(comptime T: type, engine: *ToneEngine, properties: sysaudio.Device.Properties, buffer: []T) void {
-        const sample_rate = @intToFloat(f32, properties.sample_rate);
-        const frames = buffer.len / properties.channels;
-
+    pub fn render(engine: *ToneEngine, player: *sysaudio.Player, frames: usize) void {
         var frame: usize = 0;
         while (frame < frames) : (frame += 1) {
-            // Render the sample for this frame (e.g. for both left and right audio channels.)
+            // Render the sample for this frame (e.g. for both left and right audio_ctx channels.)
             var sample: f32 = 0;
             for (engine.playing) |*tone| {
                 if (tone.sample_counter >= tone.duration) {
@@ -118,7 +90,7 @@ pub const ToneEngine = struct {
 
                 // The sine wave that plays the frequency.
                 const gain = 0.1;
-                const sine_wave = std.math.sin(tone.frequency * 2.0 * std.math.pi * sample_counter / sample_rate) * gain;
+                const sine_wave = std.math.sin(tone.frequency * 2.0 * std.math.pi * sample_counter / @intToFloat(f32, player.sampleRate())) * gain;
 
                 // A number ranging from 0.0 to 1.0 in the first 1/64th of the duration of the tone.
                 const fade_in = std.math.min(sample_counter / (duration / 64.0), 1.0);
@@ -133,32 +105,18 @@ pub const ToneEngine = struct {
                 sample += sine_wave * fade_in * fade_out;
             }
 
-            const sample_t: T = sample: {
-                switch (T) {
-                    f32 => break :sample sample,
-                    u8 => break :sample @floatToInt(u8, (sample + 1.0) * 255),
-                    else => break :sample @floatToInt(T, sample * std.math.maxInt(T)),
-                }
-            };
-
             // Emit the sample on all channels.
-            var channel: usize = 0;
-            while (channel < properties.channels) : (channel += 1) {
-                var channel_buffer = buffer[channel * frames .. (channel + 1) * frames];
-                channel_buffer[frame] = sample_t;
-            }
+            player.writeAll(frame, sample);
         }
     }
 
-    pub fn play(engine: *ToneEngine, properties: sysaudio.Device.Properties, frequency: f32) void {
-        const sample_rate = @intToFloat(f32, properties.sample_rate);
-
+    pub fn fillTone(engine: *ToneEngine, player: sysaudio.Player, frequency: f32) void {
         for (engine.playing) |*tone| {
             if (tone.sample_counter >= tone.duration) {
                 tone.* = Tone{
                     .frequency = frequency,
                     .sample_counter = 0,
-                    .duration = @floatToInt(usize, 1.5 * sample_rate), // play the tone for 1.5s
+                    .duration = @floatToInt(usize, 1.5 * @intToFloat(f32, player.sampleRate())), // play the tone for 1.5s
                 };
                 return;
             }
