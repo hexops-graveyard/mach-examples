@@ -78,7 +78,7 @@ pub fn build(b: *std.build.Builder) !void {
                 .target = target,
                 .deps = example.deps,
                 .res_dirs = if (example.has_assets) &.{example.name ++ "/assets"} else null,
-                .watch_paths = &.{example.name},
+                .watch_paths = &.{path_suffix ++ example.name},
                 .use_freetype = if (example.use_freetype) "freetype" else null,
                 .use_model3d = example.use_model3d,
             },
