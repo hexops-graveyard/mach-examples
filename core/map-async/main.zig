@@ -4,9 +4,6 @@ const gpu = @import("gpu");
 
 pub const App = @This();
 
-// TODO(self-hosted): https://github.com/ziglang/zig/issues/12275
-_unused: i32,
-
 const workgroup_size = 64;
 const buffer_size = 1000;
 
