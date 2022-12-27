@@ -76,6 +76,7 @@ pub fn build(b: *std.build.Builder) !void {
                 .name = example.name,
                 .src = path_suffix ++ example.name ++ "/main.zig",
                 .target = target,
+                .mode = mode,
                 .deps = example.deps,
                 .res_dirs = if (example.has_assets) &.{example.name ++ "/assets"} else null,
                 .watch_paths = &.{path_suffix ++ example.name},
@@ -88,7 +89,6 @@ pub fn build(b: *std.build.Builder) !void {
             mach_imgui.link(app.step);
         }
 
-        app.setBuildMode(mode);
         try app.link(options);
         app.install();
 
