@@ -1,6 +1,6 @@
 // A simple tone engine.
 //
-// It renders 2048 tones simultaneously, each with their own frequency and duration.
+// It renders 512 tones simultaneously, each with their own frequency and duration.
 //
 // `keyToFrequency` can be used to convert a keyboard key to a frequency, so that the
 // keys asdfghj on your QWERTY keyboard will map to the notes C/D/E/F/G/A/B[4], the
