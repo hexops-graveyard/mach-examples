@@ -12,13 +12,14 @@
 // the note then fades out slowly.)
 const std = @import("std");
 const mach = @import("mach");
-const gpu = @import("gpu");
-const sysaudio = mach.sysaudio;
-const js = @import("sysjs");
 const builtin = @import("builtin");
+const sysaudio = mach.sysaudio;
 
 pub const App = @This();
 
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+
+core: mach.Core,
 audio_ctx: sysaudio.Context,
 player: sysaudio.Player,
 playing: [512]Tone = std.mem.zeroes([512]Tone),
@@ -29,15 +30,50 @@ const Tone = struct {
     duration: usize,
 };
 
-pub fn init(app: *App, core: *mach.Core) !void {
-    app.audio_ctx = try sysaudio.Context.init(null, core.allocator, .{});
+pub fn init(app: *App) !void {
+    app.core = try mach.Core.init(gpa.allocator(), .{});
+
+    app.audio_ctx = try sysaudio.Context.init(null, gpa.allocator(), .{});
     errdefer app.audio_ctx.deinit();
     try app.audio_ctx.refresh();
 
     const device = app.audio_ctx.defaultDevice(.playback) orelse return error.NoDeviceFound;
     app.player = try app.audio_ctx.createPlayer(device, writeFn, .{ .user_data = app });
-
     try app.player.start();
+}
+
+pub fn deinit(app: *App) void {
+    defer _ = gpa.deinit();
+    defer app.core.deinit();
+
+    app.player.deinit();
+    app.audio_ctx.deinit();
+}
+
+pub fn update(app: *App) !bool {
+    while (app.core.pollEvents()) |event| {
+        switch (event) {
+            .key_press => |ev| {
+                const vol = try app.player.volume();
+                switch (ev.key) {
+                    .down => try app.player.setVolume(std.math.max(0.0, vol - 0.1)),
+                    .up => try app.player.setVolume(std.math.min(1.0, vol + 0.1)),
+                    else => {},
+                }
+                app.fillTone(keyToFrequency(ev.key));
+            },
+            else => {},
+        }
+    }
+
+    if (builtin.cpu.arch != .wasm32) {
+        const back_buffer_view = app.core.swapChain().getCurrentTextureView();
+
+        app.core.swapChain().present();
+        back_buffer_view.release();
+    }
+
+    return false;
 }
 
 fn writeFn(app_op: ?*anyopaque, frames: usize) void {
@@ -75,36 +111,6 @@ fn writeFn(app_op: ?*anyopaque, frames: usize) void {
     }
 }
 
-pub fn deinit(app: *App, core: *mach.Core) void {
-    _ = core;
-    app.player.deinit();
-    app.audio_ctx.deinit();
-}
-
-pub fn update(app: *App, engine: *mach.Core) !void {
-    while (engine.pollEvent()) |event| {
-        switch (event) {
-            .key_press => |ev| {
-                const vol = try app.player.volume();
-                switch (ev.key) {
-                    .down => try app.player.setVolume(std.math.max(0.0, vol - 0.1)),
-                    .up => try app.player.setVolume(std.math.min(1.0, vol + 0.1)),
-                    else => {},
-                }
-                app.fillTone(keyToFrequency(ev.key));
-            },
-            else => {},
-        }
-    }
-
-    if (builtin.cpu.arch != .wasm32) {
-        const back_buffer_view = engine.swap_chain.?.getCurrentTextureView();
-
-        engine.swap_chain.?.present();
-        back_buffer_view.release();
-    }
-}
-
 pub fn fillTone(app: *App, frequency: f32) void {
     for (app.playing) |*tone| {
         if (tone.sample_counter >= tone.duration) {
@@ -118,7 +124,7 @@ pub fn fillTone(app: *App, frequency: f32) void {
     }
 }
 
-pub fn keyToFrequency(key: mach.Key) f32 {
+pub fn keyToFrequency(key: mach.Core.Key) f32 {
     // The frequencies here just come from a piano frequencies chart. You can google for them.
     return switch (key) {
         // First row of piano keys, the highest.

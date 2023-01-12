@@ -282,10 +282,14 @@ const model_paths = [_][]const u8{
     assets.venus_path,
 };
 
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+
 //
 // Member variables
 //
 
+core: mach.Core,
+timer: mach.Timer,
 camera: Camera,
 render_pipeline: *gpu.RenderPipeline,
 render_pass_descriptor: gpu.RenderPassDescriptor,
@@ -295,7 +299,6 @@ color_attachment: gpu.RenderPassColorAttachment,
 depth_stencil_attachment_description: gpu.RenderPassDepthStencilAttachment,
 depth_texture: *gpu.Texture,
 depth_texture_view: *gpu.TextureView,
-timer: mach.Timer,
 pressed_keys: PressedKeys,
 models: [4]Model,
 ubo_params: UboParams,
@@ -309,31 +312,39 @@ is_paused: bool,
 current_material_index: usize,
 current_object_index: usize,
 imgui_render_pipeline: *gpu.RenderPipeline,
-mouse_position: mach.WindowPos,
+mouse_position: mach.Core.Position,
 is_rotating: bool,
 
 //
 // Functions
 //
 
-pub fn init(app: *App, core: *mach.Core) !void {
+pub fn init(app: *App) !void {
+    app.core = try mach.Core.init(gpa.allocator(), .{});
     app.timer = try mach.Timer.start();
 
-    app.queue = core.device.getQueue();
-    app.current_material_index = 0;
+    app.queue = app.core.device().getQueue();
+    app.pressed_keys = .{};
     app.buffers_bound = false;
+    app.is_paused = false;
     app.uniform_buffers_dirty = false;
+    app.current_material_index = 0;
+    app.current_object_index = 0;
+    app.mouse_position = .{ .x = 0, .y = 0 };
     app.is_rotating = false;
 
-    setupCamera(app, core);
-    try loadModels(std.heap.c_allocator, app, core);
-    prepareUniformBuffers(app, core);
-    setupPipeline(app, core);
-    setupRenderPass(app, core);
-    setupImgui(app, core);
+    setupCamera(app);
+    try loadModels(std.heap.c_allocator, app);
+    prepareUniformBuffers(app);
+    setupPipeline(app);
+    setupRenderPass(app);
+    setupImgui(app);
 }
 
-pub fn deinit(app: *App, _: *mach.Core) void {
+pub fn deinit(app: *App) void {
+    defer _ = gpa.deinit();
+    defer app.core.deinit();
+
     app.bind_group.release();
     app.render_pipeline.release();
     app.depth_texture_view.release();
@@ -345,8 +356,8 @@ pub fn deinit(app: *App, _: *mach.Core) void {
     imgui.backend.deinit();
 }
 
-pub fn update(app: *App, core: *mach.Core) !void {
-    while (core.pollEvent()) |event| {
+pub fn update(app: *App) !bool {
+    while (app.core.pollEvents()) |event| {
         imgui.backend.passEvent(event);
         switch (event) {
             .mouse_motion => |ev| {
@@ -378,6 +389,40 @@ pub fn update(app: *App, core: *mach.Core) !void {
                 if (key == .left or key == .a) app.pressed_keys.left = true;
                 if (key == .right or key == .d) app.pressed_keys.right = true;
             },
+            .framebuffer_resize => |ev| {
+                app.depth_texture_view.release();
+                app.depth_texture.release();
+                app.depth_texture = app.core.device().createTexture(&gpu.Texture.Descriptor{
+                    .usage = .{ .render_attachment = true },
+                    .format = .depth24_plus_stencil8,
+                    .sample_count = 1,
+                    .size = .{
+                        .width = ev.width,
+                        .height = ev.height,
+                        .depth_or_array_layers = 1,
+                    },
+                });
+                app.depth_texture_view = app.depth_texture.createView(&gpu.TextureView.Descriptor{
+                    .format = .depth24_plus_stencil8,
+                    .dimension = .dimension_2d,
+                    .array_layer_count = 1,
+                    .aspect = .all,
+                });
+                app.depth_stencil_attachment_description = gpu.RenderPassDepthStencilAttachment{
+                    .view = app.depth_texture_view,
+                    .depth_load_op = .clear,
+                    .depth_store_op = .store,
+                    .depth_clear_value = 1.0,
+                    .stencil_clear_value = 0,
+                    .stencil_load_op = .clear,
+                    .stencil_store_op = .store,
+                };
+
+                const aspect_ratio = @intToFloat(f32, ev.width) / @intToFloat(f32, ev.height);
+                app.camera.setPerspective(60.0, aspect_ratio, 0.1, 256.0);
+                app.uniform_buffers_dirty = true;
+            },
+            .close => return true,
             else => {},
         }
     }
@@ -392,21 +437,21 @@ pub fn update(app: *App, core: *mach.Core) !void {
         app.uniform_buffers_dirty = false;
     }
 
-    const back_buffer_view = core.swap_chain.?.getCurrentTextureView();
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
     app.color_attachment.view = back_buffer_view;
     app.render_pass_descriptor = gpu.RenderPassDescriptor{
         .color_attachment_count = 1,
         .color_attachments = &[_]gpu.RenderPassColorAttachment{app.color_attachment},
         .depth_stencil_attachment = &app.depth_stencil_attachment_description,
     };
-    const encoder = core.device.createCommandEncoder(null);
+    const encoder = app.core.device().createCommandEncoder(null);
     const current_model = app.models[app.current_object_index];
 
     const pass = encoder.beginRenderPass(&app.render_pass_descriptor);
 
     const dimensions = Dimensions2D(f32){
-        .width = @intToFloat(f32, core.current_desc.width),
-        .height = @intToFloat(f32, core.current_desc.height),
+        .width = @intToFloat(f32, app.core.descriptor().width),
+        .height = @intToFloat(f32, app.core.descriptor().height),
     };
     pass.setViewport(
         0,
@@ -416,7 +461,7 @@ pub fn update(app: *App, core: *mach.Core) !void {
         0.0,
         1.0,
     );
-    pass.setScissorRect(0, 0, core.current_desc.width, core.current_desc.height);
+    pass.setScissorRect(0, 0, app.core.descriptor().width, app.core.descriptor().height);
     pass.setPipeline(app.render_pipeline);
 
     if (!app.is_paused) {
@@ -445,9 +490,9 @@ pub fn update(app: *App, core: *mach.Core) !void {
 
     pass.setPipeline(app.imgui_render_pipeline);
 
-    const window_size = core.getWindowSize();
+    const window_size = app.core.size();
     imgui.backend.newFrame(
-        core,
+        &app.core,
         window_size.width,
         window_size.height,
     );
@@ -464,60 +509,28 @@ pub fn update(app: *App, core: *mach.Core) !void {
     app.queue.submit(&[_]*gpu.CommandBuffer{command});
 
     command.release();
-    core.swap_chain.?.present();
+    app.core.swapChain().present();
     back_buffer_view.release();
     app.buffers_bound = false;
+
+    return false;
 }
 
-pub fn resize(app: *App, core: *mach.Core, width: u32, height: u32) !void {
-    app.depth_texture_view.release();
-    app.depth_texture.release();
-    app.depth_texture = core.device.createTexture(&gpu.Texture.Descriptor{
-        .usage = .{ .render_attachment = true },
-        .format = .depth24_plus_stencil8,
-        .sample_count = 1,
-        .size = .{
-            .width = width,
-            .height = height,
-            .depth_or_array_layers = 1,
-        },
-    });
-    app.depth_texture_view = app.depth_texture.createView(&gpu.TextureView.Descriptor{
-        .format = .depth24_plus_stencil8,
-        .dimension = .dimension_2d,
-        .array_layer_count = 1,
-        .aspect = .all,
-    });
-    app.depth_stencil_attachment_description = gpu.RenderPassDepthStencilAttachment{
-        .view = app.depth_texture_view,
-        .depth_load_op = .clear,
-        .depth_store_op = .store,
-        .depth_clear_value = 1.0,
-        .stencil_clear_value = 0,
-        .stencil_load_op = .clear,
-        .stencil_store_op = .store,
-    };
-
-    const aspect_ratio = @intToFloat(f32, width) / @intToFloat(f32, height);
-    app.camera.setPerspective(60.0, aspect_ratio, 0.1, 256.0);
-    app.uniform_buffers_dirty = true;
-}
-
-fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
+fn prepareUniformBuffers(app: *App) void {
     comptime {
         std.debug.assert(@sizeOf(ObjectParamsDynamic) == 256);
         std.debug.assert(@sizeOf(MaterialParamsDynamic) == 256);
     }
 
     app.uniform_buffers.ubo_matrices.size = roundToMultipleOf4(u32, @intCast(u32, @sizeOf(UboMatrices)));
-    app.uniform_buffers.ubo_matrices.buffer = core.device.createBuffer(&.{
+    app.uniform_buffers.ubo_matrices.buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = app.uniform_buffers.ubo_matrices.size,
         .mapped_at_creation = false,
     });
 
     app.uniform_buffers.ubo_params.size = roundToMultipleOf4(u32, @intCast(u32, @sizeOf(UboParams)));
-    app.uniform_buffers.ubo_params.buffer = core.device.createBuffer(&.{
+    app.uniform_buffers.ubo_params.buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = app.uniform_buffers.ubo_params.size,
         .mapped_at_creation = false,
@@ -529,7 +542,7 @@ fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
     app.uniform_buffers.material_params.model_size = @sizeOf(Vec2) + @sizeOf(Vec3);
     app.uniform_buffers.material_params.buffer_size = calculateConstantBufferByteSize(@sizeOf(MaterialParamsDynamicGrid));
     std.debug.assert(app.uniform_buffers.material_params.buffer_size >= app.uniform_buffers.material_params.model_size);
-    app.uniform_buffers.material_params.buffer = core.device.createBuffer(&.{
+    app.uniform_buffers.material_params.buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = app.uniform_buffers.material_params.buffer_size,
         .mapped_at_creation = false,
@@ -541,7 +554,7 @@ fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
     app.uniform_buffers.object_params.model_size = @sizeOf(Vec3);
     app.uniform_buffers.object_params.buffer_size = calculateConstantBufferByteSize(@sizeOf(MaterialParamsDynamicGrid));
     std.debug.assert(app.uniform_buffers.object_params.buffer_size >= app.uniform_buffers.object_params.model_size);
-    app.uniform_buffers.object_params.buffer = core.device.createBuffer(&.{
+    app.uniform_buffers.object_params.buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = app.uniform_buffers.object_params.buffer_size,
         .mapped_at_creation = false,
@@ -615,7 +628,7 @@ fn updateLights(app: *App) void {
     );
 }
 
-fn setupPipeline(app: *App, core: *mach.Core) void {
+fn setupPipeline(app: *App) void {
     comptime {
         std.debug.assert(@sizeOf(Vertex) == @sizeOf(f32) * 6);
     }
@@ -625,7 +638,7 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
             .binding = 0,
             .visibility = .{ .vertex = true, .fragment = true },
             .buffer = .{
-                .@"type" = .uniform,
+                .type = .uniform,
                 .has_dynamic_offset = false,
                 .min_binding_size = app.uniform_buffers.ubo_matrices.size,
             },
@@ -634,7 +647,7 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
             .binding = 1,
             .visibility = .{ .fragment = true },
             .buffer = .{
-                .@"type" = .uniform,
+                .type = .uniform,
                 .has_dynamic_offset = false,
                 .min_binding_size = app.uniform_buffers.ubo_params.size,
             },
@@ -643,7 +656,7 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
             .binding = 2,
             .visibility = .{ .fragment = true },
             .buffer = .{
-                .@"type" = .uniform,
+                .type = .uniform,
                 .has_dynamic_offset = true,
                 .min_binding_size = app.uniform_buffers.material_params.model_size,
             },
@@ -652,21 +665,21 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
             .binding = 3,
             .visibility = .{ .vertex = true },
             .buffer = .{
-                .@"type" = .uniform,
+                .type = .uniform,
                 .has_dynamic_offset = true,
                 .min_binding_size = app.uniform_buffers.object_params.model_size,
             },
         },
     };
 
-    const bind_group_layout = core.device.createBindGroupLayout(
+    const bind_group_layout = app.core.device().createBindGroupLayout(
         &gpu.BindGroupLayout.Descriptor.init(.{
             .entries = bind_group_layout_entries[0..],
         }),
     );
 
     const bind_group_layouts = [_]*gpu.BindGroupLayout{bind_group_layout};
-    const pipeline_layout = core.device.createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
+    const pipeline_layout = app.core.device().createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
         .bind_group_layouts = &bind_group_layouts,
     }));
 
@@ -686,14 +699,14 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
     };
 
     const color_target_state = gpu.ColorTargetState{
-        .format = core.swap_chain_format,
+        .format = app.core.descriptor().format,
         .blend = &.{
             .color = blend_component_descriptor,
             .alpha = blend_component_descriptor,
         },
     };
 
-    const shader_module = core.device.createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
+    const shader_module = app.core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
     const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
         .layout = pipeline_layout,
         .primitive = .{
@@ -715,7 +728,7 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
             .buffers = &.{vertex_buffer_layout},
         }),
     };
-    app.render_pipeline = core.device.createRenderPipeline(&pipeline_descriptor);
+    app.render_pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
     shader_module.release();
 
     {
@@ -741,7 +754,7 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
                 .size = app.uniform_buffers.object_params.model_size,
             },
         };
-        app.bind_group = core.device.createBindGroup(
+        app.bind_group = app.core.device().createBindGroup(
             &gpu.BindGroup.Descriptor.init(.{
                 .layout = bind_group_layout,
                 .entries = &bind_group_entries,
@@ -750,7 +763,7 @@ fn setupPipeline(app: *App, core: *mach.Core) void {
     }
 }
 
-fn setupRenderPass(app: *App, core: *mach.Core) void {
+fn setupRenderPass(app: *App) void {
     app.color_attachment = gpu.RenderPassColorAttachment{
         .clear_value = .{
             .r = 0.0,
@@ -762,13 +775,13 @@ fn setupRenderPass(app: *App, core: *mach.Core) void {
         .store_op = .store,
     };
 
-    app.depth_texture = core.device.createTexture(&.{
+    app.depth_texture = app.core.device().createTexture(&.{
         .usage = .{ .render_attachment = true, .copy_src = true },
         .format = .depth24_plus_stencil8,
         .sample_count = 1,
         .size = .{
-            .width = core.current_desc.width,
-            .height = core.current_desc.height,
+            .width = app.core.descriptor().width,
+            .height = app.core.descriptor().height,
             .depth_or_array_layers = 1,
         },
     });
@@ -791,7 +804,7 @@ fn setupRenderPass(app: *App, core: *mach.Core) void {
     };
 }
 
-fn loadModels(allocator: std.mem.Allocator, app: *App, core: *mach.Core) !void {
+fn loadModels(allocator: std.mem.Allocator, app: *App) !void {
     for (model_paths) |model_path, model_path_i| {
         var model_file = std.fs.cwd().openFile(model_path, .{}) catch |err| {
             std.log.err("Failed to load model: '{s}' Error: {}", .{ model_path, err });
@@ -844,14 +857,14 @@ fn loadModels(allocator: std.mem.Allocator, app: *App, core: *mach.Core) !void {
 
         model.vertex_count = @intCast(u32, vertex_buffer.len);
 
-        model.vertex_buffer = core.device.createBuffer(&.{
+        model.vertex_buffer = app.core.device().createBuffer(&.{
             .usage = .{ .copy_dst = true, .vertex = true },
             .size = @sizeOf(Vertex) * model.vertex_count,
             .mapped_at_creation = false,
         });
         app.queue.writeBuffer(model.vertex_buffer, 0, vertex_buffer);
 
-        model.index_buffer = core.device.createBuffer(&.{
+        model.index_buffer = app.core.device().createBuffer(&.{
             .usage = .{ .copy_dst = true, .index = true },
             .size = @sizeOf(u32) * model.index_count,
             .mapped_at_creation = false,
@@ -895,7 +908,7 @@ fn drawUI(app: *App) void {
     imgui.end();
 }
 
-fn setupImgui(app: *App, core: *mach.Core) void {
+fn setupImgui(app: *App) void {
     imgui.init();
     const font_normal = imgui.io.addFontFromFile(assets.fonts.roboto_medium.path, 18.0);
     const blend_component_descriptor = gpu.BlendComponent{
@@ -905,14 +918,14 @@ fn setupImgui(app: *App, core: *mach.Core) void {
     };
 
     const color_target_state = gpu.ColorTargetState{
-        .format = core.swap_chain_format,
+        .format = app.core.descriptor().format,
         .blend = &.{
             .color = blend_component_descriptor,
             .alpha = blend_component_descriptor,
         },
     };
 
-    const shader_module = core.device.createShaderModuleWGSL("imgui", assets.shaders.imgui.bytes);
+    const shader_module = app.core.device().createShaderModuleWGSL("imgui", assets.shaders.imgui.bytes);
 
     const imgui_pipeline_descriptor = gpu.RenderPipeline.Descriptor{
         .depth_stencil = &.{
@@ -930,12 +943,12 @@ fn setupImgui(app: *App, core: *mach.Core) void {
         }),
     };
 
-    app.imgui_render_pipeline = core.device.createRenderPipeline(&imgui_pipeline_descriptor);
+    app.imgui_render_pipeline = app.core.device().createRenderPipeline(&imgui_pipeline_descriptor);
 
     shader_module.release();
 
     imgui.io.setDefaultFont(font_normal);
-    imgui.backend.init(core.device, core.swap_chain_format, .depth24_plus_stencil8);
+    imgui.backend.init(app.core.device(), app.core.descriptor().format, .depth24_plus_stencil8);
 
     const style = imgui.getStyle();
     style.window_min_size = .{ 350.0, 150.0 };
@@ -943,12 +956,12 @@ fn setupImgui(app: *App, core: *mach.Core) void {
     style.scrollbar_size = 6.0;
 }
 
-fn setupCamera(app: *App, core: *mach.Core) void {
+fn setupCamera(app: *App) void {
     app.camera = Camera{
         .rotation_speed = 1.0,
         .movement_speed = 1.0,
     };
-    const aspect_ratio: f32 = @intToFloat(f32, core.current_desc.width) / @intToFloat(f32, core.current_desc.height);
+    const aspect_ratio: f32 = @intToFloat(f32, app.core.descriptor().width) / @intToFloat(f32, app.core.descriptor().height);
     app.camera.setPosition(.{ 10.0, 6.0, 6.0 });
     app.camera.setRotation(.{ 62.5, 90.0, 0.0 });
     app.camera.setMovementSpeed(0.5);

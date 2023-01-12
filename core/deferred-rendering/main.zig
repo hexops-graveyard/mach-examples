@@ -87,6 +87,13 @@ const Lights = struct {
     buffer_compute_bind_group_layout: *gpu.BindGroupLayout,
 };
 
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+
+core: mach.Core,
+
+timer: mach.Timer,
+delta_time: f32,
+
 queue: *gpu.Queue,
 camera_rotation: f32,
 depth_texture: *gpu.Texture,
@@ -137,37 +144,44 @@ is_paused: bool,
 // Functions
 //
 
-pub fn init(app: *App, core: *mach.Core) !void {
-    app.queue = core.device.getQueue();
+pub fn init(app: *App) !void {
+    app.core = try mach.Core.init(gpa.allocator(), .{});
+
+    app.timer = try mach.Timer.start();
+
+    app.queue = app.core.device().getQueue();
     app.camera_rotation = 0.0;
     app.is_paused = false;
     app.settings.render_mode = .rendering;
     app.settings.lights_count = 128;
 
     app.screen_dimensions = Dimensions2D(u32){
-        .width = core.current_desc.width,
-        .height = core.current_desc.height,
+        .width = app.core.descriptor().width,
+        .height = app.core.descriptor().height,
     };
 
-    try loadMeshFromFile(app, core, std.heap.c_allocator, assets.stanford_dragon.path);
-    prepareGBufferTextureRenderTargets(app, core);
-    prepareDepthTexture(app, core);
-    prepareBindGroupLayouts(app, core);
-    prepareRenderPipelineLayouts(app, core);
-    prepareWriteGBuffersPipeline(app, core);
-    prepareGBuffersDebugViewPipeline(app, core);
-    prepareDeferredRenderPipeline(app, core);
-    setupRenderPasses(app);
-    prepareUniformBuffers(app, core);
-    prepareComputePipelineLayout(app, core);
-    prepareLightUpdateComputePipeline(app, core);
-    prepareLights(app, core);
-    prepareViewMatrices(app);
+    try app.loadMeshFromFile(std.heap.c_allocator, assets.stanford_dragon.path);
+    app.prepareGBufferTextureRenderTargets();
+    app.prepareDepthTexture();
+    app.prepareBindGroupLayouts();
+    app.prepareRenderPipelineLayouts();
+    app.prepareWriteGBuffersPipeline();
+    app.prepareGBuffersDebugViewPipeline();
+    app.prepareDeferredRenderPipeline();
+    app.setupRenderPasses();
+    app.prepareUniformBuffers();
+    app.prepareComputePipelineLayout();
+    app.prepareLightUpdateComputePipeline();
+    app.prepareLights();
+    app.prepareViewMatrices();
 
-    setupImgui(app, core);
+    app.setupImgui();
 }
 
-pub fn deinit(app: *App, _: *mach.Core) void {
+pub fn deinit(app: *App) void {
+    defer _ = gpa.deinit();
+    defer app.core.deinit();
+
     app.write_gbuffers_pipeline.release();
     app.gbuffers_debug_view_pipeline.release();
     app.deferred_render_pipeline.release();
@@ -211,56 +225,64 @@ pub fn deinit(app: *App, _: *mach.Core) void {
     imgui.backend.deinit();
 }
 
-pub fn update(app: *App, core: *mach.Core) !void {
-    while (core.pollEvent()) |event| {
+pub fn update(app: *App) !bool {
+    app.delta_time = app.timer.lap();
+
+    while (app.core.pollEvents()) |event| {
+        switch (event) {
+            .framebuffer_resize => |ev| {
+                app.screen_dimensions.width = ev.width;
+                app.screen_dimensions.height = ev.height;
+
+                app.depth_texture_view.release();
+                app.depth_texture.release();
+
+                app.gbuffer.texture_2d_float.release();
+                app.gbuffer.texture_albedo.release();
+                app.gbuffer.texture_views[0].release();
+                app.gbuffer.texture_views[1].release();
+                app.gbuffer.texture_views[2].release();
+
+                app.prepareGBufferTextureRenderTargets();
+                app.prepareDepthTexture();
+                app.setupRenderPasses();
+
+                const bind_group_entries = [_]gpu.BindGroup.Entry{
+                    gpu.BindGroup.Entry.textureView(0, app.gbuffer.texture_views[0]),
+                    gpu.BindGroup.Entry.textureView(1, app.gbuffer.texture_views[1]),
+                    gpu.BindGroup.Entry.textureView(2, app.gbuffer.texture_views[2]),
+                };
+                app.gbuffer_textures_bind_group = app.core.device().createBindGroup(
+                    &gpu.BindGroup.Descriptor.init(.{
+                        .layout = app.gbuffer_textures_bind_group_layout,
+                        .entries = &bind_group_entries,
+                    }),
+                );
+
+                app.prepareViewMatrices();
+            },
+            .close => return true,
+            else => {},
+        }
+
         imgui.backend.passEvent(event);
     }
 
-    const command = buildCommandBuffer(app, core);
+    const command = try app.buildCommandBuffer();
     app.queue.submit(&[_]*gpu.CommandBuffer{command});
 
     command.release();
-    core.swap_chain.?.present();
-    core.swap_chain.?.getCurrentTextureView().release();
+    app.core.swapChain().present();
+    app.core.swapChain().getCurrentTextureView().release();
 
     if (!app.is_paused) {
-        updateUniformBuffers(app, core);
+        app.updateUniformBuffers();
     }
+
+    return false;
 }
 
-pub fn resize(app: *App, core: *mach.Core, width: u32, height: u32) !void {
-    app.screen_dimensions.width = width;
-    app.screen_dimensions.height = height;
-
-    app.depth_texture_view.release();
-    app.depth_texture.release();
-
-    app.gbuffer.texture_2d_float.release();
-    app.gbuffer.texture_albedo.release();
-    app.gbuffer.texture_views[0].release();
-    app.gbuffer.texture_views[1].release();
-    app.gbuffer.texture_views[2].release();
-
-    prepareGBufferTextureRenderTargets(app, core);
-    prepareDepthTexture(app, core);
-    setupRenderPasses(app);
-
-    const bind_group_entries = [_]gpu.BindGroup.Entry{
-        gpu.BindGroup.Entry.textureView(0, app.gbuffer.texture_views[0]),
-        gpu.BindGroup.Entry.textureView(1, app.gbuffer.texture_views[1]),
-        gpu.BindGroup.Entry.textureView(2, app.gbuffer.texture_views[2]),
-    };
-    app.gbuffer_textures_bind_group = core.device.createBindGroup(
-        &gpu.BindGroup.Descriptor.init(.{
-            .layout = app.gbuffer_textures_bind_group_layout,
-            .entries = &bind_group_entries,
-        }),
-    );
-
-    prepareViewMatrices(app);
-}
-
-fn loadMeshFromFile(app: *App, core: *mach.Core, allocator: std.mem.Allocator, model_path: []const u8) !void {
+fn loadMeshFromFile(app: *App, allocator: std.mem.Allocator, model_path: []const u8) !void {
     var model_file = std.fs.cwd().openFile(model_path, .{}) catch |err| {
         std.log.err("Failed to load model: '{s}' Error: {}", .{ model_path, err });
         return error.LoadModelFileFailed;
@@ -363,7 +385,7 @@ fn loadMeshFromFile(app: *App, core: *mach.Core, allocator: std.mem.Allocator, m
 
     {
         const buffer_size = vertex_buffer.len * @sizeOf(Vertex);
-        app.vertex_buffer = core.device.createBuffer(&.{
+        app.vertex_buffer = app.core.device().createBuffer(&.{
             .usage = .{ .vertex = true },
             .size = roundToMultipleOf4(u64, buffer_size),
             .mapped_at_creation = true,
@@ -374,7 +396,7 @@ fn loadMeshFromFile(app: *App, core: *mach.Core, allocator: std.mem.Allocator, m
     }
     {
         const buffer_size = index_buffer.len * @sizeOf(u16);
-        app.index_buffer = core.device.createBuffer(&.{
+        app.index_buffer = app.core.device().createBuffer(&.{
             .usage = .{ .index = true },
             .size = roundToMultipleOf4(u64, buffer_size),
             .mapped_at_creation = true,
@@ -385,13 +407,13 @@ fn loadMeshFromFile(app: *App, core: *mach.Core, allocator: std.mem.Allocator, m
     }
 }
 
-fn prepareGBufferTextureRenderTargets(app: *App, core: *mach.Core) void {
+fn prepareGBufferTextureRenderTargets(app: *App) void {
     var screen_extent = gpu.Extent3D{
         .width = app.screen_dimensions.width,
         .height = app.screen_dimensions.height,
         .depth_or_array_layers = 2,
     };
-    app.gbuffer.texture_2d_float = core.device.createTexture(&.{
+    app.gbuffer.texture_2d_float = app.core.device().createTexture(&.{
         .size = screen_extent,
         .format = .rgba32_float,
         .usage = .{
@@ -400,7 +422,7 @@ fn prepareGBufferTextureRenderTargets(app: *App, core: *mach.Core) void {
         },
     });
     screen_extent.depth_or_array_layers = 1;
-    app.gbuffer.texture_albedo = core.device.createTexture(&.{
+    app.gbuffer.texture_albedo = app.core.device().createTexture(&.{
         .size = screen_extent,
         .format = .bgra8_unorm,
         .usage = .{
@@ -425,12 +447,12 @@ fn prepareGBufferTextureRenderTargets(app: *App, core: *mach.Core) void {
     app.gbuffer.texture_views[2] = app.gbuffer.texture_albedo.createView(&texture_view_descriptor);
 }
 
-fn prepareDepthTexture(app: *App, core: *mach.Core) void {
+fn prepareDepthTexture(app: *App) void {
     const screen_extent = gpu.Extent3D{
         .width = app.screen_dimensions.width,
         .height = app.screen_dimensions.height,
     };
-    app.depth_texture = core.device.createTexture(&.{
+    app.depth_texture = app.core.device().createTexture(&.{
         .usage = .{ .render_attachment = true },
         .format = .depth24_plus,
         .size = .{
@@ -447,14 +469,14 @@ fn prepareDepthTexture(app: *App, core: *mach.Core) void {
     });
 }
 
-fn prepareBindGroupLayouts(app: *App, core: *mach.Core) void {
+fn prepareBindGroupLayouts(app: *App) void {
     {
         const bind_group_layout_entries = [_]gpu.BindGroupLayout.Entry{
             gpu.BindGroupLayout.Entry.texture(0, .{ .fragment = true }, .unfilterable_float, .dimension_2d, false),
             gpu.BindGroupLayout.Entry.texture(1, .{ .fragment = true }, .unfilterable_float, .dimension_2d, false),
             gpu.BindGroupLayout.Entry.texture(2, .{ .fragment = true }, .unfilterable_float, .dimension_2d, false),
         };
-        app.gbuffer_textures_bind_group_layout = core.device.createBindGroupLayout(
+        app.gbuffer_textures_bind_group_layout = app.core.device().createBindGroupLayout(
             &gpu.BindGroupLayout.Descriptor.init(.{
                 .entries = &bind_group_layout_entries,
             }),
@@ -473,7 +495,7 @@ fn prepareBindGroupLayouts(app: *App, core: *mach.Core) void {
             ),
             gpu.BindGroupLayout.Entry.buffer(1, visibility, .uniform, false, @sizeOf(u32)),
         };
-        app.lights.buffer_bind_group_layout = core.device.createBindGroupLayout(
+        app.lights.buffer_bind_group_layout = app.core.device().createBindGroupLayout(
             &gpu.BindGroupLayout.Descriptor.init(.{
                 .entries = &bind_group_layout_entries,
             }),
@@ -483,7 +505,7 @@ fn prepareBindGroupLayouts(app: *App, core: *mach.Core) void {
         const bind_group_layout_entries = [_]gpu.BindGroupLayout.Entry{
             gpu.BindGroupLayout.Entry.buffer(0, .{ .fragment = true }, .uniform, false, @sizeOf(Vec2)),
         };
-        app.surface_size_uniform_bind_group_layout = core.device.createBindGroupLayout(
+        app.surface_size_uniform_bind_group_layout = app.core.device().createBindGroupLayout(
             &gpu.BindGroupLayout.Descriptor.init(.{
                 .entries = &bind_group_layout_entries,
             }),
@@ -494,7 +516,7 @@ fn prepareBindGroupLayouts(app: *App, core: *mach.Core) void {
             gpu.BindGroupLayout.Entry.buffer(0, .{ .vertex = true }, .uniform, false, @sizeOf(Mat4) * 2),
             gpu.BindGroupLayout.Entry.buffer(1, .{ .vertex = true }, .uniform, false, @sizeOf(Mat4)),
         };
-        app.scene_uniform_bind_group_layout = core.device.createBindGroupLayout(
+        app.scene_uniform_bind_group_layout = app.core.device().createBindGroupLayout(
             &gpu.BindGroupLayout.Descriptor.init(.{
                 .entries = &bind_group_layout_entries,
             }),
@@ -506,7 +528,7 @@ fn prepareBindGroupLayouts(app: *App, core: *mach.Core) void {
             gpu.BindGroupLayout.Entry.buffer(1, .{ .compute = true }, .uniform, false, @sizeOf(u32)),
             gpu.BindGroupLayout.Entry.buffer(2, .{ .compute = true }, .uniform, false, @sizeOf(Vec4) * 2),
         };
-        app.lights.buffer_compute_bind_group_layout = core.device.createBindGroupLayout(
+        app.lights.buffer_compute_bind_group_layout = app.core.device().createBindGroupLayout(
             &gpu.BindGroupLayout.Descriptor.init(.{
                 .entries = &bind_group_layout_entries,
             }),
@@ -514,11 +536,11 @@ fn prepareBindGroupLayouts(app: *App, core: *mach.Core) void {
     }
 }
 
-fn prepareRenderPipelineLayouts(app: *App, core: *mach.Core) void {
+fn prepareRenderPipelineLayouts(app: *App) void {
     {
         // Write GBuffers pipeline layout
         const bind_group_layouts = [_]*gpu.BindGroupLayout{app.scene_uniform_bind_group_layout};
-        app.write_gbuffers_pipeline_layout = core.device.createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
+        app.write_gbuffers_pipeline_layout = app.core.device().createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
             .bind_group_layouts = &bind_group_layouts,
         }));
     }
@@ -528,7 +550,7 @@ fn prepareRenderPipelineLayouts(app: *App, core: *mach.Core) void {
             app.gbuffer_textures_bind_group_layout,
             app.surface_size_uniform_bind_group_layout,
         };
-        app.gbuffers_debug_view_pipeline_layout = core.device.createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
+        app.gbuffers_debug_view_pipeline_layout = app.core.device().createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
             .bind_group_layouts = &bind_group_layouts,
         }));
     }
@@ -539,13 +561,13 @@ fn prepareRenderPipelineLayouts(app: *App, core: *mach.Core) void {
             app.lights.buffer_bind_group_layout,
             app.surface_size_uniform_bind_group_layout,
         };
-        app.deferred_render_pipeline_layout = core.device.createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
+        app.deferred_render_pipeline_layout = app.core.device().createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
             .bind_group_layouts = &bind_group_layouts,
         }));
     }
 }
 
-fn prepareWriteGBuffersPipeline(app: *App, core: *mach.Core) void {
+fn prepareWriteGBuffersPipeline(app: *App) void {
     const color_target_states = [_]gpu.ColorTargetState{
         .{ .format = .rgba32_float },
         .{ .format = .rgba32_float },
@@ -562,11 +584,11 @@ fn prepareWriteGBuffersPipeline(app: *App, core: *mach.Core) void {
         },
     });
 
-    const vertex_shader_module = core.device.createShaderModuleWGSL(
+    const vertex_shader_module = app.core.device().createShaderModuleWGSL(
         "vertexWriteGBuffers.wgsl",
         @embedFile("vertexWriteGBuffers.wgsl"),
     );
-    const fragment_shader_module = core.device.createShaderModuleWGSL(
+    const fragment_shader_module = app.core.device().createShaderModuleWGSL(
         "fragmentWriteGBuffers.wgsl",
         @embedFile("fragmentWriteGBuffers.wgsl"),
     );
@@ -590,13 +612,13 @@ fn prepareWriteGBuffersPipeline(app: *App, core: *mach.Core) void {
             .targets = &color_target_states,
         }),
     };
-    app.write_gbuffers_pipeline = core.device.createRenderPipeline(&pipeline_descriptor);
+    app.write_gbuffers_pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
 
     vertex_shader_module.release();
     fragment_shader_module.release();
 }
 
-fn prepareGBuffersDebugViewPipeline(app: *App, core: *mach.Core) void {
+fn prepareGBuffersDebugViewPipeline(app: *App) void {
     const blend_component_descriptor = gpu.BlendComponent{
         .operation = .add,
         .src_factor = .one,
@@ -604,18 +626,18 @@ fn prepareGBuffersDebugViewPipeline(app: *App, core: *mach.Core) void {
     };
 
     const color_target_state = gpu.ColorTargetState{
-        .format = core.swap_chain_format,
+        .format = app.core.descriptor().format,
         .blend = &.{
             .color = blend_component_descriptor,
             .alpha = blend_component_descriptor,
         },
     };
 
-    const vertex_shader_module = core.device.createShaderModuleWGSL(
+    const vertex_shader_module = app.core.device().createShaderModuleWGSL(
         "vertexTextureQuad.wgsl",
         @embedFile("vertexTextureQuad.wgsl"),
     );
-    const fragment_shader_module = core.device.createShaderModuleWGSL(
+    const fragment_shader_module = app.core.device().createShaderModuleWGSL(
         "fragmentGBuffersDebugView.wgsl",
         @embedFile("fragmentGBuffersDebugView.wgsl"),
     );
@@ -634,12 +656,12 @@ fn prepareGBuffersDebugViewPipeline(app: *App, core: *mach.Core) void {
             .targets = &.{color_target_state},
         }),
     };
-    app.gbuffers_debug_view_pipeline = core.device.createRenderPipeline(&pipeline_descriptor);
+    app.gbuffers_debug_view_pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
     vertex_shader_module.release();
     fragment_shader_module.release();
 }
 
-fn prepareDeferredRenderPipeline(app: *App, core: *mach.Core) void {
+fn prepareDeferredRenderPipeline(app: *App) void {
     const blend_component_descriptor = gpu.BlendComponent{
         .operation = .add,
         .src_factor = .one,
@@ -654,11 +676,11 @@ fn prepareDeferredRenderPipeline(app: *App, core: *mach.Core) void {
         },
     };
 
-    const vertex_shader_module = core.device.createShaderModuleWGSL(
+    const vertex_shader_module = app.core.device().createShaderModuleWGSL(
         "vertexTextureQuad.wgsl",
         @embedFile("vertexTextureQuad.wgsl"),
     );
-    const fragment_shader_module = core.device.createShaderModuleWGSL(
+    const fragment_shader_module = app.core.device().createShaderModuleWGSL(
         "fragmentDeferredRendering.wgsl",
         @embedFile("fragmentDeferredRendering.wgsl"),
     );
@@ -677,7 +699,7 @@ fn prepareDeferredRenderPipeline(app: *App, core: *mach.Core) void {
             .targets = &.{color_target_state},
         }),
     };
-    app.deferred_render_pipeline = core.device.createRenderPipeline(&pipeline_descriptor);
+    app.deferred_render_pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
     vertex_shader_module.release();
     fragment_shader_module.release();
 }
@@ -755,11 +777,11 @@ fn setupRenderPasses(app: *App) void {
     }
 }
 
-fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
+fn prepareUniformBuffers(app: *App) void {
     {
         // Config uniform buffer
         app.lights.config_uniform_buffer_size = @sizeOf(i32);
-        app.lights.config_uniform_buffer = core.device.createBuffer(&.{
+        app.lights.config_uniform_buffer = app.core.device().createBuffer(&.{
             .usage = .{ .copy_dst = true, .uniform = true },
             .size = app.lights.config_uniform_buffer_size,
             .mapped_at_creation = true,
@@ -770,14 +792,14 @@ fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
     }
     {
         // Model uniform buffer
-        app.model_uniform_buffer = core.device.createBuffer(&.{
+        app.model_uniform_buffer = app.core.device().createBuffer(&.{
             .usage = .{ .copy_dst = true, .uniform = true },
             .size = @sizeOf(Mat4) * 2,
         });
     }
     {
         // Camera uniform buffer
-        app.camera_uniform_buffer = core.device.createBuffer(&.{
+        app.camera_uniform_buffer = app.core.device().createBuffer(&.{
             .usage = .{ .copy_dst = true, .uniform = true },
             .size = @sizeOf(Mat4),
         });
@@ -796,7 +818,7 @@ fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
                 .size = @sizeOf(Mat4),
             },
         };
-        app.scene_uniform_bind_group = core.device.createBindGroup(
+        app.scene_uniform_bind_group = app.core.device().createBindGroup(
             &gpu.BindGroup.Descriptor.init(.{
                 .layout = app.write_gbuffers_pipeline.getBindGroupLayout(0),
                 .entries = &bind_group_entries,
@@ -805,7 +827,7 @@ fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
     }
     {
         // Surface size uniform buffer
-        app.surface_size_uniform_buffer = core.device.createBuffer(&.{
+        app.surface_size_uniform_buffer = app.core.device().createBuffer(&.{
             .usage = .{ .copy_dst = true, .uniform = true },
             .size = @sizeOf(f32) * 4,
         });
@@ -819,7 +841,7 @@ fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
                 .size = @sizeOf(f32) * 2,
             },
         };
-        app.surface_size_uniform_bind_group = core.device.createBindGroup(
+        app.surface_size_uniform_bind_group = app.core.device().createBindGroup(
             &gpu.BindGroup.Descriptor.init(.{
                 .layout = app.surface_size_uniform_bind_group_layout,
                 .entries = &bind_group_entries,
@@ -833,7 +855,7 @@ fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
             gpu.BindGroup.Entry.textureView(1, app.gbuffer.texture_views[1]),
             gpu.BindGroup.Entry.textureView(2, app.gbuffer.texture_views[2]),
         };
-        app.gbuffer_textures_bind_group = core.device.createBindGroup(
+        app.gbuffer_textures_bind_group = app.core.device().createBindGroup(
             &gpu.BindGroup.Descriptor.init(.{
                 .layout = app.gbuffer_textures_bind_group_layout,
                 .entries = &bind_group_entries,
@@ -842,19 +864,19 @@ fn prepareUniformBuffers(app: *App, core: *mach.Core) void {
     }
 }
 
-fn prepareComputePipelineLayout(app: *App, core: *mach.Core) void {
+fn prepareComputePipelineLayout(app: *App) void {
     const bind_group_layouts = [_]*gpu.BindGroupLayout{app.lights.buffer_compute_bind_group_layout};
-    app.light_update_compute_pipeline_layout = core.device.createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
+    app.light_update_compute_pipeline_layout = app.core.device().createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
         .bind_group_layouts = &bind_group_layouts,
     }));
 }
 
-fn prepareLightUpdateComputePipeline(app: *App, core: *mach.Core) void {
-    const shader_module = core.device.createShaderModuleWGSL(
+fn prepareLightUpdateComputePipeline(app: *App) void {
+    const shader_module = app.core.device().createShaderModuleWGSL(
         "lightUpdate.wgsl",
         @embedFile("lightUpdate.wgsl"),
     );
-    app.light_update_compute_pipeline = core.device.createComputePipeline(&gpu.ComputePipeline.Descriptor{
+    app.light_update_compute_pipeline = app.core.device().createComputePipeline(&gpu.ComputePipeline.Descriptor{
         .compute = gpu.ProgrammableStageDescriptor{
             .module = shader_module,
             .entry_point = "main",
@@ -864,7 +886,7 @@ fn prepareLightUpdateComputePipeline(app: *App, core: *mach.Core) void {
     shader_module.release();
 }
 
-fn prepareLights(app: *App, core: *mach.Core) void {
+fn prepareLights(app: *App) void {
     // Lights data are uploaded in a storage buffer
     // which could be updated/culled/etc. with a compute shader
     const extent = comptime Vec3{
@@ -873,7 +895,7 @@ fn prepareLights(app: *App, core: *mach.Core) void {
         light_extent_max[2] - light_extent_min[2],
     };
     app.lights.buffer_size = @sizeOf(f32) * light_data_stride * max_num_lights;
-    app.lights.buffer = core.device.createBuffer(&.{
+    app.lights.buffer = app.core.device().createBuffer(&.{
         .usage = .{ .storage = true },
         .size = app.lights.buffer_size,
         .mapped_at_creation = true,
@@ -908,7 +930,7 @@ fn prepareLights(app: *App, core: *mach.Core) void {
     // Lights extent buffer
     //
     app.lights.extent_buffer_size = @sizeOf(f32) * light_data_stride * max_num_lights;
-    app.lights.extent_buffer = core.device.createBuffer(&.{
+    app.lights.extent_buffer = app.core.device().createBuffer(&.{
         .usage = .{ .uniform = true, .copy_dst = true },
         .size = app.lights.extent_buffer_size,
     });
@@ -936,7 +958,7 @@ fn prepareLights(app: *App, core: *mach.Core) void {
                 .size = app.lights.config_uniform_buffer_size,
             },
         };
-        app.lights.buffer_bind_group = core.device.createBindGroup(
+        app.lights.buffer_bind_group = app.core.device().createBindGroup(
             &gpu.BindGroup.Descriptor.init(.{
                 .layout = app.lights.buffer_bind_group_layout,
                 .entries = &bind_group_entries,
@@ -964,7 +986,7 @@ fn prepareLights(app: *App, core: *mach.Core) void {
                 .size = app.lights.extent_buffer_size,
             },
         };
-        app.lights.buffer_compute_bind_group = core.device.createBindGroup(
+        app.lights.buffer_compute_bind_group = app.core.device().createBindGroup(
             &gpu.BindGroup.Descriptor.init(.{
                 .layout = app.light_update_compute_pipeline.getBindGroupLayout(0),
                 .entries = &bind_group_entries,
@@ -1021,17 +1043,17 @@ fn prepareViewMatrices(app: *App) void {
     );
 }
 
-fn buildCommandBuffer(app: *App, core: *mach.Core) *gpu.CommandBuffer {
-    const back_buffer_view = core.swap_chain.?.getCurrentTextureView();
-    const encoder = core.device.createCommandEncoder(null);
+fn buildCommandBuffer(app: *App) !*gpu.CommandBuffer {
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
+    const encoder = app.core.device().createCommandEncoder(null);
     defer encoder.release();
 
-    std.debug.assert(app.screen_dimensions.width == core.current_desc.width);
-    std.debug.assert(app.screen_dimensions.height == core.current_desc.height);
+    std.debug.assert(app.screen_dimensions.width == app.core.descriptor().width);
+    std.debug.assert(app.screen_dimensions.height == app.core.descriptor().height);
 
     const dimensions = Dimensions2D(f32){
-        .width = @intToFloat(f32, core.current_desc.width),
-        .height = @intToFloat(f32, core.current_desc.height),
+        .width = @intToFloat(f32, app.core.descriptor().width),
+        .height = @intToFloat(f32, app.core.descriptor().height),
     };
 
     {
@@ -1045,7 +1067,7 @@ fn buildCommandBuffer(app: *App, core: *mach.Core) *gpu.CommandBuffer {
             0.0,
             1.0,
         );
-        pass.setScissorRect(0, 0, core.current_desc.width, core.current_desc.height);
+        pass.setScissorRect(0, 0, app.core.descriptor().width, app.core.descriptor().height);
         pass.setPipeline(app.write_gbuffers_pipeline);
         pass.setBindGroup(0, app.scene_uniform_bind_group, null);
         pass.setVertexBuffer(0, app.vertex_buffer, 0, @sizeOf(Vertex) * app.vertex_count);
@@ -1098,13 +1120,13 @@ fn buildCommandBuffer(app: *App, core: *mach.Core) *gpu.CommandBuffer {
     }
 
     pass.setPipeline(app.imgui_render_pipeline);
-    const window_size = core.getWindowSize();
+    const window_size = app.core.size();
     imgui.backend.newFrame(
-        core,
+        &app.core,
         window_size.width,
         window_size.height,
     );
-    drawUI(app);
+    app.drawUI();
     imgui.backend.draw(pass);
 
     pass.end();
@@ -1113,7 +1135,7 @@ fn buildCommandBuffer(app: *App, core: *mach.Core) *gpu.CommandBuffer {
     return encoder.finish(null);
 }
 
-fn setupImgui(app: *App, core: *mach.Core) void {
+fn setupImgui(app: *App) void {
     imgui.init();
     const font_normal = imgui.io.addFontFromFile(assets.fonts.roboto_medium.path, 16.0);
 
@@ -1124,14 +1146,14 @@ fn setupImgui(app: *App, core: *mach.Core) void {
     };
 
     const color_target_state = gpu.ColorTargetState{
-        .format = core.swap_chain_format,
+        .format = app.core.descriptor().format,
         .blend = &.{
             .color = blend_component_descriptor,
             .alpha = blend_component_descriptor,
         },
     };
 
-    const shader_module = core.device.createShaderModuleWGSL("imgui", assets.shaders.imgui.bytes);
+    const shader_module = app.core.device().createShaderModuleWGSL("imgui", assets.shaders.imgui.bytes);
     const imgui_pipeline_descriptor = gpu.RenderPipeline.Descriptor{
         .fragment = &gpu.FragmentState.init(.{
             .module = shader_module,
@@ -1144,12 +1166,12 @@ fn setupImgui(app: *App, core: *mach.Core) void {
         }),
     };
 
-    app.imgui_render_pipeline = core.device.createRenderPipeline(&imgui_pipeline_descriptor);
+    app.imgui_render_pipeline = app.core.device().createRenderPipeline(&imgui_pipeline_descriptor);
 
     shader_module.release();
 
     imgui.io.setDefaultFont(font_normal);
-    imgui.backend.init(core.device, core.swap_chain_format, null);
+    imgui.backend.init(app.core.device(), app.core.descriptor().format, null);
 
     const style = imgui.getStyle();
     style.window_min_size = .{ 300.0, 100.0 };
@@ -1187,8 +1209,8 @@ fn drawUI(app: *App) void {
     imgui.end();
 }
 
-fn updateUniformBuffers(app: *App, core: *mach.Core) void {
-    app.camera_rotation += toRadians(360.0) * (core.delta_time / 5.0); // one rotation every 5s
+fn updateUniformBuffers(app: *App) void {
+    app.camera_rotation += toRadians(360.0) * (app.delta_time / 5.0); // one rotation every 5s
     const rotation = zm.rotationY(app.camera_rotation);
     const eye_position = zm.mul(rotation, zm.Vec{ 0, 50, -100, 0 });
     const view_matrix = zm.lookAtRh(eye_position, app.view_matrices.origin, app.view_matrices.up_vector);

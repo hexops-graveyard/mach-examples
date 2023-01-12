@@ -4,6 +4,7 @@ const gpu = @import("gpu");
 const zigimg = @import("zigimg");
 const assets = @import("assets");
 
+core: mach.Core,
 queue: *gpu.Queue,
 blur_pipeline: *gpu.ComputePipeline,
 fullscreen_quad_pipeline: *gpu.RenderPipeline,
@@ -27,11 +28,15 @@ const batch: [2]u32 = .{ 4, 4 };
 const filter_size: u32 = 15;
 const iterations: u32 = 2;
 var block_dimension: u32 = tile_dimension - (filter_size - 1);
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
-pub fn init(app: *App, core: *mach.Core) !void {
-    const queue = core.device.getQueue();
+pub fn init(app: *App) !void {
+    const allocator = gpa.allocator();
+    var core = try mach.Core.init(allocator, .{});
 
-    const blur_shader_module = core.device.createShaderModuleWGSL("blur.wgsl", @embedFile("blur.wgsl"));
+    const queue = core.device().getQueue();
+
+    const blur_shader_module = core.device().createShaderModuleWGSL("blur.wgsl", @embedFile("blur.wgsl"));
 
     const blur_pipeline_descriptor = gpu.ComputePipeline.Descriptor{
         .compute = gpu.ProgrammableStageDescriptor{
@@ -40,21 +45,21 @@ pub fn init(app: *App, core: *mach.Core) !void {
         },
     };
 
-    const blur_pipeline = core.device.createComputePipeline(&blur_pipeline_descriptor);
+    const blur_pipeline = core.device().createComputePipeline(&blur_pipeline_descriptor);
 
-    const fullscreen_quad_vs_module = core.device.createShaderModuleWGSL(
+    const fullscreen_quad_vs_module = core.device().createShaderModuleWGSL(
         "fullscreen_textured_quad.wgsl",
         @embedFile("fullscreen_textured_quad.wgsl"),
     );
 
-    const fullscreen_quad_fs_module = core.device.createShaderModuleWGSL(
+    const fullscreen_quad_fs_module = core.device().createShaderModuleWGSL(
         "fullscreen_textured_quad.wgsl",
         @embedFile("fullscreen_textured_quad.wgsl"),
     );
 
     const blend = gpu.BlendState{};
     const color_target = gpu.ColorTargetState{
-        .format = core.swap_chain_format,
+        .format = core.descriptor().format,
         .blend = &blend,
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
@@ -73,19 +78,19 @@ pub fn init(app: *App, core: *mach.Core) !void {
         },
     };
 
-    const fullscreen_quad_pipeline = core.device.createRenderPipeline(&fullscreen_quad_pipeline_descriptor);
+    const fullscreen_quad_pipeline = core.device().createRenderPipeline(&fullscreen_quad_pipeline_descriptor);
 
-    const sampler = core.device.createSampler(&.{
+    const sampler = core.device().createSampler(&.{
         .mag_filter = .linear,
         .min_filter = .linear,
     });
 
-    var img = try zigimg.Image.fromMemory(core.allocator, assets.gotta_go_fast_image);
+    var img = try zigimg.Image.fromMemory(allocator, assets.gotta_go_fast_image);
     defer img.deinit();
 
     const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
 
-    const cube_texture = core.device.createTexture(&.{
+    const cube_texture = core.device().createTexture(&.{
         .size = img_size,
         .format = .rgba8_unorm,
         .usage = .{
@@ -103,8 +108,8 @@ pub fn init(app: *App, core: *mach.Core) !void {
     switch (img.pixels) {
         .rgba32 => |pixels| queue.writeTexture(&.{ .texture = cube_texture }, &data_layout, &img_size, pixels),
         .rgb24 => |pixels| {
-            const data = try rgb24ToRgba32(core.allocator, pixels);
-            defer data.deinit(core.allocator);
+            const data = try rgb24ToRgba32(allocator, pixels);
+            defer data.deinit(allocator);
             queue.writeTexture(&.{ .texture = cube_texture }, &data_layout, &img_size, data.rgba32);
         },
         else => @panic("unsupported image color format"),
@@ -112,7 +117,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
 
     var textures: [2]*gpu.Texture = undefined;
     for (textures) |_, i| {
-        textures[i] = core.device.createTexture(&.{
+        textures[i] = core.device().createTexture(&.{
             .size = img_size,
             .format = .rgba8_unorm,
             .usage = .{
@@ -127,7 +132,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
     // depending on whether flip value is 0 or 1
     var flip: [2]*gpu.Buffer = undefined;
     for (flip) |_, i| {
-        const buffer = core.device.createBuffer(&.{
+        const buffer = core.device().createBuffer(&.{
             .usage = .{ .uniform = true },
             .size = @sizeOf(u32),
             .mapped_at_creation = true,
@@ -140,12 +145,12 @@ pub fn init(app: *App, core: *mach.Core) !void {
         flip[i] = buffer;
     }
 
-    const blur_params_buffer = core.device.createBuffer(&.{
+    const blur_params_buffer = core.device().createBuffer(&.{
         .size = 8,
         .usage = .{ .copy_dst = true, .uniform = true },
     });
 
-    const compute_constants = core.device.createBindGroup(&gpu.BindGroup.Descriptor.init(.{
+    const compute_constants = core.device().createBindGroup(&gpu.BindGroup.Descriptor.init(.{
         .layout = blur_pipeline.getBindGroupLayout(0),
         .entries = &.{
             gpu.BindGroup.Entry.sampler(0, sampler),
@@ -153,7 +158,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         },
     }));
 
-    const compute_bind_group_0 = core.device.createBindGroup(&gpu.BindGroup.Descriptor.init(.{
+    const compute_bind_group_0 = core.device().createBindGroup(&gpu.BindGroup.Descriptor.init(.{
         .layout = blur_pipeline.getBindGroupLayout(1),
         .entries = &.{
             gpu.BindGroup.Entry.textureView(1, cube_texture.createView(&gpu.TextureView.Descriptor{})),
@@ -162,7 +167,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         },
     }));
 
-    const compute_bind_group_1 = core.device.createBindGroup(&gpu.BindGroup.Descriptor.init(.{
+    const compute_bind_group_1 = core.device().createBindGroup(&gpu.BindGroup.Descriptor.init(.{
         .layout = blur_pipeline.getBindGroupLayout(1),
         .entries = &.{
             gpu.BindGroup.Entry.textureView(1, textures[0].createView(&gpu.TextureView.Descriptor{})),
@@ -171,7 +176,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         },
     }));
 
-    const compute_bind_group_2 = core.device.createBindGroup(&gpu.BindGroup.Descriptor.init(.{
+    const compute_bind_group_2 = core.device().createBindGroup(&gpu.BindGroup.Descriptor.init(.{
         .layout = blur_pipeline.getBindGroupLayout(1),
         .entries = &.{
             gpu.BindGroup.Entry.textureView(1, textures[1].createView(&gpu.TextureView.Descriptor{})),
@@ -180,7 +185,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         },
     }));
 
-    const show_result_bind_group = core.device.createBindGroup(&gpu.BindGroup.Descriptor.init(.{
+    const show_result_bind_group = core.device().createBindGroup(&gpu.BindGroup.Descriptor.init(.{
         .layout = fullscreen_quad_pipeline.getBindGroupLayout(0),
         .entries = &.{
             gpu.BindGroup.Entry.sampler(0, sampler),
@@ -191,6 +196,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
     const blur_params_buffer_data = [_]u32{ filter_size, block_dimension };
     queue.writeBuffer(blur_params_buffer, 0, &blur_params_buffer_data);
 
+    app.core = core;
     app.queue = queue;
     app.blur_pipeline = blur_pipeline;
     app.fullscreen_quad_pipeline = fullscreen_quad_pipeline;
@@ -205,11 +211,18 @@ pub fn init(app: *App, core: *mach.Core) !void {
     app.img_size = img_size;
 }
 
-pub fn deinit(_: *App, _: *mach.Core) void {}
+pub fn deinit(app: *App) void {
+    defer _ = gpa.deinit();
+    defer app.core.deinit();
+}
 
-pub fn update(app: *App, core: *mach.Core) !void {
-    const back_buffer_view = core.swap_chain.?.getCurrentTextureView();
-    const encoder = core.device.createCommandEncoder(null);
+pub fn update(app: *App) !bool {
+    while (app.core.pollEvents()) |event| {
+        if (event == .close) return true;
+    }
+
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
+    const encoder = app.core.device().createCommandEncoder(null);
 
     const compute_pass = encoder.beginComputePass(null);
     compute_pass.setPipeline(app.blur_pipeline);
@@ -254,8 +267,10 @@ pub fn update(app: *App, core: *mach.Core) !void {
     encoder.release();
     app.queue.submit(&[_]*gpu.CommandBuffer{command});
     command.release();
-    core.swap_chain.?.present();
+    app.core.swapChain().present();
     back_buffer_view.release();
+
+    return false;
 }
 
 fn rgb24ToRgba32(allocator: std.mem.Allocator, in: []zigimg.color.Rgb24) !zigimg.color.PixelStorage {

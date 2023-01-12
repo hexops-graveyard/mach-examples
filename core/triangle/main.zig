@@ -4,16 +4,21 @@ const gpu = @import("gpu");
 
 pub const App = @This();
 
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+
+core: mach.Core,
 pipeline: *gpu.RenderPipeline,
 queue: *gpu.Queue,
 
-pub fn init(app: *App, core: *mach.Core) !void {
-    const shader_module = core.device.createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
+pub fn init(app: *App) !void {
+    app.core = try mach.Core.init(gpa.allocator(), .{});
+
+    const shader_module = app.core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
 
     // Fragment state
     const blend = gpu.BlendState{};
     const color_target = gpu.ColorTargetState{
-        .format = core.swap_chain_format,
+        .format = app.core.descriptor().format,
         .blend = &blend,
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
@@ -30,16 +35,26 @@ pub fn init(app: *App, core: *mach.Core) !void {
         },
     };
 
-    app.pipeline = core.device.createRenderPipeline(&pipeline_descriptor);
-    app.queue = core.device.getQueue();
+    app.pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
+    app.queue = app.core.device().getQueue();
 
     shader_module.release();
 }
 
-pub fn deinit(_: *App, _: *mach.Core) void {}
+pub fn deinit(app: *App) void {
+    defer _ = gpa.deinit();
+    defer app.core.deinit();
+}
 
-pub fn update(app: *App, core: *mach.Core) !void {
-    const back_buffer_view = core.swap_chain.?.getCurrentTextureView();
+pub fn update(app: *App) !bool {
+    while (app.core.pollEvents()) |event| {
+        switch (event) {
+            .close => return true,
+            else => {},
+        }
+    }
+
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
     const color_attachment = gpu.RenderPassColorAttachment{
         .view = back_buffer_view,
         .clear_value = std.mem.zeroes(gpu.Color),
@@ -47,7 +62,7 @@ pub fn update(app: *App, core: *mach.Core) !void {
         .store_op = .store,
     };
 
-    const encoder = core.device.createCommandEncoder(null);
+    const encoder = app.core.device().createCommandEncoder(null);
     const render_pass_info = gpu.RenderPassDescriptor.init(.{
         .color_attachments = &.{color_attachment},
     });
@@ -62,6 +77,8 @@ pub fn update(app: *App, core: *mach.Core) !void {
 
     app.queue.submit(&[_]*gpu.CommandBuffer{command});
     command.release();
-    core.swap_chain.?.present();
+    app.core.swapChain().present();
     back_buffer_view.release();
+
+    return false;
 }

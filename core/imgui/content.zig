@@ -1,8 +1,8 @@
 const mach = @import("mach");
 const imgui = @import("imgui.zig");
 
-pub fn render_content(core: *mach.Core) !void {
-    const window_size = core.getWindowSize();
+pub fn renderContent(core: *mach.Core) void {
+    const window_size = core.size();
     imgui.backend.newFrame(
         core,
         window_size.width,

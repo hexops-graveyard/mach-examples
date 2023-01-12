@@ -7,27 +7,33 @@ pub const App = @This();
 const workgroup_size = 64;
 const buffer_size = 1000;
 
-pub fn init(_: *App, core: *mach.Core) !void {
-    const output = core.device.createBuffer(&.{
+pub fn init(_: *App) !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
+    var core = try mach.Core.init(gpa.allocator(), .{});
+    defer core.deinit();
+
+    const output = core.device().createBuffer(&.{
         .usage = .{ .storage = true, .copy_src = true },
         .size = buffer_size * @sizeOf(f32),
         .mapped_at_creation = false,
     });
 
-    const staging = core.device.createBuffer(&.{
+    const staging = core.device().createBuffer(&.{
         .usage = .{ .map_read = true, .copy_dst = true },
         .size = buffer_size * @sizeOf(f32),
         .mapped_at_creation = false,
     });
 
-    const compute_module = core.device.createShaderModuleWGSL("main.wgsl", @embedFile("main.wgsl"));
+    const compute_module = core.device().createShaderModuleWGSL("main.wgsl", @embedFile("main.wgsl"));
 
-    const compute_pipeline = core.device.createComputePipeline(&gpu.ComputePipeline.Descriptor{ .compute = gpu.ProgrammableStageDescriptor{
+    const compute_pipeline = core.device().createComputePipeline(&gpu.ComputePipeline.Descriptor{ .compute = gpu.ProgrammableStageDescriptor{
         .module = compute_module,
         .entry_point = "main",
     } });
 
-    const compute_bind_group = core.device.createBindGroup(&gpu.BindGroup.Descriptor.init(.{
+    const compute_bind_group = core.device().createBindGroup(&gpu.BindGroup.Descriptor.init(.{
         .layout = compute_pipeline.getBindGroupLayout(0),
         .entries = &.{
             gpu.BindGroup.Entry.buffer(0, output, 0, buffer_size),
@@ -36,7 +42,7 @@ pub fn init(_: *App, core: *mach.Core) !void {
 
     compute_module.release();
 
-    const encoder = core.device.createCommandEncoder(null);
+    const encoder = core.device().createCommandEncoder(null);
 
     const compute_pass = encoder.beginComputePass(null);
     compute_pass.setPipeline(compute_pipeline);
@@ -56,7 +62,7 @@ pub fn init(_: *App, core: *mach.Core) !void {
         }
     }).callback;
 
-    var queue = core.device.getQueue();
+    var queue = core.device().getQueue();
     queue.submit(&[_]*gpu.CommandBuffer{command});
 
     staging.mapAsync(.{ .read = true }, 0, buffer_size, &response, callback);
@@ -64,7 +70,7 @@ pub fn init(_: *App, core: *mach.Core) !void {
         if (response == gpu.Buffer.MapAsyncStatus.success) {
             break;
         } else {
-            core.device.tick();
+            core.device().tick();
         }
     }
 
@@ -76,8 +82,8 @@ pub fn init(_: *App, core: *mach.Core) !void {
     staging.unmap();
 }
 
-pub fn deinit(_: *App, _: *mach.Core) void {}
+pub fn deinit(_: *App) void {}
 
-pub fn update(_: *App, core: *mach.Core) !void {
-    core.close();
+pub fn update(_: *App) !bool {
+    return true;
 }

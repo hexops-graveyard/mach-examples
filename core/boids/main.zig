@@ -4,6 +4,8 @@ const std = @import("std");
 const mach = @import("mach");
 const gpu = @import("gpu");
 
+core: mach.Core,
+timer: mach.Timer,
 compute_pipeline: *gpu.ComputePipeline,
 render_pipeline: *gpu.RenderPipeline,
 sprite_vertex_buffer: *gpu.Buffer,
@@ -13,6 +15,8 @@ sim_param_buffer: *gpu.Buffer,
 frame_counter: usize,
 
 pub const App = @This();
+
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
 const num_particle = 1500;
 
@@ -26,13 +30,15 @@ var sim_params = [_]f32{
     0.005, // .rule_3_scale
 };
 
-pub fn init(app: *App, core: *mach.Core) !void {
-    const sprite_shader_module = core.device.createShaderModuleWGSL(
+pub fn init(app: *App) !void {
+    var core = try mach.Core.init(gpa.allocator(), .{});
+
+    const sprite_shader_module = core.device().createShaderModuleWGSL(
         "sprite.wgsl",
         @embedFile("sprite.wgsl"),
     );
 
-    const update_sprite_shader_module = core.device.createShaderModuleWGSL(
+    const update_sprite_shader_module = core.device().createShaderModuleWGSL(
         "updateSprites.wgsl",
         @embedFile("updateSprites.wgsl"),
     );
@@ -61,7 +67,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         },
     };
 
-    const render_pipeline = core.device.createRenderPipeline(&gpu.RenderPipeline.Descriptor{
+    const render_pipeline = core.device().createRenderPipeline(&gpu.RenderPipeline.Descriptor{
         .vertex = gpu.VertexState.init(.{
             .module = sprite_shader_module,
             .entry_point = "vert_main",
@@ -84,12 +90,12 @@ pub fn init(app: *App, core: *mach.Core) !void {
             .module = sprite_shader_module,
             .entry_point = "frag_main",
             .targets = &[_]gpu.ColorTargetState{.{
-                .format = core.swap_chain_format,
+                .format = core.descriptor().format,
             }},
         }),
     });
 
-    const compute_pipeline = core.device.createComputePipeline(&gpu.ComputePipeline.Descriptor{ .compute = gpu.ProgrammableStageDescriptor{
+    const compute_pipeline = core.device().createComputePipeline(&gpu.ComputePipeline.Descriptor{ .compute = gpu.ProgrammableStageDescriptor{
         .module = update_sprite_shader_module,
         .entry_point = "main",
     } });
@@ -99,7 +105,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         -0.02, 0.0,   0.02,
     };
 
-    const sprite_vertex_buffer = core.device.createBuffer(&gpu.Buffer.Descriptor{
+    const sprite_vertex_buffer = core.device().createBuffer(&gpu.Buffer.Descriptor{
         .label = "sprite_vertex_buffer",
         .usage = .{ .vertex = true },
         .mapped_at_creation = true,
@@ -109,12 +115,12 @@ pub fn init(app: *App, core: *mach.Core) !void {
     std.mem.copy(f32, vertex_mapped.?, vert_buffer_data[0..]);
     sprite_vertex_buffer.unmap();
 
-    const sim_param_buffer = core.device.createBuffer(&gpu.Buffer.Descriptor{
+    const sim_param_buffer = core.device().createBuffer(&gpu.Buffer.Descriptor{
         .label = "sim_param_buffer",
         .usage = .{ .uniform = true, .copy_dst = true },
         .size = sim_params.len * @sizeOf(f32),
     });
-    core.device.getQueue().writeBuffer(sim_param_buffer, 0, sim_params[0..]);
+    core.device().getQueue().writeBuffer(sim_param_buffer, 0, sim_params[0..]);
 
     var initial_particle_data: [num_particle * 4]f32 = undefined;
     var rng = std.rand.DefaultPrng.init(0);
@@ -131,7 +137,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
     var particle_bind_groups: [2]*gpu.BindGroup = undefined;
     i = 0;
     while (i < 2) : (i += 1) {
-        particle_buffers[i] = core.device.createBuffer(&gpu.Buffer.Descriptor{
+        particle_buffers[i] = core.device().createBuffer(&gpu.Buffer.Descriptor{
             .label = "particle_buffer",
             .mapped_at_creation = true,
             .usage = .{
@@ -147,7 +153,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
 
     i = 0;
     while (i < 2) : (i += 1) {
-        particle_bind_groups[i] = core.device.createBindGroup(&gpu.BindGroup.Descriptor.init(.{
+        particle_bind_groups[i] = core.device().createBindGroup(&gpu.BindGroup.Descriptor.init(.{
             .layout = compute_pipeline.getBindGroupLayout(0),
             .entries = &.{
                 gpu.BindGroup.Entry.buffer(0, sim_param_buffer, 0, sim_params.len * @sizeOf(f32)),
@@ -157,6 +163,8 @@ pub fn init(app: *App, core: *mach.Core) !void {
         }));
     }
 
+    app.core = core;
+    app.timer = try mach.Timer.start();
     app.compute_pipeline = compute_pipeline;
     app.render_pipeline = render_pipeline;
     app.sprite_vertex_buffer = sprite_vertex_buffer;
@@ -166,10 +174,19 @@ pub fn init(app: *App, core: *mach.Core) !void {
     app.frame_counter = 0;
 }
 
-pub fn deinit(_: *App, _: *mach.Core) void {}
+pub fn deinit(app: *App) void {
+    defer _ = gpa.deinit();
+    defer app.core.deinit();
+}
 
-pub fn update(app: *App, core: *mach.Core) !void {
-    const back_buffer_view = core.swap_chain.?.getCurrentTextureView();
+pub fn update(app: *App) !bool {
+    const delta_time = app.timer.lap();
+
+    while (app.core.pollEvents()) |event| {
+        if (event == .close) return true;
+    }
+
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
     const color_attachment = gpu.RenderPassColorAttachment{
         .view = back_buffer_view,
         .clear_value = std.mem.zeroes(gpu.Color),
@@ -183,10 +200,10 @@ pub fn update(app: *App, core: *mach.Core) !void {
         },
     });
 
-    sim_params[0] = @floatCast(f32, core.delta_time);
-    core.device.getQueue().writeBuffer(app.sim_param_buffer, 0, sim_params[0..]);
+    sim_params[0] = @floatCast(f32, delta_time);
+    app.core.device().getQueue().writeBuffer(app.sim_param_buffer, 0, sim_params[0..]);
 
-    const command_encoder = core.device.createCommandEncoder(null);
+    const command_encoder = app.core.device().createCommandEncoder(null);
     {
         const pass_encoder = command_encoder.beginComputePass(null);
         pass_encoder.setPipeline(app.compute_pipeline);
@@ -212,9 +229,11 @@ pub fn update(app: *App, core: *mach.Core) !void {
 
     var command = command_encoder.finish(null);
     command_encoder.release();
-    core.device.getQueue().submit(&[_]*gpu.CommandBuffer{command});
+    app.core.device().getQueue().submit(&[_]*gpu.CommandBuffer{command});
     command.release();
 
-    core.swap_chain.?.present();
+    app.core.swapChain().present();
     back_buffer_view.release();
+
+    return false;
 }
