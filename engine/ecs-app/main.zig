@@ -33,7 +33,7 @@ pub const App = mach.App(modules, init);
 pub fn init(engine: *ecs.World(modules)) !void {
     // The Mach .core is where we set window options, etc.
     const core = engine.get(.mach, .core);
-    try core.setOptions(.{ .title = "Hello, ECS!" });
+    core.setTitle("Hello, ECS!");
 
     // We can get the GPU device:
     const device = engine.get(.mach, .device);

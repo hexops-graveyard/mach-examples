@@ -1,7 +1,6 @@
 const std = @import("std");
 const mach = @import("mach");
 const gpu = @import("gpu");
-const glfw = @import("glfw");
 const zm = @import("zmath");
 const zigimg = @import("zigimg");
 const Vertex = @import("cube_mesh.zig").Vertex;
@@ -12,22 +11,27 @@ const UniformBufferObject = struct {
     mat: zm.Mat,
 };
 
-var timer: mach.Timer = undefined;
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
+core: mach.Core,
+timer: mach.Timer,
 pipeline: *gpu.RenderPipeline,
 queue: *gpu.Queue,
 vertex_buffer: *gpu.Buffer,
 uniform_buffer: *gpu.Buffer,
 bind_group: *gpu.BindGroup,
-depth_texture: ?*gpu.Texture,
+depth_texture: *gpu.Texture,
 depth_texture_view: *gpu.TextureView,
 
 pub const App = @This();
 
-pub fn init(app: *App, core: *mach.Core) !void {
-    timer = try mach.Timer.start();
+pub fn init(app: *App) !void {
+    const allocator = gpa.allocator();
 
-    const shader_module = core.device.createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
+    var core = try mach.Core.init(allocator, .{});
+
+    const shader_module = core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
+    defer shader_module.release();
 
     const vertex_attributes = [_]gpu.VertexAttribute{
         .{ .format = .float32x4, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
@@ -53,7 +57,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         },
     };
     const color_target = gpu.ColorTargetState{
-        .format = core.swap_chain_format,
+        .format = core.descriptor().format,
         .blend = &blend,
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
@@ -85,9 +89,9 @@ pub fn init(app: *App, core: *mach.Core) !void {
             .cull_mode = .none,
         },
     };
-    const pipeline = core.device.createRenderPipeline(&pipeline_descriptor);
+    const pipeline = core.device().createRenderPipeline(&pipeline_descriptor);
 
-    const vertex_buffer = core.device.createBuffer(&.{
+    const vertex_buffer = core.device().createBuffer(&.{
         .usage = .{ .vertex = true },
         .size = @sizeOf(Vertex) * vertices.len,
         .mapped_at_creation = true,
@@ -96,33 +100,33 @@ pub fn init(app: *App, core: *mach.Core) !void {
     std.mem.copy(Vertex, vertex_mapped.?, vertices[0..]);
     vertex_buffer.unmap();
 
-    const uniform_buffer = core.device.createBuffer(&.{
+    const uniform_buffer = core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = @sizeOf(UniformBufferObject),
         .mapped_at_creation = false,
     });
 
     // Create a sampler with linear filtering for smooth interpolation.
-    const sampler = core.device.createSampler(&.{
+    const sampler = core.device().createSampler(&.{
         .mag_filter = .linear,
         .min_filter = .linear,
     });
 
-    const queue = core.device.getQueue();
+    const queue = core.device().getQueue();
 
     // WebGPU expects the cubemap textures in this order: (+X,-X,+Y,-Y,+Z,-Z)
     var images: [6]zigimg.Image = undefined;
-    images[0] = try zigimg.Image.fromMemory(core.allocator, assets.skybox.posx_image);
+    images[0] = try zigimg.Image.fromMemory(allocator, assets.skybox.posx_image);
     defer images[0].deinit();
-    images[1] = try zigimg.Image.fromMemory(core.allocator, assets.skybox.negx_image);
+    images[1] = try zigimg.Image.fromMemory(allocator, assets.skybox.negx_image);
     defer images[1].deinit();
-    images[2] = try zigimg.Image.fromMemory(core.allocator, assets.skybox.posy_image);
+    images[2] = try zigimg.Image.fromMemory(allocator, assets.skybox.posy_image);
     defer images[2].deinit();
-    images[3] = try zigimg.Image.fromMemory(core.allocator, assets.skybox.negy_image);
+    images[3] = try zigimg.Image.fromMemory(allocator, assets.skybox.negy_image);
     defer images[3].deinit();
-    images[4] = try zigimg.Image.fromMemory(core.allocator, assets.skybox.posz_image);
+    images[4] = try zigimg.Image.fromMemory(allocator, assets.skybox.posz_image);
     defer images[4].deinit();
-    images[5] = try zigimg.Image.fromMemory(core.allocator, assets.skybox.negz_image);
+    images[5] = try zigimg.Image.fromMemory(allocator, assets.skybox.negz_image);
     defer images[5].deinit();
 
     // Use the first image of the set for sizing
@@ -139,7 +143,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
     };
 
     // Same as a regular texture, but with a Z of 6 (defined in tex_size)
-    const cube_texture = core.device.createTexture(&.{
+    const cube_texture = core.device().createTexture(&.{
         .size = tex_size,
         .format = .rgba8_unorm,
         .dimension = .dimension_2d,
@@ -155,7 +159,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         .rows_per_image = @intCast(u32, images[0].height),
     };
 
-    const encoder = core.device.createCommandEncoder(null);
+    const encoder = core.device().createCommandEncoder(null);
 
     // We have to create a staging buffer, copy all the image data into the
     // staging buffer at the correct Z offset, encode a command to copy
@@ -164,7 +168,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
     var staging_buff: [6]*gpu.Buffer = undefined;
     var i: u32 = 0;
     while (i < 6) : (i += 1) {
-        staging_buff[i] = core.device.createBuffer(&.{
+        staging_buff[i] = core.device().createBuffer(&.{
             .usage = .{ .copy_src = true, .map_write = true },
             .size = @intCast(u64, images[0].width) * @intCast(u64, images[0].height) * @sizeOf(u32),
             .mapped_at_creation = true,
@@ -181,8 +185,8 @@ pub fn init(app: *App, core: *mach.Core) !void {
             .rgb24 => |pixels| {
                 var staging_map = staging_buff[i].getMappedRange(u32, 0, @intCast(u64, images[i].width) * @intCast(u64, images[i].height));
                 // In this case, we have to convert the data to rgba32 first
-                const data = try rgb24ToRgba32(core.allocator, pixels);
-                defer data.deinit(core.allocator);
+                const data = try rgb24ToRgba32(allocator, pixels);
+                defer data.deinit(allocator);
                 std.mem.copy(u32, staging_map.?, @ptrCast([]u32, @alignCast(@alignOf([]u32), data.rgba32)));
                 staging_buff[i].unmap();
             },
@@ -211,7 +215,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
     command.release();
 
     // The textureView in the bind group needs dimension defined as "dimension_cube".
-    const bind_group = core.device.createBindGroup(
+    const bind_group = core.device().createBindGroup(
         &gpu.BindGroup.Descriptor.init(.{
             .layout = pipeline.getBindGroupLayout(0),
             .entries = &.{
@@ -222,37 +226,82 @@ pub fn init(app: *App, core: *mach.Core) !void {
         }),
     );
 
+    const size = core.size();
+    const depth_texture = core.device().createTexture(&gpu.Texture.Descriptor{
+        .size = gpu.Extent3D{
+            .width = size.width,
+            .height = size.height,
+        },
+        .format = .depth24_plus,
+        .usage = .{
+            .render_attachment = true,
+            .texture_binding = true,
+        },
+    });
+
+    const depth_texture_view = depth_texture.createView(&gpu.TextureView.Descriptor{
+        .format = .depth24_plus,
+        .dimension = .dimension_2d,
+        .array_layer_count = 1,
+        .mip_level_count = 1,
+    });
+
+    app.core = core;
+    app.timer = try mach.Timer.start();
     app.pipeline = pipeline;
     app.queue = queue;
     app.vertex_buffer = vertex_buffer;
     app.uniform_buffer = uniform_buffer;
     app.bind_group = bind_group;
-    app.depth_texture = null;
-    app.depth_texture_view = undefined;
-
-    shader_module.release();
+    app.depth_texture = depth_texture;
+    app.depth_texture_view = depth_texture_view;
 }
 
-pub fn deinit(app: *App, _: *mach.Core) void {
+pub fn deinit(app: *App) void {
+    defer _ = gpa.deinit();
+    defer app.core.deinit();
+
     app.vertex_buffer.release();
     app.uniform_buffer.release();
     app.bind_group.release();
-    app.depth_texture.?.release();
+    app.depth_texture.release();
     app.depth_texture_view.release();
 }
 
-pub fn update(app: *App, core: *mach.Core) !void {
-    while (core.pollEvent()) |event| {
+pub fn update(app: *App) !bool {
+    while (app.core.pollEvents()) |event| {
         switch (event) {
             .key_press => |ev| {
-                if (ev.key == .space)
-                    core.close();
+                if (ev.key == .space) return true;
+            },
+            .close => return true,
+            .framebuffer_resize => |ev| {
+                // If window is resized, recreate depth buffer otherwise we cannot use it.
+                app.depth_texture.release();
+                app.depth_texture = app.core.device().createTexture(&gpu.Texture.Descriptor{
+                    .size = gpu.Extent3D{
+                        .width = ev.width,
+                        .height = ev.height,
+                    },
+                    .format = .depth24_plus,
+                    .usage = .{
+                        .render_attachment = true,
+                        .texture_binding = true,
+                    },
+                });
+                app.depth_texture_view.release();
+                app.depth_texture_view = app.depth_texture.createView(&gpu.TextureView.Descriptor{
+                    .format = .depth24_plus,
+                    .dimension = .dimension_2d,
+                    .array_layer_count = 1,
+                    .mip_level_count = 1,
+                });
             },
             else => {},
         }
     }
 
-    const back_buffer_view = core.swap_chain.?.getCurrentTextureView();
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
     const color_attachment = gpu.RenderPassColorAttachment{
         .view = back_buffer_view,
         .clear_value = .{ .r = 0.5, .g = 0.5, .b = 0.5, .a = 0.0 },
@@ -260,7 +309,7 @@ pub fn update(app: *App, core: *mach.Core) !void {
         .store_op = .store,
     };
 
-    const encoder = core.device.createCommandEncoder(null);
+    const encoder = app.core.device().createCommandEncoder(null);
     const render_pass_info = gpu.RenderPassDescriptor.init(.{
         .color_attachments = &.{color_attachment},
         .depth_stencil_attachment = &.{
@@ -272,8 +321,8 @@ pub fn update(app: *App, core: *mach.Core) !void {
     });
 
     {
-        const time = timer.read();
-        const aspect = @intToFloat(f32, core.current_desc.width) / @intToFloat(f32, core.current_desc.height);
+        const time = app.timer.read();
+        const aspect = @intToFloat(f32, app.core.descriptor().width) / @intToFloat(f32, app.core.descriptor().height);
         const proj = zm.perspectiveFovRh((2 * std.math.pi) / 5.0, aspect, 0.1, 3000);
         const model = zm.mul(
             zm.scaling(1000, 1000, 1000),
@@ -310,34 +359,10 @@ pub fn update(app: *App, core: *mach.Core) !void {
 
     app.queue.submit(&[_]*gpu.CommandBuffer{command});
     command.release();
-    core.swap_chain.?.present();
+    app.core.swapChain().present();
     back_buffer_view.release();
-}
 
-pub fn resize(app: *App, core: *mach.Core, width: u32, height: u32) !void {
-    // If window is resized, recreate depth buffer otherwise we cannot use it.
-    if (app.depth_texture != null) {
-        app.depth_texture.?.release();
-        app.depth_texture_view.release();
-    }
-    app.depth_texture = core.device.createTexture(&gpu.Texture.Descriptor{
-        .size = gpu.Extent3D{
-            .width = width,
-            .height = height,
-        },
-        .format = .depth24_plus,
-        .usage = .{
-            .render_attachment = true,
-            .texture_binding = true,
-        },
-    });
-
-    app.depth_texture_view = app.depth_texture.?.createView(&gpu.TextureView.Descriptor{
-        .format = .depth24_plus,
-        .dimension = .dimension_2d,
-        .array_layer_count = 1,
-        .mip_level_count = 1,
-    });
+    return false;
 }
 
 fn rgb24ToRgba32(allocator: std.mem.Allocator, in: []zigimg.color.Rgb24) !zigimg.color.PixelStorage {

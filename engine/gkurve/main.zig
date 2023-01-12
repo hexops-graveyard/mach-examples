@@ -18,7 +18,10 @@ const assets = @import("assets");
 pub const App = @This();
 
 const AtlasRGB8 = Atlas(zigimg.color.Rgba32);
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
+core: mach.Core,
+allocator: std.mem.Allocator,
 pipeline: *gpu.RenderPipeline,
 queue: *gpu.Queue,
 vertex_buffer: *gpu.Buffer,
@@ -32,15 +35,18 @@ update_frag_uniform_buffer: bool,
 bind_group: *gpu.BindGroup,
 texture_atlas_data: AtlasRGB8,
 
-pub fn init(app: *App, core: *mach.Core) !void {
-    const queue = core.device.getQueue();
+pub fn init(app: *App) !void {
+    app.allocator = gpa.allocator();
+    app.core = try mach.Core.init(app.allocator, .{});
+
+    const queue = app.core.device().getQueue();
 
     // TODO: Refactor texture atlas size number
-    app.texture_atlas_data = try AtlasRGB8.init(core.allocator, 1280);
+    app.texture_atlas_data = try AtlasRGB8.init(app.allocator, 1280);
     const atlas_size = gpu.Extent3D{ .width = app.texture_atlas_data.size, .height = app.texture_atlas_data.size };
     const atlas_float_size = @intToFloat(f32, app.texture_atlas_data.size);
 
-    const texture = core.device.createTexture(&.{
+    const texture = app.core.device().createTexture(&.{
         .size = atlas_size,
         .format = .rgba8_unorm,
         .usage = .{
@@ -54,36 +60,36 @@ pub fn init(app: *App, core: *mach.Core) !void {
         .rows_per_image = @intCast(u32, atlas_size.height),
     };
 
-    var img = try zigimg.Image.fromMemory(core.allocator, assets.gotta_go_fast_image);
+    var img = try zigimg.Image.fromMemory(app.allocator, assets.gotta_go_fast_image);
     defer img.deinit();
 
-    const atlas_img_region = try app.texture_atlas_data.reserve(core.allocator, @truncate(u32, img.width), @truncate(u32, img.height));
+    const atlas_img_region = try app.texture_atlas_data.reserve(app.allocator, @truncate(u32, img.width), @truncate(u32, img.height));
     const img_uv_data = atlas_img_region.getUVData(atlas_float_size);
 
     switch (img.pixels) {
         .rgba32 => |pixels| app.texture_atlas_data.set(atlas_img_region, pixels),
         .rgb24 => |pixels| {
-            const data = try rgb24ToRgba32(core.allocator, pixels);
-            defer data.deinit(core.allocator);
+            const data = try rgb24ToRgba32(app.allocator, pixels);
+            defer data.deinit(app.allocator);
             app.texture_atlas_data.set(atlas_img_region, data.rgba32);
         },
         else => @panic("unsupported image color format"),
     }
 
     const white_tex_scale = 80;
-    var atlas_white_region = try app.texture_atlas_data.reserve(core.allocator, white_tex_scale, white_tex_scale);
+    var atlas_white_region = try app.texture_atlas_data.reserve(app.allocator, white_tex_scale, white_tex_scale);
     atlas_white_region.x += 1;
     atlas_white_region.y += 1;
     atlas_white_region.width -= 2;
     atlas_white_region.height -= 2;
     const white_texture_uv_data = atlas_white_region.getUVData(atlas_float_size);
-    var white_tex_data = try core.allocator.alloc(zigimg.color.Rgba32, white_tex_scale * white_tex_scale);
-    defer core.allocator.free(white_tex_data);
+    var white_tex_data = try app.allocator.alloc(zigimg.color.Rgba32, white_tex_scale * white_tex_scale);
+    defer app.allocator.free(white_tex_data);
     std.mem.set(zigimg.color.Rgba32, white_tex_data, zigimg.color.Rgba32.initRgb(0xff, 0xff, 0xff));
     app.texture_atlas_data.set(atlas_white_region, white_tex_data);
 
-    app.vertices = try std.ArrayList(draw.Vertex).initCapacity(core.allocator, 9);
-    app.fragment_uniform_list = try std.ArrayList(draw.FragUniform).initCapacity(core.allocator, 3);
+    app.vertices = try std.ArrayList(draw.Vertex).initCapacity(app.allocator, 9);
+    app.fragment_uniform_list = try std.ArrayList(draw.FragUniform).initCapacity(app.allocator, 3);
 
     // Quick test for using freetype
     const lib = try ft.Library.init();
@@ -105,7 +111,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         app.texture_atlas_data.data,
     );
 
-    const wsize = core.getWindowSize();
+    const wsize = app.core.size();
     const window_width = @intToFloat(f32, wsize.width);
     const window_height = @intToFloat(f32, wsize.height);
     const triangle_scale = 250;
@@ -120,7 +126,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
             // const character = "Gotta-go-fast!\n0123456789\n~!@#$%^&*()_+è\n:\"<>?`-=[];',./";
             // const character = "ABCDEFGHIJ\nKLMNOPQRST\nUVWXYZ";
             const size_multiplier = 5;
-            var label = try Label.init(lib, assets.fonts.firasans_regular.path, 0, 110 * size_multiplier, core.allocator);
+            var label = try Label.init(lib, assets.fonts.firasans_regular.path, 0, 110 * size_multiplier, app.allocator);
             defer label.deinit();
             try label.print(app, "All your game's bases are belong to us èçòà", .{}, @Vector(2, f32){ 0, 420 }, @Vector(4, f32){ 1, 1, 1, 1 });
             try label.print(app, "wow!", .{}, @Vector(2, f32){ 70 * size_multiplier, 70 }, @Vector(4, f32){ 1, 1, 1, 1 });
@@ -130,7 +136,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
             const size_multiplier = 5;
 
             var resizable_label: ResizableLabel = undefined;
-            try resizable_label.init(lib, assets.fonts.firasans_regular.path, 0, core.allocator, white_texture_uv_data);
+            try resizable_label.init(lib, assets.fonts.firasans_regular.path, 0, app.allocator, white_texture_uv_data);
             defer resizable_label.deinit();
             try resizable_label.print(app, character, .{}, @Vector(4, f32){ 20, 300, 0, 0 }, @Vector(4, f32){ 1, 1, 1, 1 }, 20 * size_multiplier);
             // try resizable_label.print(app, "@", .{}, @Vector(4, f32){ 20, 150, 0, 0 }, @Vector(4, f32){ 1, 1, 1, 1 }, 130 * size_multiplier);
@@ -143,13 +149,13 @@ pub fn init(app: *App, core: *mach.Core) !void {
         },
     }
 
-    const vert_wgsl = try std.fs.cwd().readFileAllocOptions(core.allocator, "engine/gkurve/vert.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
-    defer core.allocator.free(vert_wgsl);
-    const vs_module = core.device.createShaderModuleWGSL("gkurve/vert.wgsl", vert_wgsl);
+    const vert_wgsl = try std.fs.cwd().readFileAllocOptions(app.allocator, "engine/gkurve/vert.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
+    defer app.allocator.free(vert_wgsl);
+    const vs_module = app.core.device().createShaderModuleWGSL("gkurve/vert.wgsl", vert_wgsl);
 
-    const frag_wgsl = try std.fs.cwd().readFileAllocOptions(core.allocator, "engine/gkurve/frag.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
-    defer core.allocator.free(frag_wgsl);
-    const fs_module = core.device.createShaderModuleWGSL("gkurve/frag.wgsl", frag_wgsl);
+    const frag_wgsl = try std.fs.cwd().readFileAllocOptions(app.allocator, "engine/gkurve/frag.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
+    defer app.allocator.free(frag_wgsl);
+    const fs_module = app.core.device().createShaderModuleWGSL("gkurve/frag.wgsl", frag_wgsl);
 
     const blend = gpu.BlendState{
         .color = .{
@@ -165,7 +171,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
     };
 
     const color_target = gpu.ColorTargetState{
-        .format = core.swap_chain_format,
+        .format = app.core.descriptor().format,
         .blend = &blend,
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
@@ -179,13 +185,13 @@ pub fn init(app: *App, core: *mach.Core) !void {
     const fbgle = gpu.BindGroupLayout.Entry.buffer(1, .{ .fragment = true }, .read_only_storage, true, 0);
     const sbgle = gpu.BindGroupLayout.Entry.sampler(2, .{ .fragment = true }, .filtering);
     const tbgle = gpu.BindGroupLayout.Entry.texture(3, .{ .fragment = true }, .float, .dimension_2d, false);
-    const bgl = core.device.createBindGroupLayout(
+    const bgl = app.core.device().createBindGroupLayout(
         &gpu.BindGroupLayout.Descriptor.init(.{
             .entries = &.{ vbgle, fbgle, sbgle, tbgle },
         }),
     );
     const bind_group_layouts = [_]*gpu.BindGroupLayout{bgl};
-    const pipeline_layout = core.device.createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
+    const pipeline_layout = app.core.device().createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
         .bind_group_layouts = &bind_group_layouts,
     }));
 
@@ -199,31 +205,31 @@ pub fn init(app: *App, core: *mach.Core) !void {
         }),
     };
 
-    const vertex_buffer = core.device.createBuffer(&.{
+    const vertex_buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .vertex = true },
         .size = @sizeOf(draw.Vertex) * app.vertices.items.len,
         .mapped_at_creation = false,
     });
 
-    const vertex_uniform_buffer = core.device.createBuffer(&.{
+    const vertex_uniform_buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = @sizeOf(draw.VertexUniform),
         .mapped_at_creation = false,
     });
 
-    const frag_uniform_buffer = core.device.createBuffer(&.{
+    const frag_uniform_buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .storage = true },
         .size = @sizeOf(draw.FragUniform) * app.fragment_uniform_list.items.len,
         .mapped_at_creation = false,
     });
 
-    const sampler = core.device.createSampler(&.{
+    const sampler = app.core.device().createSampler(&.{
         // .mag_filter = .linear,
         // .min_filter = .linear,
     });
 
     std.debug.assert((app.vertices.items.len / 3) == app.fragment_uniform_list.items.len);
-    const bind_group = core.device.createBindGroup(
+    const bind_group = app.core.device().createBindGroup(
         &gpu.BindGroup.Descriptor.init(.{
             .layout = bgl,
             .entries = &.{
@@ -235,7 +241,7 @@ pub fn init(app: *App, core: *mach.Core) !void {
         }),
     );
 
-    app.pipeline = core.device.createRenderPipeline(&pipeline_descriptor);
+    app.pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
     app.queue = queue;
     app.vertex_buffer = vertex_buffer;
     app.vertex_uniform_buffer = vertex_uniform_buffer;
@@ -251,28 +257,34 @@ pub fn init(app: *App, core: *mach.Core) !void {
     bgl.release();
 }
 
-pub fn deinit(app: *App, core: *mach.Core) void {
+pub fn deinit(app: *App) void {
+    defer _ = gpa.deinit();
+    defer app.core.deinit();
+
     app.vertex_buffer.release();
     app.vertex_uniform_buffer.release();
     app.frag_uniform_buffer.release();
     app.bind_group.release();
     app.vertices.deinit();
     app.fragment_uniform_list.deinit();
-    app.texture_atlas_data.deinit(core.allocator);
+    app.texture_atlas_data.deinit(app.allocator);
 }
 
-pub fn update(app: *App, core: *mach.Core) !void {
-    while (core.pollEvent()) |event| {
+pub fn update(app: *App) !bool {
+    while (app.core.pollEvents()) |event| {
         switch (event) {
             .key_press => |ev| {
-                if (ev.key == .space)
-                    core.close();
+                if (ev.key == .space) return true;
             },
+            .framebuffer_resize => {
+                app.update_vertex_uniform_buffer = true;
+            },
+            .close => return true,
             else => {},
         }
     }
 
-    const back_buffer_view = core.swap_chain.?.getCurrentTextureView();
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
     const color_attachment = gpu.RenderPassColorAttachment{
         .view = back_buffer_view,
         .clear_value = std.mem.zeroes(gpu.Color),
@@ -280,7 +292,7 @@ pub fn update(app: *App, core: *mach.Core) !void {
         .store_op = .store,
     };
 
-    const encoder = core.device.createCommandEncoder(null);
+    const encoder = app.core.device().createCommandEncoder(null);
     const render_pass_info = gpu.RenderPassDescriptor.init(.{
         .color_attachments = &.{color_attachment},
     });
@@ -295,7 +307,7 @@ pub fn update(app: *App, core: *mach.Core) !void {
             app.update_frag_uniform_buffer = false;
         }
         if (app.update_vertex_uniform_buffer) {
-            encoder.writeBuffer(app.vertex_uniform_buffer, 0, &[_]draw.VertexUniform{try getVertexUniformBufferObject(core)});
+            encoder.writeBuffer(app.vertex_uniform_buffer, 0, &[_]draw.VertexUniform{try app.getVertexUniformBufferObject()});
             app.update_vertex_uniform_buffer = false;
         }
     }
@@ -313,12 +325,10 @@ pub fn update(app: *App, core: *mach.Core) !void {
 
     app.queue.submit(&[_]*gpu.CommandBuffer{command});
     command.release();
-    core.swap_chain.?.present();
+    app.core.swapChain().present();
     back_buffer_view.release();
-}
 
-pub fn resize(app: *App, _: *mach.Core, _: u32, _: u32) !void {
-    app.update_vertex_uniform_buffer = true;
+    return false;
 }
 
 fn rgb24ToRgba32(allocator: std.mem.Allocator, in: []zigimg.color.Rgb24) !zigimg.color.PixelStorage {
@@ -331,12 +341,12 @@ fn rgb24ToRgba32(allocator: std.mem.Allocator, in: []zigimg.color.Rgb24) !zigimg
 }
 
 // Move to draw.zig
-pub fn getVertexUniformBufferObject(core: *mach.Core) !draw.VertexUniform {
+pub fn getVertexUniformBufferObject(app: *App) !draw.VertexUniform {
     // Note: We use window width/height here, not framebuffer width/height.
     // On e.g. macOS, window size may be 640x480 while framebuffer size may be
     // 1280x960 (subpixels.) Doing this lets us use a pixel, not subpixel,
     // coordinate system.
-    const window_size = core.getWindowSize();
+    const window_size = app.core.size();
     const proj = zm.orthographicRh(
         @intToFloat(f32, window_size.width),
         @intToFloat(f32, window_size.height),
