@@ -73,8 +73,6 @@ pub fn deinit(app: *App) void {
 }
 
 pub fn update(app: *App) !bool {
-    const delta_time = app.timer.lap();
-
     while (app.core.pollEvents()) |event| {
         switch (event) {
             .framebuffer_resize => |size| {
@@ -124,11 +122,12 @@ pub fn update(app: *App) !bool {
     app.core.swapChain().present();
     back_buffer_view.release();
 
+    const delta_time = app.timer.lap();
     if (app.window_title_timer.read() >= 1.0) {
+        app.window_title_timer.reset();
         var buf: [32]u8 = undefined;
         const title = try std.fmt.bufPrintZ(&buf, "Mach Core [ FPS: {d} ]", .{@floor(1 / delta_time)});
         app.core.setTitle(title);
-        app.window_title_timer.reset();
     }
     return false;
 }

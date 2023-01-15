@@ -17,6 +17,8 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
 core: mach.Core,
 timer: mach.Timer,
+fps_timer: mach.Timer,
+window_title_timer: mach.Timer,
 pipeline: *gpu.RenderPipeline,
 queue: *gpu.Queue,
 vertex_buffer: *gpu.Buffer,
@@ -168,6 +170,8 @@ pub fn init(app: *App) !void {
 
     app.core = core;
     app.timer = try mach.Timer.start();
+    app.fps_timer = try mach.Timer.start();
+    app.window_title_timer = try mach.Timer.start();
     app.pipeline = pipeline;
     app.queue = queue;
     app.vertex_buffer = vertex_buffer;
@@ -194,7 +198,14 @@ pub fn update(app: *App) !bool {
     while (app.core.pollEvents()) |event| {
         switch (event) {
             .key_press => |ev| {
-                if (ev.key == .space) return true;
+                switch (ev.key) {
+                    .space => return true,
+                    .one => app.core.setVSync(.none),
+                    .two => app.core.setVSync(.double),
+                    .three => app.core.setVSync(.triple),
+                    else => {},
+                }
+                std.debug.print("vsync mode changed to {s}\n", .{@tagName(app.core.vsync())});
             },
             .framebuffer_resize => |ev| {
                 // If window is resized, recreate depth buffer otherwise we cannot use it.
@@ -280,6 +291,14 @@ pub fn update(app: *App) !bool {
     command.release();
     app.core.swapChain().present();
     back_buffer_view.release();
+
+    const delta_time = app.fps_timer.lap();
+    if (app.window_title_timer.read() >= 1.0) {
+        app.window_title_timer.reset();
+        var buf: [32]u8 = undefined;
+        const title = try std.fmt.bufPrintZ(&buf, "Textured Cube [ FPS: {d} ]", .{@floor(1 / delta_time)});
+        app.core.setTitle(title);
+    }
 
     return false;
 }
