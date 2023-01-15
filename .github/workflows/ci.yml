@@ -23,8 +23,6 @@ jobs:
         uses: actions/checkout@v2
         with:
           submodules: 'true'
-      - name: Install Git
-        run: choco install git
       - name: Setup Zig
         run: |
           $ProgressPreference = 'SilentlyContinue'
