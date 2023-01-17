@@ -23,7 +23,7 @@ bind_group: *gpu.BindGroup,
 pub const App = @This();
 
 pub fn init(app: *App) !void {
-    app.core = try mach.Core.init(gpa.allocator(), .{});
+    try app.core.init(gpa.allocator(), .{});
     app.timer = try mach.Timer.start();
 
     const shader_module = app.core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));

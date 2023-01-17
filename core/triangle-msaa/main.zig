@@ -17,7 +17,7 @@ texture_view: *gpu.TextureView,
 const sample_count = 4;
 
 pub fn init(app: *App) !void {
-    app.core = try mach.Core.init(gpa.allocator(), .{});
+    try app.core.init(gpa.allocator(), .{});
     app.timer = try mach.Timer.start();
     app.window_title_timer = try mach.Timer.start();
 

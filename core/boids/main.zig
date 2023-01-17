@@ -31,14 +31,14 @@ var sim_params = [_]f32{
 };
 
 pub fn init(app: *App) !void {
-    var core = try mach.Core.init(gpa.allocator(), .{});
+    try app.core.init(gpa.allocator(), .{});
 
-    const sprite_shader_module = core.device().createShaderModuleWGSL(
+    const sprite_shader_module = app.core.device().createShaderModuleWGSL(
         "sprite.wgsl",
         @embedFile("sprite.wgsl"),
     );
 
-    const update_sprite_shader_module = core.device().createShaderModuleWGSL(
+    const update_sprite_shader_module = app.core.device().createShaderModuleWGSL(
         "updateSprites.wgsl",
         @embedFile("updateSprites.wgsl"),
     );
@@ -67,7 +67,7 @@ pub fn init(app: *App) !void {
         },
     };
 
-    const render_pipeline = core.device().createRenderPipeline(&gpu.RenderPipeline.Descriptor{
+    const render_pipeline = app.core.device().createRenderPipeline(&gpu.RenderPipeline.Descriptor{
         .vertex = gpu.VertexState.init(.{
             .module = sprite_shader_module,
             .entry_point = "vert_main",
@@ -90,12 +90,12 @@ pub fn init(app: *App) !void {
             .module = sprite_shader_module,
             .entry_point = "frag_main",
             .targets = &[_]gpu.ColorTargetState{.{
-                .format = core.descriptor().format,
+                .format = app.core.descriptor().format,
             }},
         }),
     });
 
-    const compute_pipeline = core.device().createComputePipeline(&gpu.ComputePipeline.Descriptor{ .compute = gpu.ProgrammableStageDescriptor{
+    const compute_pipeline = app.core.device().createComputePipeline(&gpu.ComputePipeline.Descriptor{ .compute = gpu.ProgrammableStageDescriptor{
         .module = update_sprite_shader_module,
         .entry_point = "main",
     } });
@@ -105,7 +105,7 @@ pub fn init(app: *App) !void {
         -0.02, 0.0,   0.02,
     };
 
-    const sprite_vertex_buffer = core.device().createBuffer(&gpu.Buffer.Descriptor{
+    const sprite_vertex_buffer = app.core.device().createBuffer(&gpu.Buffer.Descriptor{
         .label = "sprite_vertex_buffer",
         .usage = .{ .vertex = true },
         .mapped_at_creation = true,
@@ -115,12 +115,12 @@ pub fn init(app: *App) !void {
     std.mem.copy(f32, vertex_mapped.?, vert_buffer_data[0..]);
     sprite_vertex_buffer.unmap();
 
-    const sim_param_buffer = core.device().createBuffer(&gpu.Buffer.Descriptor{
+    const sim_param_buffer = app.core.device().createBuffer(&gpu.Buffer.Descriptor{
         .label = "sim_param_buffer",
         .usage = .{ .uniform = true, .copy_dst = true },
         .size = sim_params.len * @sizeOf(f32),
     });
-    core.device().getQueue().writeBuffer(sim_param_buffer, 0, sim_params[0..]);
+    app.core.device().getQueue().writeBuffer(sim_param_buffer, 0, sim_params[0..]);
 
     var initial_particle_data: [num_particle * 4]f32 = undefined;
     var rng = std.rand.DefaultPrng.init(0);
@@ -137,7 +137,7 @@ pub fn init(app: *App) !void {
     var particle_bind_groups: [2]*gpu.BindGroup = undefined;
     i = 0;
     while (i < 2) : (i += 1) {
-        particle_buffers[i] = core.device().createBuffer(&gpu.Buffer.Descriptor{
+        particle_buffers[i] = app.core.device().createBuffer(&gpu.Buffer.Descriptor{
             .label = "particle_buffer",
             .mapped_at_creation = true,
             .usage = .{
@@ -153,7 +153,7 @@ pub fn init(app: *App) !void {
 
     i = 0;
     while (i < 2) : (i += 1) {
-        particle_bind_groups[i] = core.device().createBindGroup(&gpu.BindGroup.Descriptor.init(.{
+        particle_bind_groups[i] = app.core.device().createBindGroup(&gpu.BindGroup.Descriptor.init(.{
             .layout = compute_pipeline.getBindGroupLayout(0),
             .entries = &.{
                 gpu.BindGroup.Entry.buffer(0, sim_param_buffer, 0, sim_params.len * @sizeOf(f32)),
@@ -163,15 +163,17 @@ pub fn init(app: *App) !void {
         }));
     }
 
-    app.core = core;
-    app.timer = try mach.Timer.start();
-    app.compute_pipeline = compute_pipeline;
-    app.render_pipeline = render_pipeline;
-    app.sprite_vertex_buffer = sprite_vertex_buffer;
-    app.particle_buffers = particle_buffers;
-    app.particle_bind_groups = particle_bind_groups;
-    app.sim_param_buffer = sim_param_buffer;
-    app.frame_counter = 0;
+    app.* = .{
+        .core = app.core,
+        .timer = try mach.Timer.start(),
+        .compute_pipeline = compute_pipeline,
+        .render_pipeline = render_pipeline,
+        .sprite_vertex_buffer = sprite_vertex_buffer,
+        .particle_buffers = particle_buffers,
+        .particle_bind_groups = particle_bind_groups,
+        .sim_param_buffer = sim_param_buffer,
+        .frame_counter = 0,
+    };
 }
 
 pub fn deinit(app: *App) void {

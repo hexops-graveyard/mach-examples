@@ -29,10 +29,9 @@ depth_texture_view: *gpu.TextureView,
 
 pub fn init(app: *App) !void {
     const allocator = gpa.allocator();
+    try app.core.init(allocator, .{});
 
-    var core = try mach.Core.init(allocator, .{});
-
-    const shader_module = core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
+    const shader_module = app.core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
 
     const vertex_attributes = [_]gpu.VertexAttribute{
         .{ .format = .float32x4, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
@@ -57,7 +56,7 @@ pub fn init(app: *App) !void {
         },
     };
     const color_target = gpu.ColorTargetState{
-        .format = core.descriptor().format,
+        .format = app.core.descriptor().format,
         .blend = &blend,
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
@@ -88,9 +87,9 @@ pub fn init(app: *App) !void {
             .cull_mode = .back,
         },
     };
-    const pipeline = core.device().createRenderPipeline(&pipeline_descriptor);
+    const pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
 
-    const vertex_buffer = core.device().createBuffer(&.{
+    const vertex_buffer = app.core.device().createBuffer(&.{
         .usage = .{ .vertex = true },
         .size = @sizeOf(Vertex) * vertices.len,
         .mapped_at_creation = true,
@@ -100,15 +99,15 @@ pub fn init(app: *App) !void {
     vertex_buffer.unmap();
 
     // Create a sampler with linear filtering for smooth interpolation.
-    const sampler = core.device().createSampler(&.{
+    const sampler = app.core.device().createSampler(&.{
         .mag_filter = .linear,
         .min_filter = .linear,
     });
-    const queue = core.device().getQueue();
+    const queue = app.core.device().getQueue();
     var img = try zigimg.Image.fromMemory(allocator, assets.gotta_go_fast_image);
     defer img.deinit();
     const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
-    const cube_texture = core.device().createTexture(&.{
+    const cube_texture = app.core.device().createTexture(&.{
         .size = img_size,
         .format = .rgba8_unorm,
         .usage = .{
@@ -131,13 +130,13 @@ pub fn init(app: *App) !void {
         else => @panic("unsupported image color format"),
     }
 
-    const uniform_buffer = core.device().createBuffer(&.{
+    const uniform_buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = @sizeOf(UniformBufferObject),
         .mapped_at_creation = false,
     });
 
-    const bind_group = core.device().createBindGroup(
+    const bind_group = app.core.device().createBindGroup(
         &gpu.BindGroup.Descriptor.init(.{
             .layout = pipeline.getBindGroupLayout(0),
             .entries = &.{
@@ -167,7 +166,6 @@ pub fn init(app: *App) !void {
         .mip_level_count = 1,
     });
 
-    app.core = core;
     app.timer = try mach.Timer.start();
     app.fps_timer = try mach.Timer.start();
     app.window_title_timer = try mach.Timer.start();

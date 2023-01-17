@@ -37,7 +37,7 @@ texture_atlas_data: AtlasRGB8,
 
 pub fn init(app: *App) !void {
     app.allocator = gpa.allocator();
-    app.core = try mach.Core.init(app.allocator, .{});
+    try app.core.init(app.allocator, .{});
 
     const queue = app.core.device().getQueue();
 

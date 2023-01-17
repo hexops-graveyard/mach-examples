@@ -41,9 +41,9 @@ sampler: *gpu.Sampler,
 bgl: *gpu.BindGroupLayout,
 
 pub fn init(app: *App) !void {
-    var core = try mach.Core.init(gpa.allocator(), .{});
+    try app.core.init(gpa.allocator(), .{});
 
-    const shader_module = core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
+    const shader_module = app.core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
 
     const vertex_attributes = [_]gpu.VertexAttribute{
         .{ .format = .float32x4, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
@@ -56,7 +56,7 @@ pub fn init(app: *App) !void {
 
     const blend = gpu.BlendState{};
     const color_target = gpu.ColorTargetState{
-        .format = core.descriptor().format,
+        .format = app.core.descriptor().format,
         .blend = &blend,
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
@@ -69,14 +69,14 @@ pub fn init(app: *App) !void {
     const bgle_buffer = gpu.BindGroupLayout.Entry.buffer(0, .{ .vertex = true }, .uniform, true, 0);
     const bgle_sampler = gpu.BindGroupLayout.Entry.sampler(1, .{ .fragment = true }, .filtering);
     const bgle_textureview = gpu.BindGroupLayout.Entry.texture(2, .{ .fragment = true }, .float, .dimension_2d, false);
-    const bgl = core.device().createBindGroupLayout(
+    const bgl = app.core.device().createBindGroupLayout(
         &gpu.BindGroupLayout.Descriptor.init(.{
             .entries = &.{ bgle_buffer, bgle_sampler, bgle_textureview },
         }),
     );
 
     const bind_group_layouts = [_]*gpu.BindGroupLayout{bgl};
-    const pipeline_layout = core.device().createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
+    const pipeline_layout = app.core.device().createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
         .bind_group_layouts = &bind_group_layouts,
     }));
 
@@ -98,7 +98,7 @@ pub fn init(app: *App) !void {
         },
     };
 
-    const vertex_buffer = core.device().createBuffer(&.{
+    const vertex_buffer = app.core.device().createBuffer(&.{
         .usage = .{ .vertex = true },
         .size = @sizeOf(Vertex) * vertices.len,
         .mapped_at_creation = true,
@@ -107,44 +107,44 @@ pub fn init(app: *App) !void {
     std.mem.copy(Vertex, vertex_mapped.?, vertices[0..]);
     vertex_buffer.unmap();
 
-    const uniform_buffer = core.device().createBuffer(&.{
+    const uniform_buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = @sizeOf(UniformBufferObject),
         .mapped_at_creation = false,
     });
 
     // The texture to put on the cube
-    const cube_texture = core.device().createTexture(&gpu.Texture.Descriptor{
+    const cube_texture = app.core.device().createTexture(&gpu.Texture.Descriptor{
         .usage = .{ .texture_binding = true, .copy_dst = true },
-        .size = .{ .width = core.descriptor().width, .height = core.descriptor().height },
-        .format = core.descriptor().format,
+        .size = .{ .width = app.core.descriptor().width, .height = app.core.descriptor().height },
+        .format = app.core.descriptor().format,
     });
     // The texture on which we render
-    const cube_texture_render = core.device().createTexture(&gpu.Texture.Descriptor{
+    const cube_texture_render = app.core.device().createTexture(&gpu.Texture.Descriptor{
         .usage = .{ .render_attachment = true, .copy_src = true },
-        .size = .{ .width = core.descriptor().width, .height = core.descriptor().height },
-        .format = core.descriptor().format,
+        .size = .{ .width = app.core.descriptor().width, .height = app.core.descriptor().height },
+        .format = app.core.descriptor().format,
     });
 
-    const sampler = core.device().createSampler(&gpu.Sampler.Descriptor{
+    const sampler = app.core.device().createSampler(&gpu.Sampler.Descriptor{
         .mag_filter = .linear,
         .min_filter = .linear,
     });
 
     const cube_texture_view = cube_texture.createView(&gpu.TextureView.Descriptor{
-        .format = core.descriptor().format,
+        .format = app.core.descriptor().format,
         .dimension = .dimension_2d,
         .mip_level_count = 1,
         .array_layer_count = 1,
     });
     const cube_texture_view_render = cube_texture_render.createView(&gpu.TextureView.Descriptor{
-        .format = core.descriptor().format,
+        .format = app.core.descriptor().format,
         .dimension = .dimension_2d,
         .mip_level_count = 1,
         .array_layer_count = 1,
     });
 
-    const bind_group = core.device().createBindGroup(
+    const bind_group = app.core.device().createBindGroup(
         &gpu.BindGroup.Descriptor.init(.{
             .layout = bgl,
             .entries = &.{
@@ -155,9 +155,9 @@ pub fn init(app: *App) !void {
         }),
     );
 
-    const depth_texture = core.device().createTexture(&gpu.Texture.Descriptor{
+    const depth_texture = app.core.device().createTexture(&gpu.Texture.Descriptor{
         .usage = .{ .render_attachment = true },
-        .size = .{ .width = core.descriptor().width, .height = core.descriptor().height },
+        .size = .{ .width = app.core.descriptor().width, .height = app.core.descriptor().height },
         .format = .depth24_plus,
     });
     const depth_texture_view = depth_texture.createView(&gpu.TextureView.Descriptor{
@@ -167,10 +167,9 @@ pub fn init(app: *App) !void {
         .mip_level_count = 1,
     });
 
-    app.core = core;
     app.timer = try mach.Timer.start();
-    app.pipeline = core.device().createRenderPipeline(&pipeline_descriptor);
-    app.queue = core.device().getQueue();
+    app.pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
+    app.queue = app.core.device().getQueue();
     app.vertex_buffer = vertex_buffer;
     app.uniform_buffer = uniform_buffer;
     app.bind_group = bind_group;

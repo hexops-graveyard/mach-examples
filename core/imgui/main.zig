@@ -41,7 +41,7 @@ fn createColorTargetState(format: gpu.Texture.Format) gpu.ColorTargetState {
 }
 
 pub fn init(app: *App) !void {
-    app.core = try mach.Core.init(gpa.allocator(), .{
+    try app.core.init(gpa.allocator(), .{
         .title = "Imgui in mach",
         .size = .{
             .width = 1000,
