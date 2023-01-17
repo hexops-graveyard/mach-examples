@@ -6,7 +6,7 @@
 	url = https://github.com/machlibs/zmath
 [submodule "libs/zigimg"]
 	path = libs/zigimg
-	url = https://github.com/zigimg/zigimg
+	url = https://github.com/slimsag/zigimg
 [submodule "libs/imgui"]
 	path = libs/imgui
 	url = https://github.com/machlibs/imgui
