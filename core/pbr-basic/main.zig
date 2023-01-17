@@ -320,7 +320,7 @@ is_rotating: bool,
 //
 
 pub fn init(app: *App) !void {
-    app.core = try mach.Core.init(gpa.allocator(), .{});
+    try app.core.init(gpa.allocator(), .{});
     app.timer = try mach.Timer.start();
 
     app.queue = app.core.device().getQueue();

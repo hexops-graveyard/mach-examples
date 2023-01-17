@@ -31,7 +31,7 @@ const Tone = struct {
 };
 
 pub fn init(app: *App) !void {
-    app.core = try mach.Core.init(gpa.allocator(), .{});
+    try app.core.init(gpa.allocator(), .{});
 
     app.audio_ctx = try sysaudio.Context.init(null, gpa.allocator(), .{});
     errdefer app.audio_ctx.deinit();

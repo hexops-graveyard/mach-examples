@@ -27,10 +27,9 @@ pub const App = @This();
 
 pub fn init(app: *App) !void {
     const allocator = gpa.allocator();
+    try app.core.init(gpa.allocator(), .{});
 
-    var core = try mach.Core.init(allocator, .{});
-
-    const shader_module = core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
+    const shader_module = app.core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
     defer shader_module.release();
 
     const vertex_attributes = [_]gpu.VertexAttribute{
@@ -57,7 +56,7 @@ pub fn init(app: *App) !void {
         },
     };
     const color_target = gpu.ColorTargetState{
-        .format = core.descriptor().format,
+        .format = app.core.descriptor().format,
         .blend = &blend,
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
@@ -89,9 +88,9 @@ pub fn init(app: *App) !void {
             .cull_mode = .none,
         },
     };
-    const pipeline = core.device().createRenderPipeline(&pipeline_descriptor);
+    const pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
 
-    const vertex_buffer = core.device().createBuffer(&.{
+    const vertex_buffer = app.core.device().createBuffer(&.{
         .usage = .{ .vertex = true },
         .size = @sizeOf(Vertex) * vertices.len,
         .mapped_at_creation = true,
@@ -100,19 +99,19 @@ pub fn init(app: *App) !void {
     std.mem.copy(Vertex, vertex_mapped.?, vertices[0..]);
     vertex_buffer.unmap();
 
-    const uniform_buffer = core.device().createBuffer(&.{
+    const uniform_buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = @sizeOf(UniformBufferObject),
         .mapped_at_creation = false,
     });
 
     // Create a sampler with linear filtering for smooth interpolation.
-    const sampler = core.device().createSampler(&.{
+    const sampler = app.core.device().createSampler(&.{
         .mag_filter = .linear,
         .min_filter = .linear,
     });
 
-    const queue = core.device().getQueue();
+    const queue = app.core.device().getQueue();
 
     // WebGPU expects the cubemap textures in this order: (+X,-X,+Y,-Y,+Z,-Z)
     var images: [6]zigimg.Image = undefined;
@@ -143,7 +142,7 @@ pub fn init(app: *App) !void {
     };
 
     // Same as a regular texture, but with a Z of 6 (defined in tex_size)
-    const cube_texture = core.device().createTexture(&.{
+    const cube_texture = app.core.device().createTexture(&.{
         .size = tex_size,
         .format = .rgba8_unorm,
         .dimension = .dimension_2d,
@@ -159,7 +158,7 @@ pub fn init(app: *App) !void {
         .rows_per_image = @intCast(u32, images[0].height),
     };
 
-    const encoder = core.device().createCommandEncoder(null);
+    const encoder = app.core.device().createCommandEncoder(null);
 
     // We have to create a staging buffer, copy all the image data into the
     // staging buffer at the correct Z offset, encode a command to copy
@@ -168,7 +167,7 @@ pub fn init(app: *App) !void {
     var staging_buff: [6]*gpu.Buffer = undefined;
     var i: u32 = 0;
     while (i < 6) : (i += 1) {
-        staging_buff[i] = core.device().createBuffer(&.{
+        staging_buff[i] = app.core.device().createBuffer(&.{
             .usage = .{ .copy_src = true, .map_write = true },
             .size = @intCast(u64, images[0].width) * @intCast(u64, images[0].height) * @sizeOf(u32),
             .mapped_at_creation = true,
@@ -215,7 +214,7 @@ pub fn init(app: *App) !void {
     command.release();
 
     // The textureView in the bind group needs dimension defined as "dimension_cube".
-    const bind_group = core.device().createBindGroup(
+    const bind_group = app.core.device().createBindGroup(
         &gpu.BindGroup.Descriptor.init(.{
             .layout = pipeline.getBindGroupLayout(0),
             .entries = &.{
@@ -245,7 +244,6 @@ pub fn init(app: *App) !void {
         .mip_level_count = 1,
     });
 
-    app.core = core;
     app.timer = try mach.Timer.start();
     app.pipeline = pipeline;
     app.queue = queue;

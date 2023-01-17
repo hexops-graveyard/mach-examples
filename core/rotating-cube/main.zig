@@ -22,9 +22,9 @@ uniform_buffer: *gpu.Buffer,
 bind_group: *gpu.BindGroup,
 
 pub fn init(app: *App) !void {
-    var core = try mach.Core.init(gpa.allocator(), .{});
+    try app.core.init(gpa.allocator(), .{});
 
-    const shader_module = core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
+    const shader_module = app.core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
 
     const vertex_attributes = [_]gpu.VertexAttribute{
         .{ .format = .float32x4, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
@@ -38,7 +38,7 @@ pub fn init(app: *App) !void {
 
     const blend = gpu.BlendState{};
     const color_target = gpu.ColorTargetState{
-        .format = core.descriptor().format,
+        .format = app.core.descriptor().format,
         .blend = &blend,
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
@@ -49,14 +49,14 @@ pub fn init(app: *App) !void {
     });
 
     const bgle = gpu.BindGroupLayout.Entry.buffer(0, .{ .vertex = true }, .uniform, true, 0);
-    const bgl = core.device().createBindGroupLayout(
+    const bgl = app.core.device().createBindGroupLayout(
         &gpu.BindGroupLayout.Descriptor.init(.{
             .entries = &.{bgle},
         }),
     );
 
     const bind_group_layouts = [_]*gpu.BindGroupLayout{bgl};
-    const pipeline_layout = core.device().createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
+    const pipeline_layout = app.core.device().createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
         .bind_group_layouts = &bind_group_layouts,
     }));
 
@@ -73,7 +73,7 @@ pub fn init(app: *App) !void {
         },
     };
 
-    const vertex_buffer = core.device().createBuffer(&.{
+    const vertex_buffer = app.core.device().createBuffer(&.{
         .usage = .{ .vertex = true },
         .size = @sizeOf(Vertex) * vertices.len,
         .mapped_at_creation = true,
@@ -82,12 +82,12 @@ pub fn init(app: *App) !void {
     std.mem.copy(Vertex, vertex_mapped.?, vertices[0..]);
     vertex_buffer.unmap();
 
-    const uniform_buffer = core.device().createBuffer(&.{
+    const uniform_buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = @sizeOf(UniformBufferObject),
         .mapped_at_creation = false,
     });
-    const bind_group = core.device().createBindGroup(
+    const bind_group = app.core.device().createBindGroup(
         &gpu.BindGroup.Descriptor.init(.{
             .layout = bgl,
             .entries = &.{
@@ -96,10 +96,9 @@ pub fn init(app: *App) !void {
         }),
     );
 
-    app.core = core;
     app.timer = try mach.Timer.start();
-    app.pipeline = core.device().createRenderPipeline(&pipeline_descriptor);
-    app.queue = core.device().getQueue();
+    app.pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
+    app.queue = app.core.device().getQueue();
     app.vertex_buffer = vertex_buffer;
     app.uniform_buffer = uniform_buffer;
     app.bind_group = bind_group;

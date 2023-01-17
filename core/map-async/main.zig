@@ -11,7 +11,8 @@ pub fn init(_: *App) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
-    var core = try mach.Core.init(gpa.allocator(), .{});
+    var core: mach.Core = undefined;
+    try core.init(gpa.allocator(), .{});
     defer core.deinit();
 
     const output = core.device().createBuffer(&.{
