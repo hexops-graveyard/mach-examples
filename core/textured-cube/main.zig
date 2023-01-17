@@ -148,11 +148,10 @@ pub fn init(app: *App) !void {
         }),
     );
 
-    const size = core.size();
     const depth_texture = core.device().createTexture(&gpu.Texture.Descriptor{
         .size = gpu.Extent3D{
-            .width = size.width,
-            .height = size.height,
+            .width = core.descriptor().width,
+            .height = core.descriptor().height,
         },
         .format = .depth24_plus,
         .usage = .{
