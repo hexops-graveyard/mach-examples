@@ -49,7 +49,7 @@ pub fn init(app: *App) !void {
         },
     });
 
-    var adapter_props: gpu.Adapter.Properties = undefined;
+    var adapter_props = std.mem.zeroes(gpu.Adapter.Properties);
     app.core.adapter().getProperties(&adapter_props);
     std.debug.print("backend type: {?}\n", .{adapter_props.backend_type});
     std.debug.print("\n", .{});
