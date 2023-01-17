@@ -155,11 +155,9 @@ pub fn init(app: *App) !void {
         }),
     );
 
-    const size = core.size();
-
     const depth_texture = core.device().createTexture(&gpu.Texture.Descriptor{
         .usage = .{ .render_attachment = true },
-        .size = .{ .width = size.width, .height = size.height },
+        .size = .{ .width = core.descriptor().width, .height = core.descriptor().height },
         .format = .depth24_plus,
     });
     const depth_texture_view = depth_texture.createView(&gpu.TextureView.Descriptor{
