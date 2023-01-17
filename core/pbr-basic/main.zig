@@ -522,14 +522,14 @@ fn prepareUniformBuffers(app: *App) void {
         std.debug.assert(@sizeOf(MaterialParamsDynamic) == 256);
     }
 
-    app.uniform_buffers.ubo_matrices.size = roundToMultipleOf4(u32, @intCast(u32, @sizeOf(UboMatrices)));
+    app.uniform_buffers.ubo_matrices.size = roundToMultipleOf4(u32, @intCast(u32, @sizeOf(UboMatrices))) + 4;
     app.uniform_buffers.ubo_matrices.buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = app.uniform_buffers.ubo_matrices.size,
         .mapped_at_creation = false,
     });
 
-    app.uniform_buffers.ubo_params.size = roundToMultipleOf4(u32, @intCast(u32, @sizeOf(UboParams)));
+    app.uniform_buffers.ubo_params.size = roundToMultipleOf4(u32, @intCast(u32, @sizeOf(UboParams))) + 4;
     app.uniform_buffers.ubo_params.buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = app.uniform_buffers.ubo_params.size,
@@ -551,8 +551,8 @@ fn prepareUniformBuffers(app: *App) void {
     //
     // Object parameter uniform buffer
     //
-    app.uniform_buffers.object_params.model_size = @sizeOf(Vec3);
-    app.uniform_buffers.object_params.buffer_size = calculateConstantBufferByteSize(@sizeOf(MaterialParamsDynamicGrid));
+    app.uniform_buffers.object_params.model_size = @sizeOf(Vec3) + 4;
+    app.uniform_buffers.object_params.buffer_size = calculateConstantBufferByteSize(@sizeOf(MaterialParamsDynamicGrid)) + 4;
     std.debug.assert(app.uniform_buffers.object_params.buffer_size >= app.uniform_buffers.object_params.model_size);
     app.uniform_buffers.object_params.buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
