@@ -62,6 +62,7 @@ pub fn update(app: *App) !bool {
                 }
                 app.fillTone(keyToFrequency(ev.key));
             },
+            .close => return true,
             else => {},
         }
     }
