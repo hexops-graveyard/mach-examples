@@ -6,10 +6,12 @@ const Pkg = std.build.Pkg;
 pub fn build(b: *std.build.Builder) !void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
-    const options = mach.Options{ .gpu_dawn_options = .{
-        .from_source = b.option(bool, "dawn-from-source", "Build Dawn from source") orelse false,
-        .debug = b.option(bool, "dawn-debug", "Use a debug build of Dawn") orelse false,
-    } };
+    const options = mach.Options{ .core = .{
+        .gpu_dawn_options = .{
+            .from_source = b.option(bool, "dawn-from-source", "Build Dawn from source") orelse false,
+            .debug = b.option(bool, "dawn-debug", "Use a debug build of Dawn") orelse false,
+        },
+    }};
 
     try ensureDependencies(b.allocator);
 
