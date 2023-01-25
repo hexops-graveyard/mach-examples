@@ -89,7 +89,8 @@ pub fn deinit(app: *App) void {
 }
 
 pub fn update(app: *App) !bool {
-    while (app.core.pollEvents()) |event| {
+    var iter = app.core.pollEvents();
+    while (iter.next()) |event| {
         if (event == .close) return true;
         imgui.backend.passEvent(event);
     }

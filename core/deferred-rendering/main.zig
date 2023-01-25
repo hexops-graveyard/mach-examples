@@ -228,7 +228,8 @@ pub fn deinit(app: *App) void {
 pub fn update(app: *App) !bool {
     app.delta_time = app.timer.lap();
 
-    while (app.core.pollEvents()) |event| {
+    var iter = app.core.pollEvents();
+    while (iter.next()) |event| {
         switch (event) {
             .framebuffer_resize => |ev| {
                 app.screen_dimensions.width = ev.width;

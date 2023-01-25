@@ -64,7 +64,8 @@ pub fn deinit(app: *App) void {
 pub fn update(app: *App) !bool {
     const delta_time = app.timer.lap();
 
-    while (app.core.pollEvents()) |event| {
+    var iter = app.core.pollEvents();
+    while (iter.next()) |event| {
         switch (event) {
             .key_press => |ev| switch (ev.key) {
                 .q, .escape, .space => return true,
