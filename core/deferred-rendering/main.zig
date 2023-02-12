@@ -4,7 +4,7 @@ const gpu = @import("gpu");
 const zm = @import("zmath");
 const m3d = @import("model3d");
 const assets = @import("assets");
-const imgui = @import("mach-imgui").MachImgui(mach);
+const imgui = @import("imgui").MachImgui(mach);
 const VertexWriter = mach.gfx.VertexWriter;
 
 pub const App = @This();

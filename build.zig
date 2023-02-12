@@ -1,11 +1,10 @@
 const std = @import("std");
 const mach = @import("libs/mach/build.zig");
-const mach_imgui = @import("libs/imgui/build.zig");
-const Pkg = std.build.Pkg;
+// const imgui = @import("libs/imgui/build.zig");
 
-pub fn build(b: *std.build.Builder) !void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
-    const mode = b.standardReleaseOptions();
+    const optimize = b.standardOptimizeOption(.{});
     const options = mach.Options{ .core = .{
         .gpu_dawn_options = .{
             .from_source = b.option(bool, "dawn-from-source", "Build Dawn from source") orelse false,
@@ -15,9 +14,31 @@ pub fn build(b: *std.build.Builder) !void {
 
     try ensureDependencies(b.allocator);
 
+    const Dependency = enum {
+        zmath,
+        zigimg,
+        model3d,
+        imgui,
+        assets,
+
+        pub fn moduleDependency(dep: @This(), b2: *std.Build) std.Build.ModuleDependency {
+            const path = switch (dep) {
+            .zmath => "libs/zmath/src/zmath.zig",
+            .zigimg => "libs/zigimg/zigimg.zig",
+            .model3d => "libs/mach/libs/model3d/src/main.zig",
+            .imgui => "libs/imgui/src/main.zig",
+            .assets => "assets/assets.zig",
+            };
+            return std.Build.ModuleDependency{
+                .name = @tagName(dep),
+                .module = b2.createModule(.{.source_file = .{.path = path}}),
+            };
+        }
+    };
+
     inline for ([_]struct {
         name: []const u8,
-        deps: []const Pkg = &.{},
+        deps: []const Dependency = &.{},
         std_platform_only: bool = false,
         has_assets: bool = false,
         use_freetype: bool = false,
@@ -28,34 +49,35 @@ pub fn build(b: *std.build.Builder) !void {
         .{ .name = "triangle" },
         .{ .name = "triangle-msaa" },
         .{ .name = "boids" },
-        .{
-            .name = "pbr-basic",
-            .deps = &.{ Packages.zmath, Packages.model3d, Packages.mach_imgui, Packages.assets },
-            .use_model3d = true,
-            .use_imgui = true,
-        },
-        .{
-            .name = "deferred-rendering",
-            .deps = &.{ Packages.zmath, Packages.model3d, Packages.mach_imgui, Packages.assets },
-            .use_model3d = true,
-            .use_imgui = true,
-        },
-        .{ .name = "imgui", .deps = &.{ Packages.mach_imgui, Packages.assets }, .use_imgui = true },
-        .{ .name = "rotating-cube", .deps = &.{Packages.zmath} },
-        .{ .name = "pixel-post-process", .deps = &.{Packages.zmath} },
-        .{ .name = "two-cubes", .deps = &.{Packages.zmath} },
-        .{ .name = "instanced-cube", .deps = &.{Packages.zmath} },
-        .{ .name = "advanced-gen-texture-light", .deps = &.{Packages.zmath} },
-        .{ .name = "fractal-cube", .deps = &.{Packages.zmath} },
-        .{ .name = "textured-cube", .deps = &.{ Packages.zmath, Packages.zigimg, Packages.assets } },
+        // TODO: imgui examples are broken
+        // .{
+        //     .name = "pbr-basic",
+        //     .deps = &.{ .zmath, .model3d, .imgui, .assets },
+        //     .use_model3d = true,
+        //     .use_imgui = true,
+        // },
+        // .{
+        //     .name = "deferred-rendering",
+        //     .deps = &.{ .zmath, .model3d, .imgui, .assets },
+        //     .use_model3d = true,
+        //     .use_imgui = true,
+        // },
+        // .{ .name = "imgui", .deps = &.{ .imgui, .assets }, .use_imgui = true },
+        .{ .name = "rotating-cube", .deps = &.{.zmath} },
+        .{ .name = "pixel-post-process", .deps = &.{.zmath} },
+        .{ .name = "two-cubes", .deps = &.{.zmath} },
+        .{ .name = "instanced-cube", .deps = &.{.zmath} },
+        .{ .name = "advanced-gen-texture-light", .deps = &.{.zmath} },
+        .{ .name = "fractal-cube", .deps = &.{.zmath} },
+        .{ .name = "textured-cube", .deps = &.{ .zmath, .zigimg, .assets } },
         .{ .name = "ecs-app", .deps = &.{}, .mach_engine_example = true },
-        .{ .name = "image-blur", .deps = &.{ Packages.zigimg, Packages.assets } },
-        .{ .name = "cubemap", .deps = &.{ Packages.zmath, Packages.zigimg, Packages.assets } },
+        .{ .name = "image-blur", .deps = &.{ .zigimg, .assets } },
+        .{ .name = "cubemap", .deps = &.{ .zmath, .zigimg, .assets } },
         .{ .name = "map-async", .deps = &.{} },
         .{ .name = "sysaudio", .deps = &.{}, .mach_engine_example = true },
         .{
             .name = "gkurve",
-            .deps = &.{ Packages.zmath, Packages.zigimg, Packages.assets },
+            .deps = &.{ .zmath, .zigimg, .assets },
             .std_platform_only = true,
             .use_freetype = true,
             .mach_engine_example = true,
@@ -72,24 +94,26 @@ pub fn build(b: *std.build.Builder) !void {
                 break;
 
         const path_suffix = if (example.mach_engine_example) "engine/" else "core/";
+        var deps = std.ArrayList(std.Build.ModuleDependency).init(b.allocator);
+        for (example.deps) |d| try deps.append(d.moduleDependency(b));
         const app = try mach.App.init(
             b,
             .{
                 .name = example.name,
                 .src = path_suffix ++ example.name ++ "/main.zig",
                 .target = target,
-                .mode = mode,
-                .deps = example.deps,
-                .res_dirs = if (example.has_assets) &.{example.name ++ "/assets"} else null,
-                .watch_paths = &.{path_suffix ++ example.name},
+                .optimize = optimize,
+                .deps = deps.items,
+                .res_dirs = if (example.has_assets) &.{example.name++"/assets"} else null,
+                .watch_paths = &.{path_suffix++example.name},
                 .use_freetype = if (example.use_freetype) "freetype" else null,
                 .use_model3d = example.use_model3d,
             },
         );
 
-        if (example.use_imgui) {
-            mach_imgui.link(app.step);
-        }
+        // if (example.use_imgui) {
+        //     imgui.link(app.step);
+        // }
 
         try app.link(options);
         app.install();
@@ -106,30 +130,6 @@ pub fn build(b: *std.build.Builder) !void {
     const compile_all = b.step("compile-all", "Compile all examples and applications");
     compile_all.dependOn(b.getInstallStep());
 }
-
-const Packages = struct {
-    // Declared here because submodule may not be cloned at the time build.zig runs.
-    const zmath = Pkg{
-        .name = "zmath",
-        .source = .{ .path = "libs/zmath/src/zmath.zig" },
-    };
-    const zigimg = Pkg{
-        .name = "zigimg",
-        .source = .{ .path = "libs/zigimg/zigimg.zig" },
-    };
-    const model3d = Pkg{
-        .name = "model3d",
-        .source = .{ .path = "libs/mach/libs/model3d/src/main.zig" },
-    };
-    const mach_imgui = Pkg{
-        .name = "mach-imgui",
-        .source = .{ .path = "libs/imgui/src/main.zig" },
-    };
-    const assets = Pkg{
-        .name = "assets",
-        .source = .{ .path = "assets/assets.zig" },
-    };
-};
 
 pub fn copyFile(src_path: []const u8, dst_path: []const u8) void {
     std.fs.cwd().makePath(std.fs.path.dirname(dst_path).?) catch unreachable;

@@ -28,9 +28,9 @@ In your `build.zig`, use `mach.App`:
 const std = @import("std");
 const mach = @import("libs/mach/build.zig");
 
-pub fn build(b: *std.build.Builder) !void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
-    const mode = b.standardReleaseOptions();
+    const optimize = b.standardOptimizeOption(.{});
 
     const app = try mach.App.init(b, .{
         .name = "myapp",
