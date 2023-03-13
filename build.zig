@@ -71,6 +71,7 @@ pub fn build(b: *std.Build) !void {
     }{
         .{ .name = "triangle" },
         .{ .name = "triangle-msaa" },
+        .{ .name = "clear-color" },
         .{ .name = "boids" },
         .{
             .name = "pbr-basic",
