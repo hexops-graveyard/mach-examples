@@ -11,7 +11,7 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 pub fn init(app: *App) !void {
     try app.core.init(gpa.allocator(), .{.required_limits = gpu.Limits 
     { .max_vertex_buffers = 1,
-      .max_vertex_attributes = 1
+      .max_vertex_attributes = 2
     }});
 
     renderer.rendererInit(&app.core);
