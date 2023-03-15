@@ -9,12 +9,13 @@ core: mach.Core,
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn init(app: *App) !void {
-    try app.core.init(gpa.allocator(), .{.required_limits = gpu.Limits 
+    var allocator = gpa.allocator();
+    try app.core.init(allocator, .{.required_limits = gpu.Limits 
     { .max_vertex_buffers = 1,
       .max_vertex_attributes = 2
     }});
 
-    renderer.rendererInit(&app.core);
+    renderer.rendererInit(&app.core, allocator);
 }
 
 pub fn deinit(app: *App) void {

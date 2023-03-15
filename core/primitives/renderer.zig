@@ -1,6 +1,8 @@
+const std = @import("std");
 const mach = @import("mach");
 const gpu = @import("gpu");
 const zmath = @import("zmath");
+const primitives = @import("parametric-primitives.zig");
 
 pub const Renderer = @This();
 
@@ -9,31 +11,20 @@ var pipeline: *gpu.RenderPipeline = undefined;
 var vertex_buffer: *gpu.Buffer = undefined;
 var index_buffer: *gpu.Buffer = undefined;
 
-const F32x3 = @Vector(3, f32);
-const VertexData = struct {
-    position : F32x3,
-    normal : F32x3,
-};
+var triangle_primitive : primitives.Primitive = undefined;
 
-const vertex_data = [3]VertexData {
-    .{.position = F32x3{ -0.5, -0.5, 0.0 }, .normal = F32x3{-0.5, -0.5, 0.0 }},
-    .{.position = F32x3{ 0.5, -0.5, 0.0 }, .normal = F32x3{ 0.5, -0.5, 0.0}},
-    .{.position = F32x3{ 0.0, 0.5, 0.0 }, .normal = F32x3{ 0.0, 0.5, 0.0}},
-};
-
-const index_data = [3]u32 {
-    0,1,2
-};
-
-pub fn rendererInit(core: *mach.Core) void {
+pub fn rendererInit(core: *mach.Core, allocator : std.mem.Allocator) void {
     queue = core.device().getQueue();
+
+    triangle_primitive = primitives.createTrianglePrimitive(allocator);
+
 
     var shader = core.device().createShaderModuleWGSL("primitive.wgsl", @embedFile("primitive.wgsl"));
     defer shader.release();    
     
     const vertex_buffer_components = createVertexBufferComponents();
     vertex_buffer = core.device().createBuffer(&vertex_buffer_components.buffer_descriptor);
-    queue.writeBuffer(vertex_buffer, 0, vertex_data[0..]);
+    queue.writeBuffer(vertex_buffer, 0, triangle_primitive.vertex_data.items[0..]);
 
     createIndexBufferDescriptor(core);
 
@@ -47,18 +38,18 @@ const VertexBufferComponents = struct {
 
 fn createVertexBufferComponents() VertexBufferComponents {
     const vertex_buffer_descriptor = gpu.Buffer.Descriptor{
-        .size = vertex_data.len * @sizeOf(VertexData),
+        .size = triangle_primitive.vertex_count * @sizeOf(primitives.VertexData),
         .usage = .{.vertex = true, .copy_dst = true},
         .mapped_at_creation = false,
     };
 
     const vertex_attributes = [_]gpu.VertexAttribute{
         .{ .format = .float32x3, .shader_location = 0, .offset = 0},
-        .{ .format = .float32x3, .shader_location = 1, .offset = @sizeOf(F32x3)},
+        .{ .format = .float32x3, .shader_location = 1, .offset = @sizeOf(primitives.F32x3)},
     };
 
     const vertex_buffer_layout = gpu.VertexBufferLayout.init(.{
-        .array_stride = @sizeOf(VertexData),
+        .array_stride = @sizeOf(primitives.VertexData),
         .step_mode = .vertex,
         .attributes = &vertex_attributes,
     });
@@ -73,12 +64,12 @@ fn createVertexBufferComponents() VertexBufferComponents {
 
 fn createIndexBufferDescriptor (core : *mach.Core) void {
     const index_buffer_descriptor = gpu.Buffer.Descriptor{
-        .size = index_data.len * @sizeOf(u32),
+        .size = triangle_primitive.index_count * @sizeOf(u32),
         .usage = .{.index = true, .copy_dst = true},
         .mapped_at_creation = false,
     };
     index_buffer = core.device().createBuffer(&index_buffer_descriptor);
-    queue.writeBuffer(index_buffer, 0, index_data[0..]);
+    queue.writeBuffer(index_buffer, 0, triangle_primitive.index_data.items[0..]);
 }
 
 fn createPipeline(core: *mach.Core, shader_module : *gpu.ShaderModule, vertex_buffer_layout : gpu.VertexBufferLayout) *gpu.RenderPipeline {
@@ -163,9 +154,9 @@ pub fn renderUpdate (core: *mach.Core) void {
     const pass = encoder.beginRenderPass(&render_pass_info);
 
     pass.setPipeline(pipeline);
-    pass.setVertexBuffer(0, vertex_buffer, 0, @sizeOf(VertexData) * vertex_data.len);
-    pass.setIndexBuffer(index_buffer, .uint32, 0, @sizeOf(u32) * index_data.len);
-    pass.drawIndexed(index_data.len, 1, 0, 0, 0);
+    pass.setVertexBuffer(0, vertex_buffer, 0, @sizeOf(primitives.VertexData) * triangle_primitive.vertex_count);
+    pass.setIndexBuffer(index_buffer, .uint32, 0, @sizeOf(u32) * triangle_primitive.index_count);
+    pass.drawIndexed(triangle_primitive.index_count, 1, 0, 0, 0);
 
     pass.end();
     pass.release();
