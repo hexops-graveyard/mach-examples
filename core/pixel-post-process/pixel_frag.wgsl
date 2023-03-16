@@ -39,11 +39,13 @@ fn sample_normal(uv: vec2<f32>, x: f32, y: f32) -> vec3<f32> {
 
 fn normal_indicator(uv: vec2<f32>, x: f32, y: f32) -> f32 {
     var depth_diff = sample_depth(uv, 0, 0) - sample_depth(uv, x, y);
+    var dx = sample_normal(uv, 0, 0);
+    var dy = sample_normal(uv, x, y);
     if (depth_diff > 0) {
         // only sample normals from closest pixel
         return 0;
     }
-    return distance(sample_normal(uv, 0, 0), sample_normal(uv, x, y)); 
+    return distance(dx, dy); 
 }
 
 @fragment fn main(
