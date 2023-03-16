@@ -1,7 +1,7 @@
 const std = @import("std");
 const mach = @import("mach");
 const gpu = mach.gpu;
-const model3d = mach.model3d;
+const m3d = @import("model3d");
 const zm = @import("zmath");
 const assets = @import("assets");
 const imgui = @import("imgui").MachImgui(mach);
@@ -353,13 +353,13 @@ pub fn deinit(app: *App) void {
     app.uniform_buffers.ubo_params.buffer.release();
     app.uniform_buffers.material_params.buffer.release();
     app.uniform_buffers.object_params.buffer.release();
-    imgui.backend.deinit();
+    imgui.mach_backend.deinit();
 }
 
 pub fn update(app: *App) !bool {
     var iter = app.core.pollEvents();
     while (iter.next()) |event| {
-        imgui.backend.passEvent(event);
+        imgui.mach_backend.passEvent(event);
         switch (event) {
             .mouse_motion => |ev| {
                 if (app.is_rotating) {
@@ -492,14 +492,14 @@ pub fn update(app: *App) !bool {
     pass.setPipeline(app.imgui_render_pipeline);
 
     const window_size = app.core.size();
-    imgui.backend.newFrame(
+    imgui.mach_backend.newFrame(
         &app.core,
         window_size.width,
         window_size.height,
     );
 
     drawUI(app);
-    imgui.backend.draw(pass);
+    imgui.mach_backend.draw(pass);
 
     pass.end();
     pass.release();
@@ -910,7 +910,7 @@ fn drawUI(app: *App) void {
 }
 
 fn setupImgui(app: *App) void {
-    imgui.init();
+    imgui.init(gpa.allocator());
     const font_normal = imgui.io.addFontFromFile(assets.fonts.roboto_medium.path, 18.0);
     const blend_component_descriptor = gpu.BlendComponent{
         .operation = .add,
@@ -949,7 +949,9 @@ fn setupImgui(app: *App) void {
     shader_module.release();
 
     imgui.io.setDefaultFont(font_normal);
-    imgui.backend.init(app.core.device(), app.core.descriptor().format, .depth24_plus_stencil8);
+    imgui.mach_backend.init(app.core.device(), app.core.descriptor().format, .{
+        .depth_stencil_format = @enumToInt(gpu.Texture.Format.depth24_plus_stencil8),
+    });
 
     const style = imgui.getStyle();
     style.window_min_size = .{ 350.0, 150.0 };

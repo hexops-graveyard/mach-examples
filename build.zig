@@ -72,13 +72,12 @@ pub fn build(b: *std.Build) !void {
         .{ .name = "triangle" },
         .{ .name = "triangle-msaa" },
         .{ .name = "boids" },
-        // TODO: imgui examples are broken
-        // .{
-        //     .name = "pbr-basic",
-        //     .deps = &.{ .zmath, .model3d, .imgui, .assets },
-        //     .use_model3d = true,
-        //     .use_imgui = true,
-        // },
+        .{
+            .name = "pbr-basic",
+            .deps = &.{ .zmath, .model3d, .imgui, .assets },
+            .use_model3d = true,
+            .use_imgui = true,
+        },
         // .{
         //     .name = "deferred-rendering",
         //     .deps = &.{ .zmath, .model3d, .imgui, .assets },
