@@ -21,6 +21,7 @@ struct FragmentOutput {
 
 @fragment fn frag_main(in: VertexOutput) -> FragmentOutput {
     var out : FragmentOutput;
-    out.pixel_color = vec4<f32>(in.normal, 1.0);
+
+    out.pixel_color = vec4<f32>((in.normal + 1) / 2, 1.0);
     return out;
 }
