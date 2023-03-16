@@ -100,7 +100,7 @@ pub fn renderContent(core: *mach.Core) void {
 
         const items = [_][:0]const u8{ "aaa", "bbb", "ccc", "ddd", "eee", "FFF", "ggg", "hhh" };
         if (imgui.beginCombo("Combo 0", .{ .preview_value = items[static.selection_index] })) {
-            for (items) |item, index| {
+            for (items, 0..) |item, index| {
                 const i = @intCast(u32, index);
                 if (imgui.selectable(item, .{ .selected = static.selection_index == i }))
                     static.selection_index = i;
@@ -275,7 +275,7 @@ pub fn renderContent(core: *mach.Core) void {
         };
         const items = [_][:0]const u8{ "aaa", "bbb", "ccc", "ddd", "eee", "FFF", "ggg", "hhh" };
         if (imgui.beginListBox("List Box 0", .{})) {
-            for (items) |item, index| {
+            for (items, 0..) |item, index| {
                 const i = @intCast(u32, index);
                 if (imgui.selectable(item, .{ .selected = static.selection_index == i }))
                     static.selection_index = i;

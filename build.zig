@@ -11,7 +11,7 @@ pub fn build(b: *std.Build) !void {
             .from_source = b.option(bool, "dawn-from-source", "Build Dawn from source") orelse false,
             .debug = b.option(bool, "dawn-debug", "Use a debug build of Dawn") orelse false,
         },
-    }};
+    } };
 
     try ensureDependencies(b.allocator);
 
@@ -30,15 +30,15 @@ pub fn build(b: *std.Build) !void {
                 }).zmath,
             };
             const path = switch (dep) {
-            .zmath => unreachable,
-            .zigimg => "libs/zigimg/zigimg.zig",
-            .model3d => "libs/mach/libs/model3d/src/main.zig",
-            .imgui => "libs/imgui/src/main.zig",
-            .assets => "assets/assets.zig",
+                .zmath => unreachable,
+                .zigimg => "libs/zigimg/zigimg.zig",
+                .model3d => "libs/mach/libs/model3d/src/main.zig",
+                .imgui => "libs/imgui/src/main.zig",
+                .assets => "assets/assets.zig",
             };
             return std.Build.ModuleDependency{
                 .name = @tagName(dep),
-                .module = b2.createModule(.{.source_file = .{.path = path}}),
+                .module = b2.createModule(.{ .source_file = .{ .path = path } }),
             };
         }
     };
@@ -111,8 +111,8 @@ pub fn build(b: *std.Build) !void {
                 .target = target,
                 .optimize = optimize,
                 .deps = deps.items,
-                .res_dirs = if (example.has_assets) &.{example.name++"/assets"} else null,
-                .watch_paths = &.{path_suffix++example.name},
+                .res_dirs = if (example.has_assets) &.{example.name ++ "/assets"} else null,
+                .watch_paths = &.{path_suffix ++ example.name},
                 .use_freetype = if (example.use_freetype) "freetype" else null,
                 .use_model3d = example.use_model3d,
             },

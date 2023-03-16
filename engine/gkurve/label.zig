@@ -98,7 +98,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                     var glyph_data = try ctx.label.allocator.alloc(zigimg.color.Rgba32, (glyph_width + 2) * (glyph_height + 2));
                     defer ctx.label.allocator.free(glyph_data);
                     const glyph_buffer = glyph_bitmap.buffer().?;
-                    for (glyph_data) |*data, i| {
+                    for (glyph_data, 0..) |*data, i| {
                         const x = i % (glyph_width + 2);
                         const y = i / (glyph_width + 2);
 

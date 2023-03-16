@@ -1191,7 +1191,7 @@ fn drawUI(app: *App) void {
     const modes = [_][:0]const u8{ "rendering", "gbuffers view" };
     const mode_index = @enumToInt(app.settings.render_mode);
     if (imgui.beginCombo("Mode", .{ .preview_value = modes[mode_index] })) {
-        for (modes) |mode, mode_i| {
+        for (modes, 0..) |mode, mode_i| {
             const i = @intCast(u32, mode_i);
             if (imgui.selectable(mode, .{ .selected = mode_index == i })) {
                 update_uniform_buffers = true;

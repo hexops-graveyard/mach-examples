@@ -116,7 +116,7 @@ pub fn init(app: *App) !void {
     }
 
     var textures: [2]*gpu.Texture = undefined;
-    for (textures) |_, i| {
+    for (textures, 0..) |_, i| {
         textures[i] = app.core.device().createTexture(&.{
             .size = img_size,
             .format = .rgba8_unorm,
@@ -131,7 +131,7 @@ pub fn init(app: *App) !void {
     // the shader blurs the input texture in one direction,
     // depending on whether flip value is 0 or 1
     var flip: [2]*gpu.Buffer = undefined;
-    for (flip) |_, i| {
+    for (flip, 0..) |_, i| {
         const buffer = app.core.device().createBuffer(&.{
             .usage = .{ .uniform = true },
             .size = @sizeOf(u32),

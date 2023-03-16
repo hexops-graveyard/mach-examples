@@ -806,7 +806,7 @@ fn setupRenderPass(app: *App) void {
 }
 
 fn loadModels(allocator: std.mem.Allocator, app: *App) !void {
-    for (model_paths) |model_path, model_path_i| {
+    for (model_paths, 0..) |model_path, model_path_i| {
         var model_file = std.fs.cwd().openFile(model_path, .{}) catch |err| {
             std.log.err("Failed to load model: '{s}' Error: {}", .{ model_path, err });
             return error.LoadModelFileFailed;
@@ -884,7 +884,7 @@ fn drawUI(app: *App) void {
     _ = imgui.checkbox("Paused", .{ .v = &app.is_paused });
     var update_uniform_buffers: bool = false;
     if (imgui.beginCombo("Material", .{ .preview_value = material_names[app.current_material_index] })) {
-        for (material_names) |material, material_i| {
+        for (material_names, 0..) |material, material_i| {
             const i = @intCast(u32, material_i);
             if (imgui.selectable(material, .{ .selected = app.current_material_index == i })) {
                 update_uniform_buffers = true;
@@ -894,7 +894,7 @@ fn drawUI(app: *App) void {
         imgui.endCombo();
     }
     if (imgui.beginCombo("Object type", .{ .preview_value = object_names[app.current_object_index] })) {
-        for (object_names) |object, object_i| {
+        for (object_names, 0..) |object, object_i| {
             const i = @intCast(u32, object_i);
             if (imgui.selectable(object, .{ .selected = app.current_object_index == i })) {
                 update_uniform_buffers = true;

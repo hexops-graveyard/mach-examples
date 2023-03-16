@@ -37,7 +37,7 @@ const Dir = struct {
 
 pub fn init(app: *App) !void {
     try app.core.init(gpa.allocator(), .{});
-    
+
     app.timer = try mach.Timer.start();
 
     const eye = vec3(5.0, 7.0, 5.0);

@@ -219,7 +219,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                     // TODO(gkurve): could more optimally find index (e.g. already know it from
                     // data structure, instead of finding equal point.)
                     for (outline_ctx.concave_vertices.items) |concave_control| {
-                        for (all_outlines.items) |item, j| {
+                        for (all_outlines.items, 0..) |item, j| {
                             if (vec2Equal(item, concave_control)) {
                                 try v.value_ptr.concave_vertices.append(@truncate(u16, j));
                                 break;
@@ -236,7 +236,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                         try v.value_ptr.convex_vertices.append(Vertex{ .pos = vertex_pos, .uv = vertex_uv });
 
                         var found: usize = 0;
-                        for (all_outlines.items) |item, j| {
+                        for (all_outlines.items, 0..) |item, j| {
                             if (vec2Equal(item, outline_ctx.convex_vertices.items[i + 1])) {
                                 try v.value_ptr.convex_vertices_indices.append(@truncate(u16, j));
                                 found += 1;
@@ -255,7 +255,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                 // Read the data and apply resizing of pos and uv
                 var filled_vertices_after_offset = try ctx.label.allocator.alloc(Vertex, v.value_ptr.filled_vertices.items.len);
                 defer ctx.label.allocator.free(filled_vertices_after_offset);
-                for (filled_vertices_after_offset) |*vert, i| {
+                for (filled_vertices_after_offset, 0..) |*vert, i| {
                     vert.* = v.value_ptr.filled_vertices.items[i];
                     vert.pos *= Vec4{ @intToFloat(f32, ctx.text_size) / 1024, @intToFloat(f32, ctx.text_size) / 1024, 0, 1 };
                     vert.pos += ctx.position + offset;
@@ -297,7 +297,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
 
                 var concave_vertices_after_offset = try ctx.label.allocator.alloc(Vertex, v.value_ptr.concave_vertices.items.len);
                 defer ctx.label.allocator.free(concave_vertices_after_offset);
-                for (concave_vertices_after_offset) |*vert, i| {
+                for (concave_vertices_after_offset, 0..) |*vert, i| {
                     vert.* = filled_vertices_after_offset[v.value_ptr.concave_vertices.items[i]];
                 }
                 try ctx.app.vertices.appendSlice(concave_vertices_after_offset);
@@ -367,7 +367,7 @@ fn uniteOutsideAndInsideVertices(ctx: *OutlineContext) void {
             var min: f32 = std.math.f32_max;
             var closest_index: usize = undefined;
 
-            for (last_outline.items) |item, i| {
+            for (last_outline.items, 0..) |item, i| {
                 const dist = @reduce(.Add, (item - first_point_inside) * (item - first_point_inside));
                 if (dist < min) {
                     min = dist;
