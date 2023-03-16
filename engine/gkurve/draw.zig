@@ -1,5 +1,6 @@
 const std = @import("std");
 const ArrayList = std.ArrayList;
+const mach = @import("mach");
 const gpu = mach.gpu;
 const App = @import("main.zig").App;
 const zm = @import("zmath");

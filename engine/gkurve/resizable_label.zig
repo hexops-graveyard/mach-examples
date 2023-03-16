@@ -1,8 +1,9 @@
 //! TODO: Refactor the API, maybe use a handle that contains the lib and other things and controls init and deinit of ft.Lib and other things
 
 const std = @import("std");
+const mach = @import("mach");
 const gpu = mach.gpu;
-const ft = mach.freetype;
+const ft = @import("freetype");
 const zigimg = @import("zigimg");
 const Atlas = @import("atlas.zig").Atlas;
 const AtlasErr = @import("atlas.zig").Error;
