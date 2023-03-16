@@ -2,32 +2,72 @@ const std = @import("std");
 const mach = @import("mach");
 const gpu = @import("gpu");
 const primitives = @import("parametric-primitives.zig");
+const Primitive = primitives.Primitive;
+const VertexData = primitives.VertexData;
 
 pub const Renderer = @This();
 
 var queue: *gpu.Queue = undefined;
 var pipeline: *gpu.RenderPipeline = undefined;
-var vertex_buffer: *gpu.Buffer = undefined;
-var index_buffer: *gpu.Buffer = undefined;
 
-var triangle_primitive : primitives.Primitive = undefined;
+const PrimitiveRenderData = struct {
+    vertex_buffer: *gpu.Buffer,
+    index_buffer: *gpu.Buffer,
+    vertex_count : u32,
+    index_count : u32,
+};
+
+var primitives_data : [4]PrimitiveRenderData = undefined;
+pub var curr_primitive_index : u4 = 0;
 
 pub fn rendererInit(core: *mach.Core, allocator : std.mem.Allocator) void {
     queue = core.device().getQueue();
 
-    triangle_primitive = primitives.createCirclePrimitive(allocator, 32, 1);
+    {
+        const triangle_primitive = primitives.createTrianglePrimitive(allocator);
+        primitives_data[0] = PrimitiveRenderData {
+            .vertex_buffer = createVertexBuffer(core, triangle_primitive),
+            .index_buffer = createIndexBuffer(core, triangle_primitive),
+            .vertex_count = triangle_primitive.vertex_count,
+            .index_count = triangle_primitive.index_count
+        };
+    }
+
+    {
+        const quad_primitive = primitives.createQuadPrimitive(allocator);
+        primitives_data[1] = PrimitiveRenderData {
+            .vertex_buffer = createVertexBuffer(core, quad_primitive),
+            .index_buffer = createIndexBuffer(core, quad_primitive),
+            .vertex_count = quad_primitive.vertex_count,
+            .index_count = quad_primitive.index_count
+        };
+    }
+
+    {
+        const plane_primitive = primitives.createPlanePrimitive(allocator, 1000, 1000, 1.5);
+        primitives_data[2] = PrimitiveRenderData {
+            .vertex_buffer = createVertexBuffer(core, plane_primitive),
+            .index_buffer = createIndexBuffer(core, plane_primitive),
+            .vertex_count = plane_primitive.vertex_count,
+            .index_count = plane_primitive.index_count
+        };
+    }
+
+    {
+        const circle_primitive = primitives.createCirclePrimitive(allocator, 64, 1);
+        primitives_data[3] = PrimitiveRenderData {
+            .vertex_buffer = createVertexBuffer(core, circle_primitive),
+            .index_buffer = createIndexBuffer(core, circle_primitive),
+            .vertex_count = circle_primitive.vertex_count,
+            .index_count = circle_primitive.index_count
+        };
+    }
 
 
     var shader = core.device().createShaderModuleWGSL("primitive.wgsl", @embedFile("primitive.wgsl"));
     defer shader.release();    
-    
-    const vertex_buffer_components = createVertexBufferComponents();
-    vertex_buffer = core.device().createBuffer(&vertex_buffer_components.buffer_descriptor);
-    queue.writeBuffer(vertex_buffer, 0, triangle_primitive.vertex_data.items[0..]);
-
-    createIndexBufferDescriptor(core);
-
-    pipeline = createPipeline(core, shader, vertex_buffer_components.layout);    
+ 
+    pipeline = createPipeline(core, shader);    
 }
 
 const VertexBufferComponents = struct {
@@ -35,44 +75,44 @@ const VertexBufferComponents = struct {
     buffer_descriptor : gpu.Buffer.Descriptor
 };
 
-fn createVertexBufferComponents() VertexBufferComponents {
+fn createVertexBuffer(core: *mach.Core, primitive : Primitive) *gpu.Buffer {
     const vertex_buffer_descriptor = gpu.Buffer.Descriptor{
-        .size = triangle_primitive.vertex_count * @sizeOf(primitives.VertexData),
+        .size = primitive.vertex_count * @sizeOf(VertexData),
         .usage = .{.vertex = true, .copy_dst = true},
         .mapped_at_creation = false,
     };
 
+    const vertex_buffer = core.device().createBuffer(&vertex_buffer_descriptor);
+    queue.writeBuffer(vertex_buffer, 0, primitive.vertex_data.items[0..]);
+
+    return vertex_buffer;
+}
+
+fn createIndexBuffer (core : *mach.Core, primitive : Primitive) *gpu.Buffer {
+    const index_buffer_descriptor = gpu.Buffer.Descriptor{
+        .size = primitive.index_count * @sizeOf(u32),
+        .usage = .{.index = true, .copy_dst = true},
+        .mapped_at_creation = false,
+    };
+    const index_buffer = core.device().createBuffer(&index_buffer_descriptor);
+    queue.writeBuffer(index_buffer, 0, primitive.index_data.items[0..]);
+    
+    return index_buffer;
+}
+
+fn createPipeline(core: *mach.Core, shader_module : *gpu.ShaderModule) *gpu.RenderPipeline {
+    
     const vertex_attributes = [_]gpu.VertexAttribute{
         .{ .format = .float32x3, .shader_location = 0, .offset = 0},
         .{ .format = .float32x3, .shader_location = 1, .offset = @sizeOf(primitives.F32x3)},
     };
 
     const vertex_buffer_layout = gpu.VertexBufferLayout.init(.{
-        .array_stride = @sizeOf(primitives.VertexData),
+        .array_stride = @sizeOf(VertexData),
         .step_mode = .vertex,
         .attributes = &vertex_attributes,
     });
 
-    var componenets = VertexBufferComponents{
-        .layout = vertex_buffer_layout,
-        .buffer_descriptor = vertex_buffer_descriptor
-    };
-
-    return componenets;
-}
-
-fn createIndexBufferDescriptor (core : *mach.Core) void {
-    const index_buffer_descriptor = gpu.Buffer.Descriptor{
-        .size = triangle_primitive.index_count * @sizeOf(u32),
-        .usage = .{.index = true, .copy_dst = true},
-        .mapped_at_creation = false,
-    };
-    index_buffer = core.device().createBuffer(&index_buffer_descriptor);
-    queue.writeBuffer(index_buffer, 0, triangle_primitive.index_data.items[0..]);
-}
-
-fn createPipeline(core: *mach.Core, shader_module : *gpu.ShaderModule, vertex_buffer_layout : gpu.VertexBufferLayout) *gpu.RenderPipeline {
-    
     var vertex_pipeline_state = gpu.VertexState.init(.{
         .module = shader_module,
         .entry_point = "vertex_main",
@@ -153,9 +193,15 @@ pub fn renderUpdate (core: *mach.Core) void {
     const pass = encoder.beginRenderPass(&render_pass_info);
 
     pass.setPipeline(pipeline);
-    pass.setVertexBuffer(0, vertex_buffer, 0, @sizeOf(primitives.VertexData) * triangle_primitive.vertex_count);
-    pass.setIndexBuffer(index_buffer, .uint32, 0, @sizeOf(u32) * triangle_primitive.index_count);
-    pass.drawIndexed(triangle_primitive.index_count, 1, 0, 0, 0);
+
+    const vertex_buffer = primitives_data[curr_primitive_index].vertex_buffer;
+    const vertex_count = primitives_data[curr_primitive_index].vertex_count;
+    pass.setVertexBuffer(0, vertex_buffer, 0, @sizeOf(VertexData) * vertex_count);
+
+    const index_buffer = primitives_data[curr_primitive_index].index_buffer;
+    const index_count = primitives_data[curr_primitive_index].index_count;
+    pass.setIndexBuffer(index_buffer, .uint32, 0, @sizeOf(u32) * index_count);
+    pass.drawIndexed(index_count, 1, 0, 0, 0);
 
     pass.end();
     pass.release();
