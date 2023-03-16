@@ -189,7 +189,10 @@ pub fn deinit(app: *App) void {
     app.depth_texture.release();
     app.depth_texture_view.release();
 }
+var entity_position = zm.f32x4(0, 0, 0, 0);
 
+// Update entity position based on keyboard input
+const speed = 0.1;
 pub fn update(app: *App) !bool {
     var iter = app.core.pollEvents();
     while (iter.next()) |event| {
@@ -200,6 +203,12 @@ pub fn update(app: *App) !bool {
                     .one => app.core.setVSync(.none),
                     .two => app.core.setVSync(.double),
                     .three => app.core.setVSync(.triple),
+                    .left => entity_position = entity_position + zm.f32x4(-speed, 0, 0, 0),
+                    .right => entity_position = entity_position + zm.f32x4(speed, 0, 0, 0),
+                    .up => entity_position = entity_position + zm.f32x4(0, speed, 0, 0),
+                    .down => entity_position = entity_position + zm.f32x4(0, -speed, 0, 0),
+                    .z => entity_position = entity_position + zm.f32x4(0, 0, speed, 0),
+                    .x => entity_position = entity_position + zm.f32x4(0, 0, -speed, 0),
                     else => {},
                 }
                 std.debug.print("vsync mode changed to {s}\n", .{@tagName(app.core.vsync())});
@@ -253,15 +262,16 @@ pub fn update(app: *App) !bool {
     });
 
     {
-        const time = app.timer.read();
-        const model = zm.mul(zm.rotationX(time * (std.math.pi / 2.0)), zm.rotationZ(time * (std.math.pi / 2.0)));
+        // const time = app.timer.read();
+        // const model = zm.mul(zm.rotationX(time * (std.math.pi / 2.0)), zm.rotationZ(time * (std.math.pi / 2.0)));
+        const model = zm.mul(zm.translation(entity_position[0], entity_position[1], entity_position[2]), zm.mul(zm.rotationX((std.math.pi / 2.0)), zm.rotationZ((std.math.pi / 2.0))));
         const view = zm.lookAtRh(
             zm.f32x4(0, 4, 2, 1),
             zm.f32x4(0, 0, 0, 1),
             zm.f32x4(0, 0, 1, 0),
         );
-        const proj = zm.perspectiveFovRh(
-            (std.math.pi / 4.0),
+        const proj = zm.orthographicRh(
+            (std.math.pi / 3.0),
             @intToFloat(f32, app.core.descriptor().width) / @intToFloat(f32, app.core.descriptor().height),
             0.1,
             10,
