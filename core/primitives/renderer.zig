@@ -1,7 +1,6 @@
 const std = @import("std");
 const mach = @import("mach");
 const gpu = @import("gpu");
-const zmath = @import("zmath");
 const primitives = @import("parametric-primitives.zig");
 
 pub const Renderer = @This();
@@ -16,7 +15,7 @@ var triangle_primitive : primitives.Primitive = undefined;
 pub fn rendererInit(core: *mach.Core, allocator : std.mem.Allocator) void {
     queue = core.device().getQueue();
 
-    triangle_primitive = primitives.createTrianglePrimitive(allocator);
+    triangle_primitive = primitives.createCirclePrimitive(allocator, 32, 1);
 
 
     var shader = core.device().createShaderModuleWGSL("primitive.wgsl", @embedFile("primitive.wgsl"));
@@ -140,7 +139,7 @@ pub fn renderUpdate (core: *mach.Core) void {
     const back_buffer_view = core.swapChain().getCurrentTextureView();
     const color_attachment = gpu.RenderPassColorAttachment{
         .view = back_buffer_view,
-        .clear_value = gpu.Color{ .r = 0.0, .g = 0.0, .b = 1.0, .a = 1.0 },
+        .clear_value = gpu.Color{ .r = 0.2, .g = 0.2, .b = 0.2, .a = 1.0 },
         .load_op = .clear,
         .store_op = .store,
     };
