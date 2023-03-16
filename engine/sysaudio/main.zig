@@ -84,7 +84,7 @@ fn writeFn(app_op: ?*anyopaque, frames: usize) void {
     var frame: usize = 0;
     while (frame < frames) : (frame += 1) {
         var sample: f32 = 0;
-        for (app.playing) |*tone| {
+        for (&app.playing) |*tone| {
             if (tone.sample_counter >= tone.duration) continue;
 
             tone.sample_counter += 1;
@@ -114,7 +114,7 @@ fn writeFn(app_op: ?*anyopaque, frames: usize) void {
 }
 
 pub fn fillTone(app: *App, frequency: f32) void {
-    for (app.playing) |*tone| {
+    for (&app.playing) |*tone| {
         if (tone.sample_counter >= tone.duration) {
             tone.* = Tone{
                 .frequency = frequency,
