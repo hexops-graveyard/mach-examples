@@ -78,12 +78,12 @@ pub fn build(b: *std.Build) !void {
             .use_model3d = true,
             .use_imgui = true,
         },
-        // .{
-        //     .name = "deferred-rendering",
-        //     .deps = &.{ .zmath, .model3d, .imgui, .assets },
-        //     .use_model3d = true,
-        //     .use_imgui = true,
-        // },
+        .{
+            .name = "deferred-rendering",
+            .deps = &.{ .zmath, .model3d, .imgui, .assets },
+            .use_model3d = true,
+            .use_imgui = true,
+        },
         .{ .name = "imgui", .deps = &.{ .imgui, .assets }, .use_imgui = true },
         .{ .name = "rotating-cube", .deps = &.{.zmath} },
         .{ .name = "pixel-post-process", .deps = &.{.zmath} },

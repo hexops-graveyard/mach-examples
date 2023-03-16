@@ -1,7 +1,7 @@
 const std = @import("std");
 const mach = @import("mach");
 const gpu = mach.gpu;
-const m3d = mach.model3d;
+const m3d = @import("model3d");
 const zm = @import("zmath");
 const assets = @import("assets");
 const imgui = @import("imgui").MachImgui(mach);
@@ -222,7 +222,7 @@ pub fn deinit(app: *App) void {
     app.model_uniform_buffer.release();
     app.camera_uniform_buffer.release();
 
-    imgui.backend.deinit();
+    imgui.mach_backend.deinit();
 }
 
 pub fn update(app: *App) !bool {
@@ -266,7 +266,7 @@ pub fn update(app: *App) !bool {
             else => {},
         }
 
-        imgui.backend.passEvent(event);
+        imgui.mach_backend.passEvent(event);
     }
 
     const command = try app.buildCommandBuffer();
@@ -1122,13 +1122,13 @@ fn buildCommandBuffer(app: *App) !*gpu.CommandBuffer {
 
     pass.setPipeline(app.imgui_render_pipeline);
     const window_size = app.core.size();
-    imgui.backend.newFrame(
+    imgui.mach_backend.newFrame(
         &app.core,
         window_size.width,
         window_size.height,
     );
     app.drawUI();
-    imgui.backend.draw(pass);
+    imgui.mach_backend.draw(pass);
 
     pass.end();
     pass.release();
@@ -1137,7 +1137,7 @@ fn buildCommandBuffer(app: *App) !*gpu.CommandBuffer {
 }
 
 fn setupImgui(app: *App) void {
-    imgui.init();
+    imgui.init(gpa.allocator());
     const font_normal = imgui.io.addFontFromFile(assets.fonts.roboto_medium.path, 16.0);
 
     const blend_component_descriptor = gpu.BlendComponent{
@@ -1172,7 +1172,7 @@ fn setupImgui(app: *App) void {
     shader_module.release();
 
     imgui.io.setDefaultFont(font_normal);
-    imgui.backend.init(app.core.device(), app.core.descriptor().format, null);
+    imgui.mach_backend.init(app.core.device(), app.core.descriptor().format, .{});
 
     const style = imgui.getStyle();
     style.window_min_size = .{ 300.0, 100.0 };
