@@ -3,7 +3,7 @@ const imgui = @import("imgui.zig");
 
 pub fn renderContent(core: *mach.Core) void {
     const window_size = core.size();
-    imgui.backend.newFrame(
+    imgui.mach_backend.newFrame(
         core,
         window_size.width,
         window_size.height,

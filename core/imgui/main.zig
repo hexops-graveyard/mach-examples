@@ -54,7 +54,7 @@ pub fn init(app: *App) !void {
     std.debug.print("backend type: {?}\n", .{adapter_props.backend_type});
     std.debug.print("\n", .{});
 
-    imgui.init();
+    imgui.init(gpa.allocator());
 
     const font_size = 18.0;
     const font_normal = imgui.io.addFontFromFile(assets.fonts.roboto_medium.path, font_size);
@@ -66,7 +66,7 @@ pub fn init(app: *App) !void {
 
     const pipeline_descriptor = gpu.RenderPipeline.Descriptor{ .fragment = &createFragmentState(fs_module, &.{color_target}), .vertex = createVertexState(vs_module) };
 
-    imgui.backend.init(app.core.device(), app.core.descriptor().format, null);
+    imgui.mach_backend.init(app.core.device(), app.core.descriptor().format, .{});
     imgui.io.setDefaultFont(font_normal);
 
     const style = imgui.getStyle();
@@ -85,14 +85,14 @@ pub fn deinit(app: *App) void {
     defer _ = gpa.deinit();
     defer app.core.deinit();
 
-    imgui.backend.deinit();
+    imgui.mach_backend.deinit();
 }
 
 pub fn update(app: *App) !bool {
     var iter = app.core.pollEvents();
     while (iter.next()) |event| {
         if (event == .close) return true;
-        imgui.backend.passEvent(event);
+        imgui.mach_backend.passEvent(event);
     }
 
     const back_buffer_view = app.core.swapChain().getCurrentTextureView();
@@ -113,7 +113,7 @@ pub fn update(app: *App) !bool {
 
     content.renderContent(&app.core);
 
-    imgui.backend.draw(pass);
+    imgui.mach_backend.draw(pass);
 
     pass.end();
     pass.release();

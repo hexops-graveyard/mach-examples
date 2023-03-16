@@ -1,6 +1,6 @@
 const std = @import("std");
 const mach = @import("libs/mach/build.zig");
-// const imgui = @import("libs/imgui/build.zig");
+const imgui = @import("libs/imgui/build.zig");
 const zmath = @import("libs/zmath/build.zig");
 
 pub fn build(b: *std.Build) !void {
@@ -22,13 +22,29 @@ pub fn build(b: *std.Build) !void {
         imgui,
         assets,
 
-        pub fn moduleDependency(dep: @This(), b2: *std.Build) std.Build.ModuleDependency {
+        pub fn moduleDependency(
+            dep: @This(),
+            b2: *std.Build,
+            target2: std.zig.CrossTarget,
+            optimize2: std.builtin.OptimizeMode,
+        ) std.Build.ModuleDependency {
             if (dep == .zmath) return std.Build.ModuleDependency{
                 .name = @tagName(dep),
                 .module = zmath.Package.build(b2, .{
                     .options = .{ .enable_cross_platform_determinism = true },
                 }).zmath,
             };
+            if (dep == .imgui) {
+                const imgui_pkg = imgui.Package(.{
+                    .gpu_dawn = mach.gpu_dawn,
+                }).build(b2, target2, optimize2, .{
+                    .options = .{ .backend = .mach },
+                }) catch unreachable;
+                return std.Build.ModuleDependency{
+                    .name = @tagName(dep),
+                    .module = imgui_pkg.zgui,
+                };
+            }
             const path = switch (dep) {
                 .zmath => unreachable,
                 .zigimg => "libs/zigimg/zigimg.zig",
@@ -69,7 +85,7 @@ pub fn build(b: *std.Build) !void {
         //     .use_model3d = true,
         //     .use_imgui = true,
         // },
-        // .{ .name = "imgui", .deps = &.{ .imgui, .assets }, .use_imgui = true },
+        .{ .name = "imgui", .deps = &.{ .imgui, .assets }, .use_imgui = true },
         .{ .name = "rotating-cube", .deps = &.{.zmath} },
         .{ .name = "pixel-post-process", .deps = &.{.zmath} },
         .{ .name = "two-cubes", .deps = &.{.zmath} },
@@ -102,7 +118,7 @@ pub fn build(b: *std.Build) !void {
 
         const path_suffix = if (example.mach_engine_example) "engine/" else "core/";
         var deps = std.ArrayList(std.Build.ModuleDependency).init(b.allocator);
-        for (example.deps) |d| try deps.append(d.moduleDependency(b));
+        for (example.deps) |d| try deps.append(d.moduleDependency(b, target, optimize));
         const app = try mach.App.init(
             b,
             .{
@@ -118,9 +134,14 @@ pub fn build(b: *std.Build) !void {
             },
         );
 
-        // if (example.use_imgui) {
-        //     imgui.link(app.step);
-        // }
+        if (example.use_imgui) {
+            const imgui_pkg = try imgui.Package(.{
+                .gpu_dawn = mach.gpu_dawn,
+            }).build(b, target, optimize, .{
+                .options = .{ .backend = .mach },
+            });
+            imgui_pkg.link(app.step);
+        }
 
         try app.link(options);
         app.install();
