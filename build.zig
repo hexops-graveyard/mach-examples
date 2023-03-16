@@ -1,6 +1,7 @@
 const std = @import("std");
 const mach = @import("libs/mach/build.zig");
 // const imgui = @import("libs/imgui/build.zig");
+const zmath = @import("libs/zmath/build.zig");
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
@@ -22,8 +23,14 @@ pub fn build(b: *std.Build) !void {
         assets,
 
         pub fn moduleDependency(dep: @This(), b2: *std.Build) std.Build.ModuleDependency {
+            if (dep == .zmath) return std.Build.ModuleDependency{
+                .name = @tagName(dep),
+                .module = zmath.Package.build(b2, .{
+                    .options = .{ .enable_cross_platform_determinism = true },
+                }).zmath,
+            };
             const path = switch (dep) {
-            .zmath => "libs/zmath/src/zmath.zig",
+            .zmath => unreachable,
             .zigimg => "libs/zigimg/zigimg.zig",
             .model3d => "libs/mach/libs/model3d/src/main.zig",
             .imgui => "libs/imgui/src/main.zig",
