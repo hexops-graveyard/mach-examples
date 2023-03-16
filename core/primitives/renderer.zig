@@ -20,7 +20,7 @@ const PrimitiveRenderData = struct {
 var primitives_data : [4]PrimitiveRenderData = undefined;
 pub var curr_primitive_index : u4 = 0;
 
-pub fn rendererInit(core: *mach.Core, allocator : std.mem.Allocator) void {
+pub fn init(core: *mach.Core, allocator : std.mem.Allocator) void {
     queue = core.device().getQueue();
 
     {
@@ -31,6 +31,8 @@ pub fn rendererInit(core: *mach.Core, allocator : std.mem.Allocator) void {
             .vertex_count = triangle_primitive.vertex_count,
             .index_count = triangle_primitive.index_count
         };
+        defer triangle_primitive.vertex_data.deinit();
+        defer triangle_primitive.index_data.deinit();
     }
 
     {
@@ -41,6 +43,8 @@ pub fn rendererInit(core: *mach.Core, allocator : std.mem.Allocator) void {
             .vertex_count = quad_primitive.vertex_count,
             .index_count = quad_primitive.index_count
         };
+        defer quad_primitive.vertex_data.deinit();
+        defer quad_primitive.index_data.deinit();
     }
 
     {
@@ -51,6 +55,8 @@ pub fn rendererInit(core: *mach.Core, allocator : std.mem.Allocator) void {
             .vertex_count = plane_primitive.vertex_count,
             .index_count = plane_primitive.index_count
         };
+        defer plane_primitive.vertex_data.deinit();
+        defer plane_primitive.index_data.deinit();
     }
 
     {
@@ -61,6 +67,8 @@ pub fn rendererInit(core: *mach.Core, allocator : std.mem.Allocator) void {
             .vertex_count = circle_primitive.vertex_count,
             .index_count = circle_primitive.index_count
         };
+        defer circle_primitive.vertex_data.deinit();
+        defer circle_primitive.index_data.deinit();
     }
 
 
@@ -174,7 +182,7 @@ fn createPipeline(core: *mach.Core, shader_module : *gpu.ShaderModule) *gpu.Rend
     return core.device().createRenderPipeline(&pipeline_descriptor);
 }
 
-pub fn renderUpdate (core: *mach.Core) void {
+pub fn update (core: *mach.Core) void {
 
     const back_buffer_view = core.swapChain().getCurrentTextureView();
     const color_attachment = gpu.RenderPassColorAttachment{
@@ -213,4 +221,13 @@ pub fn renderUpdate (core: *mach.Core) void {
     command.release();
     core.swapChain().present();
     back_buffer_view.release();
+}
+
+pub fn deinit() void {
+    var i: u4 = 0;
+    while (i < 4) : (i += 1) {
+        primitives_data[i].vertex_buffer.release();
+        primitives_data[i].index_buffer.release();
+    }
+
 }

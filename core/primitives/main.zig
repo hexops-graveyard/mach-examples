@@ -15,12 +15,13 @@ pub fn init(app: *App) !void {
       .max_vertex_attributes = 2
     }});
 
-    renderer.rendererInit(&app.core, allocator);
+    renderer.init(&app.core, allocator);
 }
 
 pub fn deinit(app: *App) void {
     defer _ = gpa.deinit();
     defer app.core.deinit();
+    defer renderer.deinit();
 
 }
 
@@ -40,7 +41,7 @@ pub fn update(app: *App) !bool {
         }
     }
 
-    renderer.renderUpdate(&app.core);
+    renderer.update(&app.core);
     
     return false;
 }
