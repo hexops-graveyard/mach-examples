@@ -19,3 +19,4 @@ zig-out/
 
 **/*.png
 !assets/*.png
+imgui.ini
