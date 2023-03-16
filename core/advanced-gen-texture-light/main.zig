@@ -8,8 +8,7 @@
 
 const std = @import("std");
 const mach = @import("mach");
-const gpu = @import("gpu");
-const glfw = @import("glfw");
+const gpu = mach.gpu;
 const zm = @import("zmath");
 
 const Vec = zm.Vec;

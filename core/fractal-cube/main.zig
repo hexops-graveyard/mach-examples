@@ -10,8 +10,7 @@
 
 const std = @import("std");
 const mach = @import("mach");
-const gpu = @import("gpu");
-const glfw = @import("glfw");
+const gpu = mach.gpu;
 const zm = @import("zmath");
 const Vertex = @import("cube_mesh.zig").Vertex;
 const vertices = @import("cube_mesh.zig").vertices;

@@ -2,7 +2,7 @@
 /// https://github.com/austinEng/webgpu-samples/blob/main/src/sample/computeBoids/main.ts
 const std = @import("std");
 const mach = @import("mach");
-const gpu = @import("gpu");
+const gpu = mach.gpu;
 
 core: mach.Core,
 timer: mach.Timer,

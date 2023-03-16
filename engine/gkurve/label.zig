@@ -1,7 +1,8 @@
 //! At the moment we use only rgba32, but maybe it could be useful to use also other types
 
 const std = @import("std");
-const ft = @import("freetype");
+const mach = @import("mach");
+const ft = mach.freetype;
 const zigimg = @import("zigimg");
 const Atlas = @import("atlas.zig").Atlas;
 const AtlasErr = @import("atlas.zig").Error;

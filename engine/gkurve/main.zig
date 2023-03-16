@@ -4,13 +4,12 @@
 
 const std = @import("std");
 const mach = @import("mach");
-const gpu = @import("gpu");
+const gpu = mach.gpu;
+const ft = mach.freetype;
 const zm = @import("zmath");
 const zigimg = @import("zigimg");
-const glfw = @import("glfw");
 const draw = @import("draw.zig");
 const Atlas = @import("atlas.zig").Atlas;
-const ft = @import("freetype");
 const Label = @import("label.zig");
 const ResizableLabel = @import("resizable_label.zig");
 const assets = @import("assets");

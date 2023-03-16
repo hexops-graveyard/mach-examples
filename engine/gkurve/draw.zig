@@ -1,6 +1,6 @@
 const std = @import("std");
 const ArrayList = std.ArrayList;
-const gpu = @import("gpu");
+const gpu = mach.gpu;
 const App = @import("main.zig").App;
 const zm = @import("zmath");
 const UVData = @import("atlas.zig").UVData;

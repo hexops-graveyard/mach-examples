@@ -1,7 +1,7 @@
 const std = @import("std");
 const mach = @import("mach");
+const gpu = mach.gpu;
 const imgui = @import("imgui.zig");
-const gpu = @import("gpu");
 const assets = @import("assets");
 
 const content = @import("content.zig");
