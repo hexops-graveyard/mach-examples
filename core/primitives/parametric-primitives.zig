@@ -4,6 +4,7 @@ const zmath = @import("zmath");
 const PI = 3.1415927410125732421875;
 
 pub const F32x3 = @Vector(3, f32);
+pub const F32x4 = @Vector(3, f32);
 pub const VertexData = struct {
     position : F32x3,
     normal : F32x3,
@@ -31,28 +32,34 @@ pub const Primitive = struct {
 };
 
 
-pub fn createTrianglePrimitive(allocator : std.mem.Allocator) Primitive {
+
+// 2D Primitives
+pub fn createTrianglePrimitive(allocator : std.mem.Allocator, size : f32) Primitive {
+    const vertex_count = 3;
+    const index_count = 3;
     var vertex_data : std.ArrayList(VertexData) = undefined;
-    if (std.ArrayList(VertexData).initCapacity(allocator, 3)) |array_list| {
+    if (std.ArrayList(VertexData).initCapacity(allocator, vertex_count)) |array_list| {
         vertex_data = array_list;
     } else |err| {
         std.log.err("mach-examples: error: primitive triangle vertex memory wasn't allocated. Full message {}", .{err});
     }
 
-    vertex_data.appendSliceAssumeCapacity(&[3]VertexData {
-        VertexData{.position = F32x3{ -0.5, -0.5, 0.0 }, .normal = F32x3{-0.5, -0.5, 0.0 }},
-        VertexData{.position = F32x3{ 0.5, -0.5, 0.0 }, .normal = F32x3{ 0.5, -0.5, 0.0}},
-        VertexData{.position = F32x3{ 0.0, 0.5, 0.0 }, .normal = F32x3{ 0.0, 0.5, 0.0}},
+    const edge = size / 2.0;
+
+    vertex_data.appendSliceAssumeCapacity(&[vertex_count]VertexData {
+        VertexData{.position = F32x3{ -edge, -edge, 0.0 }, .normal = F32x3{-edge, -edge, 0.0 }},
+        VertexData{.position = F32x3{ edge, -edge, 0.0 }, .normal = F32x3{ edge, -edge, 0.0}},
+        VertexData{.position = F32x3{ 0.0, edge, 0.0 }, .normal = F32x3{ 0.0, edge, 0.0}},
     });
 
     var index_data : std.ArrayList(u32) = undefined;
-    if (std.ArrayList(u32).initCapacity(allocator, 3)) |array_list| {
+    if (std.ArrayList(u32).initCapacity(allocator, index_count)) |array_list| {
         index_data = array_list;
     } else |err| {
         std.log.err("mach-examples: error: primitive triangle index memory wasn't allocated. Full message {}", .{err});
     }
 
-    index_data.appendSliceAssumeCapacity(&[3]u32 { 0,1,2 });
+    index_data.appendSliceAssumeCapacity(&[index_count]u32 { 0,1,2 });
 
     return Primitive {
         .vertex_data = vertex_data,
@@ -64,29 +71,33 @@ pub fn createTrianglePrimitive(allocator : std.mem.Allocator) Primitive {
 }
 
 
-pub fn createQuadPrimitive(allocator : std.mem.Allocator) Primitive {
+pub fn createQuadPrimitive(allocator : std.mem.Allocator, size : f32) Primitive {
+    const vertex_count = 4;
+    const index_count = 6;
     var vertex_data : std.ArrayList(VertexData) = undefined;
-    if (std.ArrayList(VertexData).initCapacity(allocator, 4)) |array_list| {
+    if (std.ArrayList(VertexData).initCapacity(allocator, vertex_count)) |array_list| {
         vertex_data = array_list;
     } else |err| {
         std.log.err("mach-examples: error: primitive triangle vertex memory wasn't allocated. Full message {}", .{err});
     }
 
-    vertex_data.appendSliceAssumeCapacity(&[4]VertexData {
-        VertexData{.position = F32x3{ -0.5, -0.5, 0.0 }, .normal = F32x3{-0.5, -0.5, 0.0 }},
-        VertexData{.position = F32x3{ 0.5, -0.5, 0.0 }, .normal = F32x3{ 0.5, -0.5, 0.0}},
-        VertexData{.position = F32x3{ -0.5, 0.5, 0.0 }, .normal = F32x3{ -0.5, 0.5, 0.0}},
-        VertexData{.position = F32x3{ 0.5, 0.5, 0.0 }, .normal = F32x3{ 0.5, 0.5, 0.0}},
+    const edge = size / 2.0;
+
+    vertex_data.appendSliceAssumeCapacity(&[vertex_count]VertexData {
+        VertexData{.position = F32x3{ -edge, -edge, 0.0 }, .normal = F32x3{-edge, -edge, 0.0 }},
+        VertexData{.position = F32x3{ edge, -edge, 0.0 }, .normal = F32x3{ edge, -edge, 0.0}},
+        VertexData{.position = F32x3{ -edge, edge, 0.0 }, .normal = F32x3{ -edge, edge, 0.0}},
+        VertexData{.position = F32x3{ edge, edge, 0.0 }, .normal = F32x3{ edge, edge, 0.0}},
     });
 
     var index_data : std.ArrayList(u32) = undefined;
-    if (std.ArrayList(u32).initCapacity(allocator, 6)) |array_list| {
+    if (std.ArrayList(u32).initCapacity(allocator, index_count)) |array_list| {
         index_data = array_list;
     } else |err| {
         std.log.err("mach-examples: error: primitive triangle index memory wasn't allocated. Full message {}", .{err});
     }
 
-    index_data.appendSliceAssumeCapacity(&[6]u32 { 
+    index_data.appendSliceAssumeCapacity(&[index_count]u32 { 
         0,1,2,
         1,3,2,
      });
@@ -220,3 +231,59 @@ pub fn createCirclePrimitive(allocator : std.mem.Allocator, vertices : u32, radi
     };
 }
 
+// 3D Primitives
+pub fn createCubePrimitive(allocator : std.mem.Allocator, size : f32) Primitive {
+    const vertex_count = 8;
+    const index_count = 24;
+    var vertex_data : std.ArrayList(VertexData) = undefined;
+    if (std.ArrayList(VertexData).initCapacity(allocator, vertex_count)) |array_list| {
+        vertex_data = array_list;
+    } else |err| {
+        std.log.err("mach-examples: error: primitive triangle vertex memory wasn't allocated. Full message {}", .{err});
+    }
+
+    const edge = size / 2.0;
+
+    vertex_data.appendSliceAssumeCapacity(&[vertex_count]VertexData {
+        // Back quad
+        VertexData{.position = F32x3{ -edge, -edge, -edge }, .normal = F32x3{ -edge, -edge, -edge }},
+        VertexData{.position = F32x3{ edge, -edge, -edge }, .normal = F32x3{ edge, -edge, -edge }},
+        VertexData{.position = F32x3{ -edge, edge, -edge }, .normal = F32x3{ -edge, edge, -edge }},
+        VertexData{.position = F32x3{ edge, edge, -edge }, .normal = F32x3{ edge, edge, -edge }},
+        // Front quad
+        VertexData{.position = F32x3{ -edge, -edge, edge }, .normal = F32x3{ -edge, -edge, edge }},
+        VertexData{.position = F32x3{ edge, -edge, edge }, .normal = F32x3{ edge, -edge, edge }},
+        VertexData{.position = F32x3{ -edge, edge, edge }, .normal = F32x3{ -edge, edge, edge }},
+        VertexData{.position = F32x3{ edge, edge, edge }, .normal = F32x3{ edge, edge, edge }},
+    });
+
+    var index_data : std.ArrayList(u32) = undefined;
+    if (std.ArrayList(u32).initCapacity(allocator, index_count)) |array_list| {
+        index_data = array_list;
+    } else |err| {
+        std.log.err("mach-examples: error: primitive triangle index memory wasn't allocated. Full message {}", .{err});
+    }
+
+    index_data.appendSliceAssumeCapacity(&[index_count]u32 {
+        // Back Quad
+        0,1,2,
+        1,3,2,
+        // Right Quad
+        5,1,6,
+        1,3,6,
+        // Left Quad
+        4,0,7,
+        0,2,7,
+        // Front Quad
+        4,5,7,
+        5,6,7,
+     });
+
+    return Primitive {
+        .vertex_data = vertex_data,
+        .vertex_count = 8,
+        .index_data = index_data,
+        .index_count = 24,
+        .type = .quad
+    };
+}

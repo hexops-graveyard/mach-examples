@@ -1,3 +1,9 @@
+struct Uniforms {
+  mvp_matrix : mat4x4<f32>,
+};
+
+@binding(0) @group(0) var<uniform> ubo : Uniforms;
+
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -10,7 +16,7 @@ struct VertexOutput {
 
 @vertex fn vertex_main(in : VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.position = vec4<f32>(in.position, 1.0);
+    out.position = ubo.mvp_matrix * vec4<f32>(in.position, 1.0);
     out.normal = in.normal;
     return out;
 }

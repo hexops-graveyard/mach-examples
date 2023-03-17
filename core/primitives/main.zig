@@ -10,12 +10,19 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn init(app: *App) !void {
     var allocator = gpa.allocator();
-    try app.core.init(allocator, .{.required_limits = gpu.Limits 
-    { .max_vertex_buffers = 1,
-      .max_vertex_attributes = 2
-    }});
+    try app.core.init(allocator, 
+    .{.required_limits = gpu.Limits 
+        {   .max_vertex_buffers = 1,
+            .max_vertex_attributes = 2,
+            .max_bind_groups = 1,
+            .max_uniform_buffers_per_shader_stage = 1,
+            .max_uniform_buffer_binding_size = 16 * 1 * @sizeOf(f32),
+        }}
+    );
+    
+    const timer = try mach.Timer.start();
 
-    renderer.init(&app.core, allocator);
+    renderer.init(&app.core, allocator, timer);
 }
 
 pub fn deinit(app: *App) void {
@@ -33,7 +40,7 @@ pub fn update(app: *App) !bool {
                 // TODO(Rok Kos): Improve this, maybe even make ImGui for this
                 if (ev.key == .right) {
                     renderer.curr_primitive_index += 1;
-                    renderer.curr_primitive_index %= 4;
+                    renderer.curr_primitive_index %= 5;
                 }
             },
             .close => return true,
