@@ -30,6 +30,8 @@ pub fn init(app: *App) !void {
     const allocator = gpa.allocator();
     try app.core.init(allocator, .{});
 
+    entity_position = zm.f32x4(0, 0, 0, 0);
+
     const shader_module = app.core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
 
     const vertex_attributes = [_]gpu.VertexAttribute{
@@ -189,7 +191,10 @@ pub fn deinit(app: *App) void {
     app.depth_texture.release();
     app.depth_texture_view.release();
 }
+var entity_position = zm.f32x4(0, 0, 0, 0);
+var direction = zm.f32x4(0, 0, 0, 0);
 
+const speed = 2.0 * 100.0; // pixels per second
 pub fn update(app: *App) !bool {
     var iter = app.core.pollEvents();
     while (iter.next()) |event| {
@@ -197,12 +202,21 @@ pub fn update(app: *App) !bool {
             .key_press => |ev| {
                 switch (ev.key) {
                     .space => return true,
-                    .one => app.core.setVSync(.none),
-                    .two => app.core.setVSync(.double),
-                    .three => app.core.setVSync(.triple),
+                    .left => direction[0] += 1,
+                    .right => direction[0] -= 1,
+                    .up => direction[2] += 1,
+                    .down => direction[2] -= 1,
                     else => {},
                 }
-                std.debug.print("vsync mode changed to {s}\n", .{@tagName(app.core.vsync())});
+            },
+            .key_release => |ev| {
+                switch (ev.key) {
+                    .left => direction[0] -= 1,
+                    .right => direction[0] += 1,
+                    .up => direction[2] -= 1,
+                    .down => direction[2] += 1,
+                    else => {},
+                }
             },
             .framebuffer_resize => |ev| {
                 // If window is resized, recreate depth buffer otherwise we cannot use it.
@@ -233,6 +247,9 @@ pub fn update(app: *App) !bool {
         }
     }
 
+    const delta_time = app.fps_timer.lap();
+    entity_position += direction * zm.splat(@Vector(4, f32), speed) * zm.splat(@Vector(4, f32), delta_time);
+
     const back_buffer_view = app.core.swapChain().getCurrentTextureView();
     const color_attachment = gpu.RenderPassColorAttachment{
         .view = back_buffer_view,
@@ -253,18 +270,20 @@ pub fn update(app: *App) !bool {
     });
 
     {
-        const time = app.timer.read();
-        const model = zm.mul(zm.rotationX(time * (std.math.pi / 2.0)), zm.rotationZ(time * (std.math.pi / 2.0)));
+        const model = zm.translation(entity_position[0], entity_position[1], entity_position[2]);
         const view = zm.lookAtRh(
-            zm.f32x4(0, 4, 2, 1),
+            zm.f32x4(0, 1000, 0, 1),
             zm.f32x4(0, 0, 0, 1),
             zm.f32x4(0, 0, 1, 0),
         );
-        const proj = zm.perspectiveFovRh(
-            (std.math.pi / 4.0),
-            @intToFloat(f32, app.core.descriptor().width) / @intToFloat(f32, app.core.descriptor().height),
+
+        // One pixel in our scene will equal one window pixel (i.e. be roughly the same size
+        // irrespective of whether the user has a Retina/HDPI display.)
+        const proj = zm.orthographicRh(
+            @intToFloat(f32, app.core.size().width),
+            @intToFloat(f32, app.core.size().height),
             0.1,
-            10,
+            1000,
         );
         const mvp = zm.mul(zm.mul(model, view), proj);
         const ubo = UniformBufferObject{
@@ -277,7 +296,7 @@ pub fn update(app: *App) !bool {
     pass.setPipeline(app.pipeline);
     pass.setVertexBuffer(0, app.vertex_buffer, 0, @sizeOf(Vertex) * vertices.len);
     pass.setBindGroup(0, app.bind_group, &.{});
-    pass.draw(vertices.len, 1, 0, 0);
+    pass.draw(6, 1, 0, 0);
     pass.end();
     pass.release();
 
@@ -289,11 +308,10 @@ pub fn update(app: *App) !bool {
     app.core.swapChain().present();
     back_buffer_view.release();
 
-    const delta_time = app.fps_timer.lap();
     if (app.window_title_timer.read() >= 1.0) {
         app.window_title_timer.reset();
         var buf: [32]u8 = undefined;
-        const title = try std.fmt.bufPrintZ(&buf, "Textured Cube [ FPS: {d} ]", .{@floor(1 / delta_time)});
+        const title = try std.fmt.bufPrintZ(&buf, "Sprite2D [ FPS: {d} ]", .{@floor(1 / delta_time)});
         app.core.setTitle(title);
     }
 
