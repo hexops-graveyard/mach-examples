@@ -1,5 +1,6 @@
 const std = @import("std");
 const mach = @import("mach");
+const gpu = mach.gpu;
 const renderer = @import("renderer.zig");
 
 pub const App = @This();
@@ -29,6 +30,34 @@ pub fn update(app: *App) !bool {
         }
     }
 
-    renderer.RenderUpdate(&app.core);
+    app.render();
     return false;
+}
+
+fn render(app: *App) void {
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
+    const color_attachment = gpu.RenderPassColorAttachment{
+        .view = back_buffer_view,
+        .clear_value = gpu.Color{ .r = 0.0, .g = 0.0, .b = 1.0, .a = 1.0 },
+        .load_op = .clear,
+        .store_op = .store,
+    };
+
+    const encoder = app.core.device().createCommandEncoder(null);
+    const render_pass_info = gpu.RenderPassDescriptor.init(.{
+        .color_attachments = &.{color_attachment},
+    });
+
+    const pass = encoder.beginRenderPass(&render_pass_info);
+    pass.end();
+    pass.release();
+
+    var command = encoder.finish(null);
+    encoder.release();
+
+    var queue = app.core.device().getQueue();
+    queue.submit(&[_]*gpu.CommandBuffer{command});
+    command.release();
+    app.core.swapChain().present();
+    back_buffer_view.release();
 }
