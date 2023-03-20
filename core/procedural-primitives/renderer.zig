@@ -1,6 +1,6 @@
 const std = @import("std");
 const mach = @import("mach");
-const gpu = @import("gpu");
+const gpu = mach.gpu;
 const zmath = @import("zmath");
 const primitives = @import("procedural-primitives.zig");
 const Primitive = primitives.Primitive;

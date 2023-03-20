@@ -1,6 +1,6 @@
 const std = @import("std");
-const gpu = @import("gpu");
 const mach = @import("mach");
+const gpu = mach.gpu;
 const renderer = @import("renderer.zig");
 
 pub const App = @This();
@@ -30,7 +30,8 @@ pub fn deinit(app: *App) void {
 }
 
 pub fn update(app: *App) !bool {
-    while (app.core.pollEvents()) |event| {
+    var iter = app.core.pollEvents();
+    while (iter.next()) |event| {
         switch (event) {
             .key_press => |ev| {
                 if (ev.key == .space) return true;
