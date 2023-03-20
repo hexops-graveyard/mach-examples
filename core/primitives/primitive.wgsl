@@ -16,7 +16,7 @@ struct VertexOutput {
 
 @vertex fn vertex_main(in : VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.position = ubo.mvp_matrix * vec4<f32>(in.position, 1.0);
+    out.position = vec4<f32>(in.position, 1.0) * ubo.mvp_matrix;
     out.normal = in.normal;
     return out;
 }

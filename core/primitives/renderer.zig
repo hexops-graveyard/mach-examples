@@ -83,7 +83,7 @@ pub fn init(core: *mach.Core, allocator : std.mem.Allocator, timer : mach.Timer)
     }
 
     {
-        const cube_primitive = primitives.createCubePrimitive(allocator, 1);
+        const cube_primitive = primitives.createCubePrimitive(allocator, 0.5);
         primitives_data[4] = PrimitiveRenderData {
             .vertex_buffer = createVertexBuffer(core, cube_primitive),
             .index_buffer = createIndexBuffer(core, cube_primitive),
@@ -252,6 +252,8 @@ fn createPipeline(core: *mach.Core, shader_module : *gpu.ShaderModule, bind_grou
     return core.device().createRenderPipeline(&pipeline_descriptor);
 }
 
+pub const F32x1 = @Vector(1, f32);
+
 pub fn update (core: *mach.Core) void {
 
     const back_buffer_view = core.swapChain().getCurrentTextureView();
@@ -276,23 +278,31 @@ pub fn update (core: *mach.Core) void {
     });
 
        
-
-    {
-        const time = app_timer.read();
+    if (curr_primitive_index >= 4) {
+        
+        const time = app_timer.read() / 5;
         const model = zmath.mul(zmath.rotationX(time * (std.math.pi / 2.0)), zmath.rotationZ(time * (std.math.pi / 2.0)));
         const view = zmath.lookAtRh(
-            zmath.f32x4(0, -4, 0, 1),
+            zmath.f32x4(0, 4, 2, 1),
             zmath.f32x4(0, 0, 0, 1),
             zmath.f32x4(0, 0, 1, 0),
         );
         const proj = zmath.perspectiveFovRh(
-            (std.math.pi * 2.0 / 5.0),
+            (std.math.pi / 4.0),
             @intToFloat(f32, core.descriptor().width) / @intToFloat(f32, core.descriptor().height),
-            1,
-            100,
+            0.1,
+            10,
         );
+
+        const mvp = zmath.mul(zmath.mul(model, view), proj);
+
         const ubo = UniformBufferObject{
-            .mvp_matrix = zmath.transpose(zmath.mul(zmath.mul(model, view), proj)),
+            .mvp_matrix = zmath.transpose(mvp),
+        };
+        encoder.writeBuffer(uniform_buffer, 0, &[_]UniformBufferObject{ubo});
+    } else {
+        const ubo = UniformBufferObject{
+            .mvp_matrix = zmath.identity(),
         };
         encoder.writeBuffer(uniform_buffer, 0, &[_]UniformBufferObject{ubo});
     }

@@ -4,7 +4,7 @@ const zmath = @import("zmath");
 const PI = 3.1415927410125732421875;
 
 pub const F32x3 = @Vector(3, f32);
-pub const F32x4 = @Vector(3, f32);
+pub const F32x4 = @Vector(4, f32);
 pub const VertexData = struct {
     position : F32x3,
     normal : F32x3,
@@ -234,7 +234,7 @@ pub fn createCirclePrimitive(allocator : std.mem.Allocator, vertices : u32, radi
 // 3D Primitives
 pub fn createCubePrimitive(allocator : std.mem.Allocator, size : f32) Primitive {
     const vertex_count = 8;
-    const index_count = 24;
+    const index_count = 36;
     var vertex_data : std.ArrayList(VertexData) = undefined;
     if (std.ArrayList(VertexData).initCapacity(allocator, vertex_count)) |array_list| {
         vertex_data = array_list;
@@ -245,16 +245,16 @@ pub fn createCubePrimitive(allocator : std.mem.Allocator, size : f32) Primitive 
     const edge = size / 2.0;
 
     vertex_data.appendSliceAssumeCapacity(&[vertex_count]VertexData {
-        // Back quad
-        VertexData{.position = F32x3{ -edge, -edge, -edge }, .normal = F32x3{ -edge, -edge, -edge }},
-        VertexData{.position = F32x3{ edge, -edge, -edge }, .normal = F32x3{ edge, -edge, -edge }},
-        VertexData{.position = F32x3{ -edge, edge, -edge }, .normal = F32x3{ -edge, edge, -edge }},
-        VertexData{.position = F32x3{ edge, edge, -edge }, .normal = F32x3{ edge, edge, -edge }},
-        // Front quad
+        // Front positions
         VertexData{.position = F32x3{ -edge, -edge, edge }, .normal = F32x3{ -edge, -edge, edge }},
         VertexData{.position = F32x3{ edge, -edge, edge }, .normal = F32x3{ edge, -edge, edge }},
-        VertexData{.position = F32x3{ -edge, edge, edge }, .normal = F32x3{ -edge, edge, edge }},
         VertexData{.position = F32x3{ edge, edge, edge }, .normal = F32x3{ edge, edge, edge }},
+        VertexData{.position = F32x3{ -edge, edge, edge }, .normal = F32x3{ -edge, edge, edge }},
+        // Back positions
+        VertexData{.position = F32x3{ -edge, -edge, -edge }, .normal = F32x3{ -edge, -edge, -edge }},
+        VertexData{.position = F32x3{ edge, -edge, -edge }, .normal = F32x3{ edge, -edge, -edge }},
+        VertexData{.position = F32x3{ edge, edge, -edge }, .normal = F32x3{ edge, edge, -edge }},
+        VertexData{.position = F32x3{ -edge, edge, -edge }, .normal = F32x3{ -edge, edge, -edge }},
     });
 
     var index_data : std.ArrayList(u32) = undefined;
@@ -265,25 +265,31 @@ pub fn createCubePrimitive(allocator : std.mem.Allocator, size : f32) Primitive 
     }
 
     index_data.appendSliceAssumeCapacity(&[index_count]u32 {
-        // Back Quad
-        0,1,2,
-        1,3,2,
-        // Right Quad
-        5,1,6,
-        1,3,6,
-        // Left Quad
-        4,0,7,
-        0,2,7,
-        // Front Quad
-        4,5,7,
-        5,6,7,
+		// front quad
+		0, 1, 2,
+		2, 3, 0,
+		// right quad
+		1, 5, 6,
+		6, 2, 1,
+		// back quad
+		7, 6, 5,
+		5, 4, 7,
+		// left quad
+		4, 0, 3,
+		3, 7, 4,
+		// bottom quad
+		4, 5, 1,
+		1, 0, 4,
+		// top quad
+		3, 2, 6,
+		6, 7, 3
      });
 
     return Primitive {
         .vertex_data = vertex_data,
-        .vertex_count = 8,
+        .vertex_count = vertex_count,
         .index_data = index_data,
-        .index_count = 24,
+        .index_count = index_count,
         .type = .quad
     };
 }
