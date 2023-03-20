@@ -2,7 +2,7 @@ const std = @import("std");
 const mach = @import("mach");
 const gpu = @import("gpu");
 const zmath = @import("zmath");
-const primitives = @import("parametric-primitives.zig");
+const primitives = @import("procedural-primitives.zig");
 const Primitive = primitives.Primitive;
 const VertexData = primitives.VertexData;
 
@@ -99,7 +99,7 @@ pub fn init(core: *mach.Core, allocator : std.mem.Allocator, timer : mach.Timer)
 
     createDepthTexture(core);
 
-    var shader = core.device().createShaderModuleWGSL("primitive.wgsl", @embedFile("primitive.wgsl"));
+    var shader = core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
     defer shader.release();    
  
     pipeline = createPipeline(core, shader, bind_group_layout);    
