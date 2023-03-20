@@ -1,5 +1,5 @@
 const mach = @import("mach");
-const gpu = @import("gpu");
+const gpu = mach.gpu;
 
 pub const Renderer = @This();
 
@@ -9,8 +9,7 @@ pub fn RendererInit(core: *mach.Core) void {
     queue = core.device().getQueue();
 }
 
-pub fn RenderUpdate (core: *mach.Core) void {
-
+pub fn RenderUpdate(core: *mach.Core) void {
     const back_buffer_view = core.swapChain().getCurrentTextureView();
     const color_attachment = gpu.RenderPassColorAttachment{
         .view = back_buffer_view,
@@ -24,7 +23,6 @@ pub fn RenderUpdate (core: *mach.Core) void {
         .color_attachments = &.{color_attachment},
     });
 
-    
     const pass = encoder.beginRenderPass(&render_pass_info);
     pass.end();
     pass.release();

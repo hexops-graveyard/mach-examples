@@ -9,18 +9,17 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn init(app: *App) !void {
     try app.core.init(gpa.allocator(), .{});
-
     renderer.RendererInit(&app.core);
 }
 
 pub fn deinit(app: *App) void {
     defer _ = gpa.deinit();
     defer app.core.deinit();
-
 }
 
 pub fn update(app: *App) !bool {
-    while (app.core.pollEvents()) |event| {
+    var iter = app.core.pollEvents();
+    while (iter.next()) |event| {
         switch (event) {
             .key_press => |ev| {
                 if (ev.key == .space) return true;
@@ -31,6 +30,5 @@ pub fn update(app: *App) !bool {
     }
 
     renderer.RenderUpdate(&app.core);
-    
     return false;
 }
