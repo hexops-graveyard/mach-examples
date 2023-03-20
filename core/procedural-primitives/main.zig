@@ -20,7 +20,7 @@ pub fn init(app: *App) !void {
 
     const timer = try mach.Timer.start();
 
-    renderer.init(&app.core, allocator, timer);
+    try renderer.init(&app.core, allocator, timer);
 }
 
 pub fn deinit(app: *App) void {

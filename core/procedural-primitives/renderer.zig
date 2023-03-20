@@ -30,40 +30,40 @@ var bind_group: *gpu.BindGroup = undefined;
 var primitives_data: [5]PrimitiveRenderData = undefined;
 pub var curr_primitive_index: u4 = 0;
 
-pub fn init(core: *mach.Core, allocator: std.mem.Allocator, timer: mach.Timer) void {
+pub fn init(core: *mach.Core, allocator: std.mem.Allocator, timer: mach.Timer) !void {
     queue = core.device().getQueue();
     app_timer = timer;
 
     {
-        const triangle_primitive = primitives.createTrianglePrimitive(allocator, 1);
+        const triangle_primitive = try primitives.createTrianglePrimitive(allocator, 1);
         primitives_data[0] = PrimitiveRenderData{ .vertex_buffer = createVertexBuffer(core, triangle_primitive), .index_buffer = createIndexBuffer(core, triangle_primitive), .vertex_count = triangle_primitive.vertex_count, .index_count = triangle_primitive.index_count };
         defer triangle_primitive.vertex_data.deinit();
         defer triangle_primitive.index_data.deinit();
     }
 
     {
-        const quad_primitive = primitives.createQuadPrimitive(allocator, 1.4);
+        const quad_primitive = try primitives.createQuadPrimitive(allocator, 1.4);
         primitives_data[1] = PrimitiveRenderData{ .vertex_buffer = createVertexBuffer(core, quad_primitive), .index_buffer = createIndexBuffer(core, quad_primitive), .vertex_count = quad_primitive.vertex_count, .index_count = quad_primitive.index_count };
         defer quad_primitive.vertex_data.deinit();
         defer quad_primitive.index_data.deinit();
     }
 
     {
-        const plane_primitive = primitives.createPlanePrimitive(allocator, 1000, 1000, 1.5);
+        const plane_primitive = try primitives.createPlanePrimitive(allocator, 1000, 1000, 1.5);
         primitives_data[2] = PrimitiveRenderData{ .vertex_buffer = createVertexBuffer(core, plane_primitive), .index_buffer = createIndexBuffer(core, plane_primitive), .vertex_count = plane_primitive.vertex_count, .index_count = plane_primitive.index_count };
         defer plane_primitive.vertex_data.deinit();
         defer plane_primitive.index_data.deinit();
     }
 
     {
-        const circle_primitive = primitives.createCirclePrimitive(allocator, 64, 1);
+        const circle_primitive = try primitives.createCirclePrimitive(allocator, 64, 1);
         primitives_data[3] = PrimitiveRenderData{ .vertex_buffer = createVertexBuffer(core, circle_primitive), .index_buffer = createIndexBuffer(core, circle_primitive), .vertex_count = circle_primitive.vertex_count, .index_count = circle_primitive.index_count };
         defer circle_primitive.vertex_data.deinit();
         defer circle_primitive.index_data.deinit();
     }
 
     {
-        const cube_primitive = primitives.createCubePrimitive(allocator, 0.5);
+        const cube_primitive = try primitives.createCubePrimitive(allocator, 0.5);
         primitives_data[4] = PrimitiveRenderData{ .vertex_buffer = createVertexBuffer(core, cube_primitive), .index_buffer = createIndexBuffer(core, cube_primitive), .vertex_count = cube_primitive.vertex_count, .index_count = cube_primitive.index_count };
         defer cube_primitive.vertex_data.deinit();
         defer cube_primitive.index_data.deinit();
