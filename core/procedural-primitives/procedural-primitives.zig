@@ -189,10 +189,10 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
     var index_data = try std.ArrayList(u32).initCapacity(allocator, 500);
     var indexes: u32 = 0;
 
-    var normal: [500 * 3]f32 = undefined;
+    var temp_normal: [500 * 3]f32 = undefined;
     var temp_vertices: [(500 * 3) + 3]f32 = undefined;
 
-    std.mem.set(f32, &normal, 0.0);
+    std.mem.set(f32, &temp_normal, 0.0);
     std.mem.set(f32, &temp_vertices, 0.0);
 
     temp_vertices[0] = 0.0;
@@ -253,20 +253,20 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
 
             var cross = zmath.cross3(edgeAB, edgeAC);
 
-            normal[indexA * 3] += cross[0];
-            normal[indexA * 3 + 1] += cross[1];
-            normal[indexA * 3 + 2] += cross[2];
-            normal[indexB * 3] += cross[0];
-            normal[indexB * 3 + 1] += cross[1];
-            normal[indexB * 3 + 2] += cross[2];
-            normal[indexC * 3] += cross[0];
-            normal[indexC * 3 + 1] += cross[1];
-            normal[indexC * 3 + 2] += cross[2];
+            temp_normal[indexA * 3] += cross[0];
+            temp_normal[indexA * 3 + 1] += cross[1];
+            temp_normal[indexA * 3 + 2] += cross[2];
+            temp_normal[indexB * 3] += cross[0];
+            temp_normal[indexB * 3 + 1] += cross[1];
+            temp_normal[indexB * 3 + 2] += cross[2];
+            temp_normal[indexC * 3] += cross[0];
+            temp_normal[indexC * 3 + 1] += cross[1];
+            temp_normal[indexC * 3 + 2] += cross[2];
         }
     }
 
     for (0..(indexes / 3)) |i| {
-        vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ temp_vertices[i * 3], temp_vertices[i * 3 + 1], temp_vertices[i * 3 + 2] }, .normal = F32x3{ normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2] } });
+        vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ temp_vertices[i * 3], temp_vertices[i * 3 + 1], temp_vertices[i * 3 + 2] }, .normal = F32x3{ temp_normal[i * 3], temp_normal[i * 3 + 1], temp_normal[i * 3 + 2] } });
     }
 
     return Primitive{ .vertex_data = vertex_data, .vertex_count = indexes / 3, .index_data = index_data, .index_count = indexes, .type = .cylinder };
