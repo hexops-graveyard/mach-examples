@@ -185,12 +185,16 @@ pub fn createCubePrimitive(allocator: std.mem.Allocator, size: f32) !Primitive {
 }
 
 pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height: f32, num_sides: u32) !Primitive {
-    var vertex_data = try std.ArrayList(VertexData).initCapacity(allocator, 500);
-    var index_data = try std.ArrayList(u32).initCapacity(allocator, 500);
+    const alloc_amt_vert: u32 = (num_sides * 12 + 12) / 3;
+    const alloc_amt_idx: u32 = num_sides * 12 + 12;
+
+    var vertex_data = try std.ArrayList(VertexData).initCapacity(allocator, alloc_amt_vert);
+    var index_data = try std.ArrayList(u32).initCapacity(allocator, alloc_amt_idx);
     var indexes: u32 = 0;
 
-    var temp_normal: [500 * 3]f32 = undefined;
-    var temp_vertices: [(500 * 3) + 3]f32 = undefined;
+    // (50 * 12 + 12)/3 = 204 (allocate for 50 side)
+    var temp_normal: [204 * 3]f32 = undefined;
+    var temp_vertices: [204 * 3]f32 = undefined;
 
     std.mem.set(f32, &temp_normal, 0.0);
     std.mem.set(f32, &temp_vertices, 0.0);
