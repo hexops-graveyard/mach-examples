@@ -185,92 +185,89 @@ pub fn createCubePrimitive(allocator: std.mem.Allocator, size: f32) !Primitive {
 }
 
 pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height: f32, num_sides: u32) !Primitive {
-
     var vertex_data = try std.ArrayList(VertexData).initCapacity(allocator, 500);
     var index_data = try std.ArrayList(u32).initCapacity(allocator, 500);
     var indexes: u32 = 0;
 
-    var normal: [500*3]f32 = undefined;
-    var temp_vertices: [(500*3)+3]f32 = undefined;
+    var normal: [500 * 3]f32 = undefined;
+    var temp_vertices: [(500 * 3) + 3]f32 = undefined;
 
     std.mem.set(f32, &normal, 0.0);
     std.mem.set(f32, &temp_vertices, 0.0);
 
     temp_vertices[0] = 0.0;
-    temp_vertices[1] = (height/2.0);
+    temp_vertices[1] = (height / 2.0);
     temp_vertices[2] = 0.0;
 
     temp_vertices[3] = 0.0;
-    temp_vertices[4] = -((height/2.0));
+    temp_vertices[4] = -((height / 2.0));
     temp_vertices[5] = 0.0;
 
     const float_num_tries = @intToFloat(f32, num_sides);
-    for (1..num_sides+1) |i|{
+    for (1..num_sides + 1) |i| {
         var float_i = @intToFloat(f32, i);
         //6.283184 = (360*(3.14/180))
-        var x: f32 = radius * @sin((6.283184/float_num_tries)*float_i);
-        var y: f32 = radius * @cos((6.283184/float_num_tries)*float_i);
+        var x: f32 = radius * @sin((6.283184 / float_num_tries) * float_i);
+        var y: f32 = radius * @cos((6.283184 / float_num_tries) * float_i);
 
-        temp_vertices[i*6] = x;
-        temp_vertices[i*6+1] = (height/2.0);
-        temp_vertices[i*6+2] = y;
+        temp_vertices[i * 6] = x;
+        temp_vertices[i * 6 + 1] = (height / 2.0);
+        temp_vertices[i * 6 + 2] = y;
 
-        temp_vertices[i*6+3] = x;
-        temp_vertices[i*6+4] = -(height/2.0);
-        temp_vertices[i*6+5] = y;
+        temp_vertices[i * 6 + 3] = x;
+        temp_vertices[i * 6 + 4] = -(height / 2.0);
+        temp_vertices[i * 6 + 5] = y;
     }
 
-
-    var group1:u32 = 1;
-    var group2:u32 = 3;
+    var group1: u32 = 1;
+    var group2: u32 = 3;
     indexes = 0;
 
-    for (0..num_sides+1) |_| {
-        if(group2 >= num_sides*2) group2 = 1;
+    for (0..num_sides + 1) |_| {
+        if (group2 >= num_sides * 2) group2 = 1;
         index_data.appendSliceAssumeCapacity(&[_]u32{
-            0, group1+1, group2+1,
-            group1+2, group2+1, group1+1,
-            group1+2, group2+2, group2+1,
-            1, group2+2, group1+2,
+            0,          group1 + 1, group2 + 1,
+            group1 + 2, group2 + 1, group1 + 1,
+            group1 + 2, group2 + 2, group2 + 1,
+            1,          group2 + 2, group1 + 2,
         });
-        indexes+=12;
+        indexes += 12;
         group1 += 2;
         group2 += 2;
     }
 
-    {var i: u32 = 0;
-    while (i < indexes) : (i+=3){
-        var indexA: u32 = index_data.items[i];
-        var indexB: u32 = index_data.items[i+1];
-        var indexC: u32 = index_data.items[i+2];
+    {
+        var i: u32 = 0;
+        while (i < indexes) : (i += 3) {
+            var indexA: u32 = index_data.items[i];
+            var indexB: u32 = index_data.items[i + 1];
+            var indexC: u32 = index_data.items[i + 2];
 
-        var vert1: F32x4 = F32x4{temp_vertices[indexA*3], temp_vertices[indexA*3+1], temp_vertices[indexA*3+2], 1.0};
-        var vert2: F32x4 = F32x4{temp_vertices[indexB*3], temp_vertices[indexB*3+1], temp_vertices[indexB*3+2], 1.0};
-        var vert3: F32x4 = F32x4{temp_vertices[indexC*3], temp_vertices[indexC*3+1], temp_vertices[indexC*3+2], 1.0};
+            var vert1: F32x4 = F32x4{ temp_vertices[indexA * 3], temp_vertices[indexA * 3 + 1], temp_vertices[indexA * 3 + 2], 1.0 };
+            var vert2: F32x4 = F32x4{ temp_vertices[indexB * 3], temp_vertices[indexB * 3 + 1], temp_vertices[indexB * 3 + 2], 1.0 };
+            var vert3: F32x4 = F32x4{ temp_vertices[indexC * 3], temp_vertices[indexC * 3 + 1], temp_vertices[indexC * 3 + 2], 1.0 };
 
-        var edgeAB: F32x4 = vert2 - vert1;
-        var edgeAC: F32x4 = vert3 - vert1;
+            var edgeAB: F32x4 = vert2 - vert1;
+            var edgeAC: F32x4 = vert3 - vert1;
 
-        var cross = zmath.cross3(edgeAB, edgeAC);
-        cross = zmath.normalize3(cross);
+            var cross = zmath.cross3(edgeAB, edgeAC);
+            cross = zmath.normalize3(cross);
 
-        normal[indexA*3] += cross[0];
-        normal[indexA*3+1] += cross[1];
-        normal[indexA*3+2] += cross[2];
-        normal[indexB*3] += cross[0];
-        normal[indexB*3+1] += cross[1];
-        normal[indexB*3+2] += cross[2];
-        normal[indexC*3] += cross[0];
-        normal[indexC*3+1] += cross[1];
-        normal[indexC*3+2] += cross[2];
-    }}
-
-    for(0..(indexes/3)) |i|{
-        vertex_data.appendAssumeCapacity(VertexData{ 
-            .position = F32x3{ temp_vertices[i*3], temp_vertices[i*3+1], temp_vertices[i*3+2] }, 
-            .normal = F32x3{ normal[i*3], normal[i*3+1], normal[i*3+2] } 
-        });
+            normal[indexA * 3] += cross[0];
+            normal[indexA * 3 + 1] += cross[1];
+            normal[indexA * 3 + 2] += cross[2];
+            normal[indexB * 3] += cross[0];
+            normal[indexB * 3 + 1] += cross[1];
+            normal[indexB * 3 + 2] += cross[2];
+            normal[indexC * 3] += cross[0];
+            normal[indexC * 3 + 1] += cross[1];
+            normal[indexC * 3 + 2] += cross[2];
+        }
     }
 
-    return Primitive{ .vertex_data = vertex_data, .vertex_count = indexes/3, .index_data = index_data, .index_count = indexes, .type = .cylinder };
+    for (0..(indexes / 3)) |i| {
+        vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ temp_vertices[i * 3], temp_vertices[i * 3 + 1], temp_vertices[i * 3 + 2] }, .normal = F32x3{ normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2] } });
+    }
+
+    return Primitive{ .vertex_data = vertex_data, .vertex_count = indexes / 3, .index_data = index_data, .index_count = indexes, .type = .cylinder };
 }
