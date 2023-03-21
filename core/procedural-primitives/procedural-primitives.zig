@@ -203,12 +203,13 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
     temp_vertices[4] = -((height / 2.0));
     temp_vertices[5] = 0.0;
 
-    const float_num_tries = @intToFloat(f32, num_sides);
-    for (1..num_sides + 1) |i| {
+    const angle = 2.0 * PI / @intToFloat(f32, num_sides);
+
+    for (0..num_sides + 1) |i| {
         var float_i = @intToFloat(f32, i);
-        //6.283184 = (360*(3.14/180))
-        var x: f32 = radius * @sin((6.283184 / float_num_tries) * float_i);
-        var y: f32 = radius * @cos((6.283184 / float_num_tries) * float_i);
+
+        var x: f32 = radius * @sin(angle * float_i);
+        var y: f32 = radius * @cos(angle * float_i);
 
         temp_vertices[i * 6] = x;
         temp_vertices[i * 6 + 1] = (height / 2.0);
@@ -251,7 +252,6 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
             var edgeAC: F32x4 = vert3 - vert1;
 
             var cross = zmath.cross3(edgeAB, edgeAC);
-            cross = zmath.normalize3(cross);
 
             normal[indexA * 3] += cross[0];
             normal[indexA * 3 + 1] += cross[1];
