@@ -196,9 +196,6 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
     var temp_normal: [204 * 3]f32 = undefined;
     var temp_vertices: [204 * 3]f32 = undefined;
 
-    std.mem.set(f32, &temp_normal, 0.0);
-    std.mem.set(f32, &temp_vertices, 0.0);
-
     temp_vertices[0] = 0.0;
     temp_vertices[1] = (height / 2.0);
     temp_vertices[2] = 0.0;
