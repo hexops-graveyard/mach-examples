@@ -190,11 +190,10 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
 
     var vertex_data = try std.ArrayList(VertexData).initCapacity(allocator, alloc_amt_vert);
     var index_data = try std.ArrayList(u32).initCapacity(allocator, alloc_amt_idx);
-    var indexes: u32 = 0;
 
-    // (50 * 12 + 12)/3 = 204 (allocate for 50 side)
-    var temp_normal: [204 * 3]f32 = undefined;
-    var temp_vertices: [204 * 3]f32 = undefined;
+    // (50 * 12)/3 = 200 (allocate for 50 side)
+    var temp_normal: [200 * 3]f32 = undefined;
+    var temp_vertices: [200 * 3]f32 = undefined;
 
     temp_vertices[0] = 0.0;
     temp_vertices[1] = (height / 2.0);
@@ -232,7 +231,6 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
             group1 + 2, group2 + 2, group2 + 1,
             group2 + 2, group1 + 2, 1,
         });
-        indexes += 12;
         group1 += 2;
         group2 += 2;
     }
@@ -269,5 +267,5 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
         vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ temp_vertices[i * 3], temp_vertices[i * 3 + 1], temp_vertices[i * 3 + 2] }, .normal = F32x3{ temp_normal[i * 3], temp_normal[i * 3 + 1], temp_normal[i * 3 + 2] } });
     }
 
-    return Primitive{ .vertex_data = vertex_data, .vertex_count = indexes / 3, .index_data = index_data, .index_count = indexes, .type = .cylinder };
+    return Primitive{ .vertex_data = vertex_data, .vertex_count = alloc_amt_vert, .index_data = index_data, .index_count = alloc_amt_idx, .type = .cylinder };
 }
