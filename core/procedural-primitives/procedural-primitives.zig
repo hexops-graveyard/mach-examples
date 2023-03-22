@@ -185,8 +185,8 @@ pub fn createCubePrimitive(allocator: std.mem.Allocator, size: f32) !Primitive {
 }
 
 pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height: f32, num_sides: u32) !Primitive {
-    const alloc_amt_vert: u32 = (num_sides * 12 + 12) / 3;
-    const alloc_amt_idx: u32 = num_sides * 12 + 12;
+    const alloc_amt_vert: u32 = (num_sides * 12) / 3;
+    const alloc_amt_idx: u32 = num_sides * 12;
 
     var vertex_data = try std.ArrayList(VertexData).initCapacity(allocator, alloc_amt_vert);
     var index_data = try std.ArrayList(u32).initCapacity(allocator, alloc_amt_idx);
@@ -206,11 +206,11 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
 
     const angle = 2.0 * PI / @intToFloat(f32, num_sides);
 
-    for (0..num_sides + 1) |i| {
+    for (1..num_sides + 1) |i| {
         var float_i = @intToFloat(f32, i);
 
-        var x: f32 = radius * @sin(angle * float_i);
-        var y: f32 = radius * @cos(angle * float_i);
+        const x: f32 = radius * zmath.sin(angle * float_i);
+        const y: f32 = radius * zmath.cos(angle * float_i);
 
         temp_vertices[i * 6] = x;
         temp_vertices[i * 6 + 1] = (height / 2.0);
@@ -223,15 +223,14 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
 
     var group1: u32 = 1;
     var group2: u32 = 3;
-    indexes = 0;
 
-    for (0..num_sides + 1) |_| {
+    for (0..num_sides) |_| {
         if (group2 >= num_sides * 2) group2 = 1;
         index_data.appendSliceAssumeCapacity(&[_]u32{
             0,          group1 + 1, group2 + 1,
-            group1 + 2, group2 + 1, group1 + 1,
+            group1 + 1, group1 + 2, group2 + 1,
             group1 + 2, group2 + 2, group2 + 1,
-            1,          group2 + 2, group1 + 2,
+            group2 + 2, group1 + 2, 1,
         });
         indexes += 12;
         group1 += 2;
@@ -240,7 +239,7 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
 
     {
         var i: u32 = 0;
-        while (i < indexes) : (i += 3) {
+        while (i < alloc_amt_idx) : (i += 3) {
             var indexA: u32 = index_data.items[i];
             var indexB: u32 = index_data.items[i + 1];
             var indexC: u32 = index_data.items[i + 2];
@@ -266,7 +265,7 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
         }
     }
 
-    for (0..(indexes / 3)) |i| {
+    for (0..alloc_amt_vert) |i| {
         vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ temp_vertices[i * 3], temp_vertices[i * 3 + 1], temp_vertices[i * 3 + 2] }, .normal = F32x3{ temp_normal[i * 3], temp_normal[i * 3 + 1], temp_normal[i * 3 + 2] } });
     }
 
