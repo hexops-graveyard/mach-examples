@@ -3,16 +3,47 @@ const mach = @import("mach");
 const gpu = mach.gpu;
 const zm = @import("zmath");
 const zigimg = @import("zigimg");
-const Vertex = @import("cube_mesh.zig").Vertex;
-const vertices = @import("cube_mesh.zig").vertices;
+// const Vertex = @import("cube_mesh.zig").Vertex;
+// const vertices = @import("cube_mesh.zig").vertices;
 const assets = @import("assets");
 
 pub const App = @This();
 
+pub const Vertex = extern struct {
+    pos: @Vector(4, f32),
+    uv: @Vector(2, f32),
+};
 const UniformBufferObject = struct {
     mat: zm.Mat,
 };
+const Sprite = struct {
+    pos_x: f32,
+    pos_y: f32,
+    width: f32,
+    height: f32,
+};
+const SpriteSheet = struct {
+    width: f32,
+    height: f32,
+};
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+
+const sheet = SpriteSheet{ .width = 384.0, .height = 96.0 };
+const sprite = Sprite{ .pos_x = 0.0, .pos_y = 0.0, .width = 64.0, .height = 96.0 };
+const vertices = [_]Vertex{
+    // Vertex 0 - bottom-left
+    .{ .pos = .{ 0.0, 0.0, 0.0, 1.0 }, .uv = .{ sprite.pos_x / sheet.width, (sprite.pos_y + sprite.height) / sheet.height } },
+    // Vertex 1 - top-left
+    .{ .pos = .{ 0.0, 0.0, sprite.height, 1.0 }, .uv = .{ sprite.pos_x / sheet.width, sprite.pos_y / sheet.height } },
+    // Vertex 2 - bottom-right
+    .{ .pos = .{ sprite.width, 0.0, 0.0, 1.0 }, .uv = .{ (sprite.pos_x + sprite.width) / sheet.width, (sprite.pos_y + sprite.height) / sheet.height } },
+    // Vertex 3 - bottom-right
+    .{ .pos = .{ sprite.width, 0.0, 0.0, 1.0 }, .uv = .{ (sprite.pos_x + sprite.width) / sheet.width, (sprite.pos_y + sprite.height) / sheet.height } },
+    // Vertex 4 - top-left
+    .{ .pos = .{ 0.0, 0.0, sprite.height, 1.0 }, .uv = .{ sprite.pos_x / sheet.width, sprite.pos_y / sheet.height } },
+    // Vertex 5 - top-right
+    .{ .pos = .{ sprite.width, 0.0, sprite.height, 1.0 }, .uv = .{ (sprite.pos_x + sprite.width) / sheet.width, sprite.pos_y / sheet.height } },
+};
 
 core: mach.Core,
 timer: mach.Timer,
@@ -32,7 +63,7 @@ pub fn init(app: *App) !void {
 
     entity_position = zm.f32x4(0, 0, 0, 0);
 
-    const shader_module = app.core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
+    const shader_module = app.core.device().createShaderModuleWGSL("simple-shader.wgsl", @embedFile("simple-shader.wgsl"));
 
     const vertex_attributes = [_]gpu.VertexAttribute{
         .{ .format = .float32x4, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
@@ -90,13 +121,22 @@ pub fn init(app: *App) !void {
     };
     const pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
 
+    // const vertex_buffer = app.core.device().createBuffer(&.{
+    //     .usage = .{ .vertex = true },
+    //     .size = @sizeOf(Vertex) * vertices.len,
+    //     .mapped_at_creation = true,
+    // });
+    // var vertex_mapped = vertex_buffer.getMappedRange(Vertex, 0, vertices.len);
+    // std.mem.copy(Vertex, vertex_mapped.?, vertices[0..]);
+    // vertex_buffer.unmap();
     const vertex_buffer = app.core.device().createBuffer(&.{
         .usage = .{ .vertex = true },
-        .size = @sizeOf(Vertex) * vertices.len,
+        // .size = @sizeOf(Vertex) * vertices.len,
+        .size = 1152,
         .mapped_at_creation = true,
     });
-    var vertex_mapped = vertex_buffer.getMappedRange(Vertex, 0, vertices.len);
-    std.mem.copy(Vertex, vertex_mapped.?, vertices[0..]);
+    var sprite_mapped = vertex_buffer.getMappedRange(Vertex, 0, vertices.len);
+    std.mem.copy(Vertex, sprite_mapped.?, vertices[0..]);
     vertex_buffer.unmap();
 
     // Create a sampler with linear filtering for smooth interpolation.
@@ -105,7 +145,9 @@ pub fn init(app: *App) !void {
         .min_filter = .linear,
     });
     const queue = app.core.device().getQueue();
-    var img = try zigimg.Image.fromMemory(allocator, assets.gotta_go_fast_image);
+    // var img = try zigimg.Image.fromMemory(allocator, assets.gotta_go_fast_image);
+    // defer img.deinit();
+    var img = try zigimg.Image.fromMemory(allocator, assets.example_spritesheet_image);
     defer img.deinit();
     const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
     const cube_texture = app.core.device().createTexture(&.{

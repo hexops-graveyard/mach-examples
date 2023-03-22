@@ -17,6 +17,9 @@ pub const venus_model_m3d = @embedFile("venus.m3d");
 const gotta_go_fast_image_path = root_path ++ "gotta-go-fast.png";
 pub const gotta_go_fast_image = @embedFile("gotta-go-fast.png");
 
+const example_spritesheet_image_path = root_path ++ "uwnh-sprites.png";
+pub const example_spritesheet_image = @embedFile("uwnh-sprites.png");
+
 pub const stanford_dragon = struct {
     pub const path = root_path ++ "stanford_dragon.m3d";
 };

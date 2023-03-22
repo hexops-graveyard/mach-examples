@@ -15,8 +15,8 @@ fn vertex_main(
   @location(1) uv : vec2<f32>,
   @builtin(vertex_index) VertexIndex : u32
 ) -> VertexOutput {
-  var width = 100.0;
-  var height = 100.0;
+  var width = 64.0;
+  var height = 96.0;
   var positions = array<vec2<f32>, 6>(
       vec2<f32>(0.0, 0.0),      // bottom-left
       vec2<f32>(0.0, height),   // top-left
@@ -32,6 +32,18 @@ fn vertex_main(
       vec2<f32>(1.0, 0.0), // bottom-right
       vec2<f32>(0.0, 1.0), // top-left
       vec2<f32>(1.0, 1.0), // top-right
+  );
+  var pos = vec4<f32>(positions[VertexIndex % 6].x, 0.0, positions[VertexIndex % 6].y, 1.0);
+
+  var width = 64.0;
+  var height = 96.0;
+  var positions = array<vec2<f32>, 6>(
+      vec2<f32>(0.0, 0.0),      // bottom-left
+      vec2<f32>(0.0, height),   // top-left
+      vec2<f32>(width, 0.0),    // bottom-right
+      vec2<f32>(width, 0.0),    // bottom-right
+      vec2<f32>(0.0, height),   // top-left
+      vec2<f32>(width, height), // top-right
   );
   var pos = vec4<f32>(positions[VertexIndex % 6].x, 0.0, positions[VertexIndex % 6].y, 1.0);
 
