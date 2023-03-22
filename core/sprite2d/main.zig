@@ -21,6 +21,8 @@ const Sprite = struct {
     pos_y: f32,
     width: f32,
     height: f32,
+    world_x: f32,
+    world_y: f32,
 };
 const SpriteSheet = struct {
     width: f32,
@@ -29,20 +31,36 @@ const SpriteSheet = struct {
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
 const sheet = SpriteSheet{ .width = 384.0, .height = 96.0 };
-const sprite = Sprite{ .pos_x = 0.0, .pos_y = 0.0, .width = 64.0, .height = 96.0 };
+const sprite = Sprite{ .world_x = 0.0, .world_y = 0.0, .pos_x = 0.0, .pos_y = 0.0, .width = 64.0, .height = 96.0 };
+const sprite_two = Sprite{ .world_x = 128.0, .world_y = 128.0, .pos_x = 64.0, .pos_y = 0.0, .width = 64.0, .height = 96.0 };
 const vertices = [_]Vertex{
     // Vertex 0 - bottom-left
-    .{ .pos = .{ 0.0, 0.0, 0.0, 1.0 }, .uv = .{ sprite.pos_x / sheet.width, (sprite.pos_y + sprite.height) / sheet.height } },
+    .{ .pos = .{ sprite.world_x + 0.0, 0.0, sprite.world_y + 0.0, 1.0 }, .uv = .{ sprite.pos_x / sheet.width, (sprite.pos_y + sprite.height) / sheet.height } },
     // Vertex 1 - top-left
-    .{ .pos = .{ 0.0, 0.0, sprite.height, 1.0 }, .uv = .{ sprite.pos_x / sheet.width, sprite.pos_y / sheet.height } },
+    .{ .pos = .{ sprite.world_x + 0.0, 0.0, (sprite.world_y + sprite.height), 1.0 }, .uv = .{ sprite.pos_x / sheet.width, sprite.pos_y / sheet.height } },
     // Vertex 2 - bottom-right
-    .{ .pos = .{ sprite.width, 0.0, 0.0, 1.0 }, .uv = .{ (sprite.pos_x + sprite.width) / sheet.width, (sprite.pos_y + sprite.height) / sheet.height } },
+    .{ .pos = .{ (sprite.world_x + sprite.width), 0.0, sprite.world_y + 0.0, 1.0 }, .uv = .{ (sprite.pos_x + sprite.width) / sheet.width, (sprite.pos_y + sprite.height) / sheet.height } },
     // Vertex 3 - bottom-right
-    .{ .pos = .{ sprite.width, 0.0, 0.0, 1.0 }, .uv = .{ (sprite.pos_x + sprite.width) / sheet.width, (sprite.pos_y + sprite.height) / sheet.height } },
+    .{ .pos = .{ sprite.width, 0.0, sprite.world_y + 0.0, 1.0 }, .uv = .{ (sprite.pos_x + sprite.width) / sheet.width, (sprite.pos_y + sprite.height) / sheet.height } },
     // Vertex 4 - top-left
-    .{ .pos = .{ 0.0, 0.0, sprite.height, 1.0 }, .uv = .{ sprite.pos_x / sheet.width, sprite.pos_y / sheet.height } },
+    .{ .pos = .{ sprite.world_x + 0.0, 0.0, (sprite.world_y + sprite.height), 1.0 }, .uv = .{ sprite.pos_x / sheet.width, sprite.pos_y / sheet.height } },
     // Vertex 5 - top-right
-    .{ .pos = .{ sprite.width, 0.0, sprite.height, 1.0 }, .uv = .{ (sprite.pos_x + sprite.width) / sheet.width, sprite.pos_y / sheet.height } },
+    .{ .pos = .{ (sprite.world_x + sprite.width), 0.0, (sprite.world_y + sprite.height), 1.0 }, .uv = .{ (sprite.pos_x + sprite.width) / sheet.width, sprite.pos_y / sheet.height } },
+
+    // SECOND SPRITE
+
+    // Vertex 0 - bottom-left
+    .{ .pos = .{ sprite_two.world_x + 0.0, 0.0, sprite_two.world_y + 0.0, 1.0 }, .uv = .{ sprite_two.pos_x / sheet.width, (sprite_two.pos_y + sprite_two.height) / sheet.height } },
+    // Vertex 1 - top-left
+    .{ .pos = .{ sprite_two.world_x + 0.0, 0.0, (sprite_two.world_y + sprite_two.height), 1.0 }, .uv = .{ sprite_two.pos_x / sheet.width, sprite_two.pos_y / sheet.height } },
+    // Vertex 2 - bottom-right
+    .{ .pos = .{ (sprite_two.world_x + sprite_two.width), 0.0, sprite_two.world_y + 0.0, 1.0 }, .uv = .{ (sprite_two.pos_x + sprite_two.width) / sheet.width, (sprite_two.pos_y + sprite_two.height) / sheet.height } },
+    // Vertex 3 - bottom-right
+    .{ .pos = .{ (sprite_two.world_x + sprite_two.width), 0.0, sprite_two.world_y + 0.0, 1.0 }, .uv = .{ (sprite_two.pos_x + sprite_two.width) / sheet.width, (sprite_two.pos_y + sprite_two.height) / sheet.height } },
+    // Vertex 4 - top-left
+    .{ .pos = .{ sprite_two.world_x + 0.0, 0.0, (sprite_two.world_y + sprite_two.height), 1.0 }, .uv = .{ sprite_two.pos_x / sheet.width, sprite_two.pos_y / sheet.height } },
+    // Vertex 5 - top-right
+    .{ .pos = .{ (sprite_two.world_x + sprite_two.width), 0.0, (sprite_two.world_y + sprite_two.height), 1.0 }, .uv = .{ (sprite_two.pos_x + sprite_two.width) / sheet.width, sprite_two.pos_y / sheet.height } },
 };
 
 core: mach.Core,
@@ -338,7 +356,7 @@ pub fn update(app: *App) !bool {
     pass.setPipeline(app.pipeline);
     pass.setVertexBuffer(0, app.vertex_buffer, 0, @sizeOf(Vertex) * vertices.len);
     pass.setBindGroup(0, app.bind_group, &.{});
-    pass.draw(6, 1, 0, 0);
+    pass.draw(12, 1, 0, 0);
     pass.end();
     pass.release();
 
