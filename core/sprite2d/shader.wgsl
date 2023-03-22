@@ -35,18 +35,6 @@ fn vertex_main(
   );
   var pos = vec4<f32>(positions[VertexIndex % 6].x, 0.0, positions[VertexIndex % 6].y, 1.0);
 
-  var width = 64.0;
-  var height = 96.0;
-  var positions = array<vec2<f32>, 6>(
-      vec2<f32>(0.0, 0.0),      // bottom-left
-      vec2<f32>(0.0, height),   // top-left
-      vec2<f32>(width, 0.0),    // bottom-right
-      vec2<f32>(width, 0.0),    // bottom-right
-      vec2<f32>(0.0, height),   // top-left
-      vec2<f32>(width, height), // top-right
-  );
-  var pos = vec4<f32>(positions[VertexIndex % 6].x, 0.0, positions[VertexIndex % 6].y, 1.0);
-
   var output : VertexOutput;
   output.Position = pos * uniforms.modelViewProjectionMatrix;
   output.fragUV = uvs[VertexIndex % 6];
