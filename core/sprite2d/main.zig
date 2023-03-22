@@ -331,6 +331,7 @@ pub fn update(app: *App) !bool {
 
     {
         const model = zm.translation(entity_position[0], entity_position[1], entity_position[2]);
+        sprite_two.world_y += entity_position[1];
         const view = zm.lookAtRh(
             zm.f32x4(0, 1000, 0, 1),
             zm.f32x4(0, 0, 0, 1),
