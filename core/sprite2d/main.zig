@@ -20,12 +20,26 @@ const Sprite = extern struct {
     size: Vec2,
     world_pos: Vec2,
     sheet_size: Vec2,
+    frames: SpriteFrames,
+};
+const SpriteFrames = extern struct {
+    up: Vec2,
+    down: Vec2,
+    left: Vec2,
+    right: Vec2,
+};
+const JSONFrames = struct {
+    up: []f32,
+    down: []f32,
+    left: []f32,
+    right: []f32,
 };
 const JSONSprite = struct {
     pos: []f32,
     size: []f32,
     world_pos: []f32,
     is_player: bool = false,
+    frames: JSONFrames,
 };
 const SpriteSheet = struct {
     width: f32,
@@ -49,6 +63,7 @@ sheet: SpriteSheet,
 sprites_buffer: *gpu.Buffer,
 sprites: std.ArrayList(Sprite),
 player_pos: Vec2,
+player_direction: f32,
 direction: Vec2,
 player_sprite_index: usize,
 
@@ -67,6 +82,7 @@ pub fn init(app: *App) !void {
     defer std.json.parseFree(JSONData, root, .{ .allocator = allocator });
 
     app.player_pos = Vec2{ 0, 0 };
+    app.player_direction = 0.0;
     app.direction = Vec2{ 0, 0 };
     app.sheet = root.sheet;
     std.log.info("Sheet Dimensions: {} {}", .{ app.sheet.width, app.sheet.height });
@@ -83,6 +99,7 @@ pub fn init(app: *App) !void {
             .size = Vec2{ sprite.size[0], sprite.size[1] },
             .world_pos = Vec2{ sprite.world_pos[0], sprite.world_pos[1] },
             .sheet_size = Vec2{ app.sheet.width, app.sheet.height },
+            .frames = SpriteFrames{ .up = Vec2{ sprite.frames.up[0], sprite.frames.up[1] }, .down = Vec2{ sprite.frames.down[0], sprite.frames.down[1] }, .left = Vec2{ sprite.frames.left[0], sprite.frames.left[1] }, .right = Vec2{ sprite.frames.right[0], sprite.frames.right[1] } },
         });
     }
     std.log.info("Number of sprites: {}", .{app.sprites.items.len});
@@ -211,10 +228,22 @@ pub fn update(app: *App) !bool {
             .key_press => |ev| {
                 switch (ev.key) {
                     .space => return true,
-                    .left => app.direction[0] += 1,
-                    .right => app.direction[0] -= 1,
-                    .up => app.direction[1] += 1,
-                    .down => app.direction[1] -= 1,
+                    .left => {
+                        app.direction[0] += 1;
+                        app.player_direction = 2.0;
+                    },
+                    .right => {
+                        app.direction[0] -= 1;
+                        app.player_direction = 3.0;
+                    },
+                    .up => {
+                        app.direction[1] += 1;
+                        app.player_direction = 0.0;
+                    },
+                    .down => {
+                        app.direction[1] -= 1;
+                        app.player_direction = 1.0;
+                    },
                     else => {},
                 }
             },
@@ -267,6 +296,15 @@ fn render(app: *App) !void {
     });
 
     const player_sprite = &app.sprites.items[app.player_sprite_index];
+    if (app.player_direction == 0.0) {
+        player_sprite.pos = player_sprite.frames.up;
+    } else if (app.player_direction == 1.0) {
+        player_sprite.pos = player_sprite.frames.down;
+    } else if (app.player_direction == 2.0) {
+        player_sprite.pos = player_sprite.frames.left;
+    } else if (app.player_direction == 3.0) {
+        player_sprite.pos = player_sprite.frames.right;
+    }
     player_sprite.world_pos = app.player_pos;
 
     // One pixel in our scene will equal one window pixel (i.e. be roughly the same size
