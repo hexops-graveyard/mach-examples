@@ -17,51 +17,54 @@ const UniformBufferObject = struct {
     mat: zm.Mat,
 };
 const Sprite = struct {
+    const Self = @This();
+
+    fn init(pos_x: f32, pos_y: f32, width: f32, height: f32, world_x: f32, world_y: f32) Self {
+        var self: Self = .{
+            .pos_x = pos_x,
+            .pos_y = pos_y,
+            .width = width,
+            .height = height,
+            .world_x = world_x,
+            .world_y = world_y,
+        };
+
+        return self;
+    }
+
     pos_x: f32,
     pos_y: f32,
     width: f32,
     height: f32,
     world_x: f32,
     world_y: f32,
+
+    fn updateWorldX(self: *Self, newValue: f32) void {
+        self.world_x += newValue / 12;
+    }
+
+    fn getVertices(self: *Self, sheet: SpriteSheet) []Vertex {
+        return &[_]Vertex{
+            // Vertex 0 - bottom-left
+            .{ .pos = .{ self.world_x + 0.0, 0.0, self.world_y + 0.0, 1.0 }, .uv = .{ self.pos_x / sheet.width, (self.pos_y + self.height) / sheet.height } },
+            // Vertex 1 - top-left
+            .{ .pos = .{ self.world_x + 0.0, 0.0, (self.world_y + self.height), 1.0 }, .uv = .{ self.pos_x / sheet.width, self.pos_y / sheet.height } },
+            // Vertex 2 - bottom-right
+            .{ .pos = .{ (self.world_x + self.width), 0.0, self.world_y + 0.0, 1.0 }, .uv = .{ (self.pos_x + self.width) / sheet.width, (self.pos_y + self.height) / sheet.height } },
+            // Vertex 3 - bottom-right
+            .{ .pos = .{ (self.world_x + self.width), 0.0, self.world_y + 0.0, 1.0 }, .uv = .{ (self.pos_x + self.width) / sheet.width, (self.pos_y + self.height) / sheet.height } },
+            // Vertex 4 - top-left
+            .{ .pos = .{ self.world_x + 0.0, 0.0, (self.world_y + self.height), 1.0 }, .uv = .{ self.pos_x / sheet.width, self.pos_y / sheet.height } },
+            // Vertex 5 - top-right
+            .{ .pos = .{ (self.world_x + self.width), 0.0, (self.world_y + self.height), 1.0 }, .uv = .{ (self.pos_x + self.width) / sheet.width, self.pos_y / sheet.height } },
+        };
+    }
 };
 const SpriteSheet = struct {
     width: f32,
     height: f32,
 };
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-
-const sheet = SpriteSheet{ .width = 384.0, .height = 96.0 };
-const sprite = Sprite{ .world_x = 0.0, .world_y = 0.0, .pos_x = 0.0, .pos_y = 0.0, .width = 64.0, .height = 96.0 };
-const sprite_two = Sprite{ .world_x = 128.0, .world_y = 128.0, .pos_x = 64.0, .pos_y = 0.0, .width = 64.0, .height = 96.0 };
-const vertices = [_]Vertex{
-    // Vertex 0 - bottom-left
-    .{ .pos = .{ sprite.world_x + 0.0, 0.0, sprite.world_y + 0.0, 1.0 }, .uv = .{ sprite.pos_x / sheet.width, (sprite.pos_y + sprite.height) / sheet.height } },
-    // Vertex 1 - top-left
-    .{ .pos = .{ sprite.world_x + 0.0, 0.0, (sprite.world_y + sprite.height), 1.0 }, .uv = .{ sprite.pos_x / sheet.width, sprite.pos_y / sheet.height } },
-    // Vertex 2 - bottom-right
-    .{ .pos = .{ (sprite.world_x + sprite.width), 0.0, sprite.world_y + 0.0, 1.0 }, .uv = .{ (sprite.pos_x + sprite.width) / sheet.width, (sprite.pos_y + sprite.height) / sheet.height } },
-    // Vertex 3 - bottom-right
-    .{ .pos = .{ sprite.width, 0.0, sprite.world_y + 0.0, 1.0 }, .uv = .{ (sprite.pos_x + sprite.width) / sheet.width, (sprite.pos_y + sprite.height) / sheet.height } },
-    // Vertex 4 - top-left
-    .{ .pos = .{ sprite.world_x + 0.0, 0.0, (sprite.world_y + sprite.height), 1.0 }, .uv = .{ sprite.pos_x / sheet.width, sprite.pos_y / sheet.height } },
-    // Vertex 5 - top-right
-    .{ .pos = .{ (sprite.world_x + sprite.width), 0.0, (sprite.world_y + sprite.height), 1.0 }, .uv = .{ (sprite.pos_x + sprite.width) / sheet.width, sprite.pos_y / sheet.height } },
-
-    // SECOND SPRITE
-
-    // Vertex 0 - bottom-left
-    .{ .pos = .{ sprite_two.world_x + 0.0, 0.0, sprite_two.world_y + 0.0, 1.0 }, .uv = .{ sprite_two.pos_x / sheet.width, (sprite_two.pos_y + sprite_two.height) / sheet.height } },
-    // Vertex 1 - top-left
-    .{ .pos = .{ sprite_two.world_x + 0.0, 0.0, (sprite_two.world_y + sprite_two.height), 1.0 }, .uv = .{ sprite_two.pos_x / sheet.width, sprite_two.pos_y / sheet.height } },
-    // Vertex 2 - bottom-right
-    .{ .pos = .{ (sprite_two.world_x + sprite_two.width), 0.0, sprite_two.world_y + 0.0, 1.0 }, .uv = .{ (sprite_two.pos_x + sprite_two.width) / sheet.width, (sprite_two.pos_y + sprite_two.height) / sheet.height } },
-    // Vertex 3 - bottom-right
-    .{ .pos = .{ (sprite_two.world_x + sprite_two.width), 0.0, sprite_two.world_y + 0.0, 1.0 }, .uv = .{ (sprite_two.pos_x + sprite_two.width) / sheet.width, (sprite_two.pos_y + sprite_two.height) / sheet.height } },
-    // Vertex 4 - top-left
-    .{ .pos = .{ sprite_two.world_x + 0.0, 0.0, (sprite_two.world_y + sprite_two.height), 1.0 }, .uv = .{ sprite_two.pos_x / sheet.width, sprite_two.pos_y / sheet.height } },
-    // Vertex 5 - top-right
-    .{ .pos = .{ (sprite_two.world_x + sprite_two.width), 0.0, (sprite_two.world_y + sprite_two.height), 1.0 }, .uv = .{ (sprite_two.pos_x + sprite_two.width) / sheet.width, sprite_two.pos_y / sheet.height } },
-};
 
 core: mach.Core,
 timer: mach.Timer,
@@ -74,12 +77,29 @@ uniform_buffer: *gpu.Buffer,
 bind_group: *gpu.BindGroup,
 depth_texture: *gpu.Texture,
 depth_texture_view: *gpu.TextureView,
+sprite: Sprite,
+sprite_two: Sprite,
+sheet: SpriteSheet,
+vertices: [12]Vertex,
 
 pub fn init(app: *App) !void {
     const allocator = gpa.allocator();
     try app.core.init(allocator, .{});
 
     entity_position = zm.f32x4(0, 0, 0, 0);
+
+    app.sprite = Sprite.init(0.0, 0.0, 64.0, 96.0, 0.0, 0.0);
+    app.sprite_two = Sprite.init(64.0, 0.0, 64.0, 96.0, 128.0, 128.0);
+    app.sheet = SpriteSheet{ .width = 384.0, .height = 96.0 };
+    var i: usize = 0;
+    for (app.sprite.getVertices(app.sheet)) |element| {
+        app.vertices[i] = element;
+        i += 1;
+    }
+    for (app.sprite_two.getVertices(app.sheet)) |element| {
+        app.vertices[i] = element;
+        i += 1;
+    }
 
     const shader_module = app.core.device().createShaderModuleWGSL("simple-shader.wgsl", @embedFile("simple-shader.wgsl"));
 
@@ -153,8 +173,8 @@ pub fn init(app: *App) !void {
         .size = 1152,
         .mapped_at_creation = true,
     });
-    var sprite_mapped = vertex_buffer.getMappedRange(Vertex, 0, vertices.len);
-    std.mem.copy(Vertex, sprite_mapped.?, vertices[0..]);
+    var sprite_mapped = vertex_buffer.getMappedRange(Vertex, 0, app.vertices.len);
+    std.mem.copy(Vertex, sprite_mapped.?, app.vertices[0..]);
     vertex_buffer.unmap();
 
     // Create a sampler with linear filtering for smooth interpolation.
@@ -331,7 +351,26 @@ pub fn update(app: *App) !bool {
 
     {
         const model = zm.translation(entity_position[0], entity_position[1], entity_position[2]);
-        sprite_two.world_y += entity_position[1];
+        app.sprite_two.updateWorldX(entity_position[0]);
+        var i: usize = 0;
+        for (app.sprite.getVertices(app.sheet)) |element| {
+            app.vertices[i] = element;
+            i += 1;
+        }
+        for (app.sprite_two.getVertices(app.sheet)) |element| {
+            app.vertices[i] = element;
+            i += 1;
+        }
+        const vertex_buffer = app.core.device().createBuffer(&.{
+            .usage = .{ .vertex = true },
+            // .size = @sizeOf(Vertex) * vertices.len,
+            .size = 1152,
+            .mapped_at_creation = true,
+        });
+        var sprite_mapped = vertex_buffer.getMappedRange(Vertex, 0, app.vertices.len);
+        std.mem.copy(Vertex, sprite_mapped.?, app.vertices[0..]);
+        vertex_buffer.unmap();
+        app.vertex_buffer = vertex_buffer;
         const view = zm.lookAtRh(
             zm.f32x4(0, 1000, 0, 1),
             zm.f32x4(0, 0, 0, 1),
@@ -355,7 +394,7 @@ pub fn update(app: *App) !bool {
 
     const pass = encoder.beginRenderPass(&render_pass_info);
     pass.setPipeline(app.pipeline);
-    pass.setVertexBuffer(0, app.vertex_buffer, 0, @sizeOf(Vertex) * vertices.len);
+    pass.setVertexBuffer(0, app.vertex_buffer, 0, @sizeOf(Vertex) * app.vertices.len);
     pass.setBindGroup(0, app.bind_group, &.{});
     pass.draw(12, 1, 0, 0);
     pass.end();
