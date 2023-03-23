@@ -16,10 +16,15 @@ pub const Vertex = extern struct {
 const UniformBufferObject = struct {
     mat: zm.Mat,
 };
-const Sprite = struct {
+const SpriteShaderData = struct {
+    world_position: @Vector(2, f32),
+    texture_position: @Vector(2, f32),
+    texture_dimensions: @Vector(2, f32),
+};
+const Sprite = extern struct {
     const Self = @This();
 
-    fn init(pos_x: f32, pos_y: f32, width: f32, height: f32, world_x: f32, world_y: f32) Self {
+    fn init(pos_x: f32, pos_y: f32, width: f32, height: f32, world_x: f32, world_y: f32, sheet_width: f32, sheet_height: f32) Self {
         var self: Self = .{
             .pos_x = pos_x,
             .pos_y = pos_y,
@@ -27,6 +32,8 @@ const Sprite = struct {
             .height = height,
             .world_x = world_x,
             .world_y = world_y,
+            .sheet_width = sheet_width,
+            .sheet_height = sheet_height,
         };
 
         return self;
@@ -38,9 +45,19 @@ const Sprite = struct {
     height: f32,
     world_x: f32,
     world_y: f32,
+    sheet_width: f32,
+    sheet_height: f32,
 
     fn updateWorldX(self: *Self, newValue: f32) void {
         self.world_x += newValue / 12;
+    }
+
+    fn getData(self: *Self) SpriteShaderData {
+        return .{
+            .world_position = .{ self.world_x, self.world_y },
+            .texture_position = .{ self.pos_x, self.pos_y },
+            .texture_dimensions = .{ self.width, self.height },
+        };
     }
 
     fn getVertices(self: *Self, sheet: SpriteSheet) []Vertex {
@@ -66,6 +83,19 @@ const SpriteSheet = struct {
 };
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
+const Sprites = struct {
+    buffer: *gpu.Buffer,
+    buffer_size: u64,
+    extent_buffer: *gpu.Buffer,
+    extent_buffer_size: u64,
+    config_uniform_buffer: *gpu.Buffer,
+    config_uniform_buffer_size: u64,
+    buffer_bind_group: *gpu.BindGroup,
+    buffer_bind_group_layout: *gpu.BindGroupLayout,
+    buffer_compute_bind_group: *gpu.BindGroup,
+    buffer_compute_bind_group_layout: *gpu.BindGroupLayout,
+};
+
 core: mach.Core,
 timer: mach.Timer,
 fps_timer: mach.Timer,
@@ -81,6 +111,8 @@ sprite: Sprite,
 sprite_two: Sprite,
 sheet: SpriteSheet,
 vertices: [12]Vertex,
+sprites_buffer: *gpu.Buffer,
+sprites: std.ArrayList(Sprite),
 
 pub fn init(app: *App) !void {
     const allocator = gpa.allocator();
@@ -88,9 +120,9 @@ pub fn init(app: *App) !void {
 
     entity_position = zm.f32x4(0, 0, 0, 0);
 
-    app.sprite = Sprite.init(0.0, 0.0, 64.0, 96.0, 0.0, 0.0);
-    app.sprite_two = Sprite.init(64.0, 0.0, 64.0, 96.0, 128.0, 128.0);
     app.sheet = SpriteSheet{ .width = 384.0, .height = 96.0 };
+    app.sprite = Sprite.init(0.0, 0.0, 64.0, 96.0, 0.0, 0.0, app.sheet.width, app.sheet.height);
+    app.sprite_two = Sprite.init(64.0, 0.0, 64.0, 96.0, 128.0, 128.0, app.sheet.width, app.sheet.height);
     var i: usize = 0;
     for (app.sprite.getVertices(app.sheet)) |element| {
         app.vertices[i] = element;
@@ -100,8 +132,11 @@ pub fn init(app: *App) !void {
         app.vertices[i] = element;
         i += 1;
     }
+    app.sprites = std.ArrayList(Sprite).init(allocator);
+    try app.sprites.append(app.sprite);
+    try app.sprites.append(app.sprite_two);
 
-    const shader_module = app.core.device().createShaderModuleWGSL("simple-shader.wgsl", @embedFile("simple-shader.wgsl"));
+    const shader_module = app.core.device().createShaderModuleWGSL("sprite-shader.wgsl", @embedFile("sprite-shader.wgsl"));
 
     const vertex_attributes = [_]gpu.VertexAttribute{
         .{ .format = .float32x4, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
@@ -176,6 +211,14 @@ pub fn init(app: *App) !void {
     var sprite_mapped = vertex_buffer.getMappedRange(Vertex, 0, app.vertices.len);
     std.mem.copy(Vertex, sprite_mapped.?, app.vertices[0..]);
     vertex_buffer.unmap();
+    const sprites_buffer = app.core.device().createBuffer(&.{
+        .usage = .{ .storage = true },
+        .size = @sizeOf(Sprite) * 2,
+        .mapped_at_creation = true,
+    });
+    var sprites_mapped = sprites_buffer.getMappedRange(Sprite, 0, app.sprites.items.len);
+    std.mem.copy(Sprite, sprites_mapped.?, app.sprites.items[0..]);
+    sprites_buffer.unmap();
 
     // Create a sampler with linear filtering for smooth interpolation.
     const sampler = app.core.device().createSampler(&.{
@@ -224,6 +267,7 @@ pub fn init(app: *App) !void {
                 gpu.BindGroup.Entry.buffer(0, uniform_buffer, 0, @sizeOf(UniformBufferObject)),
                 gpu.BindGroup.Entry.sampler(1, sampler),
                 gpu.BindGroup.Entry.textureView(2, cube_texture.createView(&gpu.TextureView.Descriptor{})),
+                gpu.BindGroup.Entry.buffer(3, sprites_buffer, 0, @sizeOf(Sprite)),
             },
         }),
     );
@@ -257,6 +301,7 @@ pub fn init(app: *App) !void {
     app.bind_group = bind_group;
     app.depth_texture = depth_texture;
     app.depth_texture_view = depth_texture_view;
+    app.sprites_buffer = sprites_buffer;
 
     shader_module.release();
 }
@@ -270,6 +315,7 @@ pub fn deinit(app: *App) void {
     app.bind_group.release();
     app.depth_texture.release();
     app.depth_texture_view.release();
+    app.sprites_buffer.release();
 }
 var entity_position = zm.f32x4(0, 0, 0, 0);
 var direction = zm.f32x4(0, 0, 0, 0);
@@ -351,6 +397,7 @@ pub fn update(app: *App) !bool {
 
     {
         const model = zm.translation(entity_position[0], entity_position[1], entity_position[2]);
+
         app.sprite_two.updateWorldX(entity_position[0]);
         var i: usize = 0;
         for (app.sprite.getVertices(app.sheet)) |element| {
@@ -361,6 +408,7 @@ pub fn update(app: *App) !bool {
             app.vertices[i] = element;
             i += 1;
         }
+
         const vertex_buffer = app.core.device().createBuffer(&.{
             .usage = .{ .vertex = true },
             // .size = @sizeOf(Vertex) * vertices.len,
@@ -371,6 +419,20 @@ pub fn update(app: *App) !bool {
         std.mem.copy(Vertex, sprite_mapped.?, app.vertices[0..]);
         vertex_buffer.unmap();
         app.vertex_buffer = vertex_buffer;
+
+        app.sprites = std.ArrayList(Sprite).init(gpa.allocator());
+        try app.sprites.append(app.sprite);
+        try app.sprites.append(app.sprite_two);
+        const sprites_buffer = app.core.device().createBuffer(&.{
+            .usage = .{ .storage = true },
+            .size = @sizeOf(Sprite) * 2,
+            .mapped_at_creation = true,
+        });
+        var sprites_mapped = sprites_buffer.getMappedRange(Sprite, 0, app.sprites.items.len);
+        std.mem.copy(Sprite, sprites_mapped.?, app.sprites.items[0..]);
+        sprites_buffer.unmap();
+        app.sprites_buffer = sprites_buffer;
+
         const view = zm.lookAtRh(
             zm.f32x4(0, 1000, 0, 1),
             zm.f32x4(0, 0, 0, 1),
