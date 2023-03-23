@@ -7,6 +7,8 @@ const assets = @import("assets");
 
 pub const App = @This();
 
+const speed = 2.0 * 100.0; // pixels per second
+
 const Vec2 = @Vector(2, f32);
 
 const UniformBufferObject = struct {
@@ -54,13 +56,15 @@ sprite2: usize,
 sheet: SpriteSheet,
 sprites_buffer: *gpu.Buffer,
 sprites: std.ArrayList(Sprite),
+player_pos: Vec2,
+direction: Vec2,
 
 pub fn init(app: *App) !void {
     const allocator = gpa.allocator();
     try app.core.init(allocator, .{});
 
-    entity_position = zm.f32x4(0, 0, 0, 0);
-
+    app.player_pos = Vec2{0, 0};
+    app.direction = Vec2{0, 0};
     app.sheet = SpriteSheet{ .width = 384.0, .height = 96.0 };
     app.sprites = std.ArrayList(Sprite).init(allocator);
 
@@ -184,10 +188,7 @@ pub fn deinit(app: *App) void {
     app.bind_group.release();
     app.sprites_buffer.release();
 }
-var entity_position = zm.f32x4(0, 0, 0, 0);
-var direction = zm.f32x4(0, 0, 0, 0);
 
-const speed = 2.0 * 100.0; // pixels per second
 pub fn update(app: *App) !bool {
     var iter = app.core.pollEvents();
     while (iter.next()) |event| {
@@ -195,19 +196,19 @@ pub fn update(app: *App) !bool {
             .key_press => |ev| {
                 switch (ev.key) {
                     .space => return true,
-                    .left => direction[0] += 1,
-                    .right => direction[0] -= 1,
-                    .up => direction[2] += 1,
-                    .down => direction[2] -= 1,
+                    .left => app.direction[0] += 1,
+                    .right => app.direction[0] -= 1,
+                    .up => app.direction[1] += 1,
+                    .down => app.direction[1] -= 1,
                     else => {},
                 }
             },
             .key_release => |ev| {
                 switch (ev.key) {
-                    .left => direction[0] -= 1,
-                    .right => direction[0] += 1,
-                    .up => direction[2] -= 1,
-                    .down => direction[2] += 1,
+                    .left => app.direction[0] -= 1,
+                    .right => app.direction[0] += 1,
+                    .up => app.direction[1] -= 1,
+                    .down => app.direction[1] += 1,
                     else => {},
                 }
             },
@@ -217,7 +218,7 @@ pub fn update(app: *App) !bool {
     }
 
     const delta_time = app.fps_timer.lap();
-    entity_position += direction * zm.splat(@Vector(4, f32), speed) * zm.splat(@Vector(4, f32), delta_time);
+    app.player_pos += app.direction * Vec2{speed, speed} * Vec2{delta_time, delta_time};
 
     const back_buffer_view = app.core.swapChain().getCurrentTextureView();
     const color_attachment = gpu.RenderPassColorAttachment{
@@ -233,10 +234,10 @@ pub fn update(app: *App) !bool {
     });
 
     {
-        const model = zm.translation(entity_position[0], entity_position[1], entity_position[2]);
+        const model = zm.translation(app.player_pos[0], 0, app.player_pos[1]);
 
         const sprite2 = &app.sprites.items[app.sprite2];
-        sprite2.updateWorldX(entity_position[0]);
+        sprite2.updateWorldX(app.player_pos[0]);
 
         const view = zm.lookAtRh(
             zm.f32x4(0, 1000, 0, 1),
