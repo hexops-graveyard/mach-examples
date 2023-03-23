@@ -10,14 +10,10 @@ struct VertexOutput {
 };
 
 struct Sprite {
-  pos_x: f32,
-  pos_y: f32,
-  width: f32,
-  height: f32,
-  world_x: f32,
-  world_y: f32,
-  sheet_width: f32,
-  sheet_height: f32,
+  pos: vec2<f32>,
+  size: vec2<f32>,
+  world_pos: vec2<f32>,
+  sheet_size: vec2<f32>,
 };
 @binding(3) @group(0) var<storage, read> sprites: array<Sprite>;
 
@@ -27,23 +23,23 @@ fn vertex_main(
 ) -> VertexOutput {
   var sprite_index = VertexIndex / 6;
   var sprite = sprites[sprite_index];
-  var width = sprite.width;
-  var height = sprite.height;
+  var width = sprite.size.x;
+  var height = sprite.size.y;
   var positions = array<vec2<f32>, 6>(
-      vec2<f32>(sprite.world_x, sprite.world_y),      // bottom-left
-      vec2<f32>(sprite.world_x, (sprite.world_y + height)),   // top-left
-      vec2<f32>((sprite.world_x + width), sprite.world_y),    // bottom-right
-      vec2<f32>((sprite.world_x + width), sprite.world_y),    // bottom-right
-      vec2<f32>(sprite.world_x, (sprite.world_y + height)),   // top-left
-      vec2<f32>((sprite.world_x + width), (sprite.world_y + height)), // top-right
+      vec2<f32>(sprite.world_pos.x, sprite.world_pos.y),      // bottom-left
+      vec2<f32>(sprite.world_pos.x, (sprite.world_pos.y + height)),   // top-left
+      vec2<f32>((sprite.world_pos.x + width), sprite.world_pos.y),    // bottom-right
+      vec2<f32>((sprite.world_pos.x + width), sprite.world_pos.y),    // bottom-right
+      vec2<f32>(sprite.world_pos.x, (sprite.world_pos.y + height)),   // top-left
+      vec2<f32>((sprite.world_pos.x + width), (sprite.world_pos.y + height)), // top-right
   );
   var uvs = array<vec2<f32>, 6>(
-      vec2<f32>((sprite.pos_x / sprite.sheet_width), ((sprite.pos_y + sprite.height) / sprite.sheet_height)), // bottom-left
-      vec2<f32>((sprite.pos_x / sprite.sheet_width), (sprite.pos_y / sprite.sheet_height)), // top-left
-      vec2<f32>(((sprite.pos_x + sprite.width) / sprite.sheet_width), ((sprite.pos_y + sprite.height) / sprite.sheet_height)), // bottom-right
-      vec2<f32>(((sprite.pos_x + sprite.width) / sprite.sheet_width), ((sprite.pos_y + sprite.height) / sprite.sheet_height)), // bottom-right
-      vec2<f32>((sprite.pos_x / sprite.sheet_width), (sprite.pos_y / sprite.sheet_height)), // top-left
-      vec2<f32>(((sprite.pos_x + sprite.width) / sprite.sheet_width), (sprite.pos_y / sprite.sheet_height)), // top-right
+      vec2<f32>((sprite.pos.x / sprite.sheet_size.x), ((sprite.pos.y + sprite.size.y) / sprite.sheet_size.y)), // bottom-left
+      vec2<f32>((sprite.pos.x / sprite.sheet_size.x), (sprite.pos.y / sprite.sheet_size.y)), // top-left
+      vec2<f32>(((sprite.pos.x + sprite.size.x) / sprite.sheet_size.x), ((sprite.pos.y + sprite.size.y) / sprite.sheet_size.y)), // bottom-right
+      vec2<f32>(((sprite.pos.x + sprite.size.x) / sprite.sheet_size.x), ((sprite.pos.y + sprite.size.y) / sprite.sheet_size.y)), // bottom-right
+      vec2<f32>((sprite.pos.x / sprite.sheet_size.x), (sprite.pos.y / sprite.sheet_size.y)), // top-left
+      vec2<f32>(((sprite.pos.x + sprite.size.x) / sprite.sheet_size.x), (sprite.pos.y / sprite.sheet_size.y)), // top-right
   );
   var pos = vec4<f32>(positions[VertexIndex % 6].x, 0.0, positions[VertexIndex % 6].y, 1.0);
 

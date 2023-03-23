@@ -7,6 +7,8 @@ const assets = @import("assets");
 
 pub const App = @This();
 
+const Vec2 = @Vector(2, f32);
+
 const UniformBufferObject = struct {
     mat: zm.Mat,
 };
@@ -15,30 +17,22 @@ const Sprite = extern struct {
 
     fn init(pos_x: f32, pos_y: f32, width: f32, height: f32, world_x: f32, world_y: f32, sheet_width: f32, sheet_height: f32) Self {
         var self: Self = .{
-            .pos_x = pos_x,
-            .pos_y = pos_y,
-            .width = width,
-            .height = height,
-            .world_x = world_x,
-            .world_y = world_y,
-            .sheet_width = sheet_width,
-            .sheet_height = sheet_height,
+            .pos = Vec2{ pos_x, pos_y },
+            .size = Vec2{ width, height },
+            .world_pos = Vec2{ world_x, world_y },
+            .sheet_size = Vec2{ sheet_width, sheet_height },
         };
 
         return self;
     }
 
-    pos_x: f32,
-    pos_y: f32,
-    width: f32,
-    height: f32,
-    world_x: f32,
-    world_y: f32,
-    sheet_width: f32,
-    sheet_height: f32,
+    pos: Vec2,
+    size: Vec2,
+    world_pos: Vec2,
+    sheet_size: Vec2,
 
     fn updateWorldX(self: *Self, newValue: f32) void {
-        self.world_x += newValue / 12;
+        self.world_pos[0] += newValue / 12;
     }
 };
 const SpriteSheet = struct {
