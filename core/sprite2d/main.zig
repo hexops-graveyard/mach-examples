@@ -32,10 +32,6 @@ const Sprite = extern struct {
     size: Vec2,
     world_pos: Vec2,
     sheet_size: Vec2,
-
-    fn updateWorldX(self: *Self, newValue: f32) void {
-        self.world_pos[0] += newValue / 12;
-    }
 };
 const SpriteSheet = struct {
     width: f32,
@@ -234,10 +230,8 @@ pub fn update(app: *App) !bool {
     });
 
     {
-        const model = zm.translation(app.player_pos[0], 0, app.player_pos[1]);
-
         const sprite2 = &app.sprites.items[app.sprite2];
-        sprite2.updateWorldX(app.player_pos[0]);
+        sprite2.world_pos = app.player_pos;
 
         const view = zm.lookAtRh(
             zm.f32x4(0, 1000, 0, 1),
@@ -253,7 +247,7 @@ pub fn update(app: *App) !bool {
             0.1,
             1000,
         );
-        const mvp = zm.mul(zm.mul(model, view), proj);
+        const mvp = zm.mul(view, proj);
         const ubo = UniformBufferObject{
             .mat = zm.transpose(mvp),
         };
