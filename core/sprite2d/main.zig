@@ -69,9 +69,12 @@ pub fn init(app: *App) !void {
     app.player_pos = Vec2{ 0, 0 };
     app.direction = Vec2{ 0, 0 };
     app.sheet = root.sheet;
+    std.log.info("Sheet Dimensions: {} {}", .{ app.sheet.width, app.sheet.height });
     app.sprites = std.ArrayList(Sprite).init(allocator);
     for (root.sprites) |sprite| {
-        std.log.info("Sprite: {} {}", .{ sprite.world_pos[0], sprite.world_pos[1] });
+        std.log.info("Sprite World Position: {} {}", .{ sprite.world_pos[0], sprite.world_pos[1] });
+        std.log.info("Sprite Texture Position: {} {}", .{ sprite.pos[0], sprite.pos[1] });
+        std.log.info("Sprite Dimensions: {} {}", .{ sprite.size[0], sprite.size[1] });
         if (sprite.is_player) {
             app.player_sprite_index = app.sprites.items.len;
         }
@@ -136,6 +139,7 @@ pub fn init(app: *App) !void {
     var img = try zigimg.Image.fromMemory(allocator, assets.example_spritesheet_image);
     defer img.deinit();
     const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
+    std.log.info("Image Dimensions: {} {}", .{ img.width, img.height });
     const texture = app.core.device().createTexture(&.{
         .size = img_size,
         .format = .rgba8_unorm,
