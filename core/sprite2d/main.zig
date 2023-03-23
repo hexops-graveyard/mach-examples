@@ -4,6 +4,7 @@ const gpu = mach.gpu;
 const zm = @import("zmath");
 const zigimg = @import("zigimg");
 const assets = @import("assets");
+const json = std.json;
 
 pub const App = @This();
 
@@ -20,9 +21,19 @@ const Sprite = extern struct {
     world_pos: Vec2,
     sheet_size: Vec2,
 };
+const JSONSprite = struct {
+    pos: []f32,
+    size: []f32,
+    world_pos: []f32,
+    is_player: bool = false,
+};
 const SpriteSheet = struct {
     width: f32,
     height: f32,
+};
+const JSONData = struct {
+    sheet: SpriteSheet,
+    sprites: []JSONSprite,
 };
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
@@ -34,38 +45,44 @@ pipeline: *gpu.RenderPipeline,
 queue: *gpu.Queue,
 uniform_buffer: *gpu.Buffer,
 bind_group: *gpu.BindGroup,
-sprite1: usize,
-sprite2: usize,
 sheet: SpriteSheet,
 sprites_buffer: *gpu.Buffer,
 sprites: std.ArrayList(Sprite),
 player_pos: Vec2,
 direction: Vec2,
+player_sprite_index: usize,
 
 pub fn init(app: *App) !void {
     const allocator = gpa.allocator();
     try app.core.init(allocator, .{});
 
+    const sprites_file = try std.fs.cwd().openFile(assets.example_spritesheet_json_path, .{ .mode = .read_only });
+    defer sprites_file.close();
+    const file_size = (try sprites_file.stat()).size;
+    var buffer = try allocator.alloc(u8, file_size);
+    defer allocator.free(buffer);
+    try sprites_file.reader().readNoEof(buffer);
+    var stream = std.json.TokenStream.init(buffer);
+    const root = try std.json.parse(JSONData, &stream, .{ .allocator = allocator });
+    defer std.json.parseFree(JSONData, root, .{ .allocator = allocator });
+
     app.player_pos = Vec2{ 0, 0 };
     app.direction = Vec2{ 0, 0 };
-    app.sheet = SpriteSheet{ .width = 384.0, .height = 96.0 };
+    app.sheet = root.sheet;
     app.sprites = std.ArrayList(Sprite).init(allocator);
-
-    app.sprite1 = app.sprites.items.len;
-    try app.sprites.append(.{
-        .pos = Vec2{ 0, 0 },
-        .size = Vec2{ 64, 96 },
-        .world_pos = Vec2{ 0, 0 },
-        .sheet_size = Vec2{ app.sheet.width, app.sheet.height },
-    });
-
-    app.sprite2 = app.sprites.items.len;
-    try app.sprites.append(.{
-        .pos = Vec2{ 64, 0 },
-        .size = Vec2{ 64, 96 },
-        .world_pos = Vec2{ 128, 128 },
-        .sheet_size = Vec2{ app.sheet.width, app.sheet.height },
-    });
+    for (root.sprites) |sprite| {
+        std.log.info("Sprite: {} {}", .{ sprite.world_pos[0], sprite.world_pos[1] });
+        if (sprite.is_player) {
+            app.player_sprite_index = app.sprites.items.len;
+        }
+        try app.sprites.append(.{
+            .pos = Vec2{ sprite.pos[0], sprite.pos[1] },
+            .size = Vec2{ sprite.size[0], sprite.size[1] },
+            .world_pos = Vec2{ sprite.world_pos[0], sprite.world_pos[1] },
+            .sheet_size = Vec2{ app.sheet.width, app.sheet.height },
+        });
+    }
+    std.log.info("Number of sprites: {}", .{app.sprites.items.len});
 
     const shader_module = app.core.device().createShaderModuleWGSL("sprite-shader.wgsl", @embedFile("sprite-shader.wgsl"));
 
@@ -245,8 +262,8 @@ fn render(app: *App) !void {
         .color_attachments = &.{color_attachment},
     });
 
-    const sprite2 = &app.sprites.items[app.sprite2];
-    sprite2.world_pos = app.player_pos;
+    const player_sprite = &app.sprites.items[app.player_sprite_index];
+    player_sprite.world_pos = app.player_pos;
 
     // One pixel in our scene will equal one window pixel (i.e. be roughly the same size
     // irrespective of whether the user has a Retina/HDPI display.)
