@@ -25,30 +25,37 @@ struct Sprite {
 fn vertex_main(
   @builtin(vertex_index) VertexIndex : u32
 ) -> VertexOutput {
-  var width = sprites[0].width;
-  var height = sprites[0].height;
+  var sprite_index = 0;
+  if (VertexIndex < 6) {
+      sprite_index = 0;
+  } else if (VertexIndex < 12) {
+      sprite_index = 1;
+  }
+  var sprite = sprites[sprite_index];
+  var width = sprite.width;
+  var height = sprite.height;
   var positions = array<vec2<f32>, 6>(
-      vec2<f32>(0.0, 0.0),      // bottom-left
-      vec2<f32>(0.0, height),   // top-left
-      vec2<f32>(width, 0.0),    // bottom-right
-      vec2<f32>(width, 0.0),    // bottom-right
-      vec2<f32>(0.0, height),   // top-left
-      vec2<f32>(width, height), // top-right
+      vec2<f32>(sprite.world_x, sprite.world_y),      // bottom-left
+      vec2<f32>(sprite.world_x, (sprite.world_y + height)),   // top-left
+      vec2<f32>((sprite.world_x + width), sprite.world_y),    // bottom-right
+      vec2<f32>((sprite.world_x + width), sprite.world_y),    // bottom-right
+      vec2<f32>(sprite.world_x, (sprite.world_y + height)),   // top-left
+      vec2<f32>((sprite.world_x + width), (sprite.world_y + height)), // top-right
   );
   var uvs = array<vec2<f32>, 6>(
-      vec2<f32>((sprites[0].pos_x / sprites[0].sheet_width), ((sprites[0].pos_y + sprites[0].height) / sprites[0].sheet_height)), // bottom-left
-      vec2<f32>((sprites[0].pos_x / sprites[0].sheet_width), (sprites[0].pos_y / sprites[0].sheet_height)), // top-left
-      vec2<f32>(((sprites[0].pos_x + sprites[0].width) / sprites[0].sheet_width), ((sprites[0].pos_y + sprites[0].height) / sprites[0].sheet_height)), // bottom-right
-      vec2<f32>(((sprites[0].pos_x + sprites[0].width) / sprites[0].sheet_width), ((sprites[0].pos_y + sprites[0].height) / sprites[0].sheet_height)), // bottom-right
-      vec2<f32>((sprites[0].pos_x / sprites[0].sheet_width), (sprites[0].pos_y / sprites[0].sheet_height)), // top-left
-      vec2<f32>(((sprites[0].pos_x + sprites[0].width) / sprites[0].sheet_width), (sprites[0].pos_y / sprites[0].sheet_height)), // top-right
+      vec2<f32>((sprite.pos_x / sprite.sheet_width), ((sprite.pos_y + sprite.height) / sprite.sheet_height)), // bottom-left
+      vec2<f32>((sprite.pos_x / sprite.sheet_width), (sprite.pos_y / sprite.sheet_height)), // top-left
+      vec2<f32>(((sprite.pos_x + sprite.width) / sprite.sheet_width), ((sprite.pos_y + sprite.height) / sprite.sheet_height)), // bottom-right
+      vec2<f32>(((sprite.pos_x + sprite.width) / sprite.sheet_width), ((sprite.pos_y + sprite.height) / sprite.sheet_height)), // bottom-right
+      vec2<f32>((sprite.pos_x / sprite.sheet_width), (sprite.pos_y / sprite.sheet_height)), // top-left
+      vec2<f32>(((sprite.pos_x + sprite.width) / sprite.sheet_width), (sprite.pos_y / sprite.sheet_height)), // top-right
   );
   var pos = vec4<f32>(positions[VertexIndex % 6].x, 0.0, positions[VertexIndex % 6].y, 1.0);
 
   var output : VertexOutput;
   output.Position = pos * uniforms.modelViewProjectionMatrix;
   output.fragUV = uvs[VertexIndex % 6];
-  output.fragUV.y = 1.0 - output.fragUV.y; // flip UV because .tga files are stored upside down
+  // output.fragUV.y = 1.0 - output.fragUV.y; // flip UV because .tga files are stored upside down
 
   output.fragPosition = 0.5 * (pos + vec4<f32>(1.0, 1.0, 1.0, 1.0));
   return output;

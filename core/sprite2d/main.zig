@@ -213,7 +213,7 @@ pub fn init(app: *App) !void {
     vertex_buffer.unmap();
     const sprites_buffer = app.core.device().createBuffer(&.{
         .usage = .{ .storage = true },
-        .size = @sizeOf(Sprite) * 2,
+        .size = @sizeOf(Sprite) * app.sprites.items.len,
         .mapped_at_creation = true,
     });
     var sprites_mapped = sprites_buffer.getMappedRange(Sprite, 0, app.sprites.items.len);
@@ -398,7 +398,7 @@ pub fn update(app: *App) !bool {
     {
         const model = zm.translation(entity_position[0], entity_position[1], entity_position[2]);
 
-        app.sprite_two.updateWorldX(entity_position[0]);
+        //app.sprite_two.updateWorldX(entity_position[0]);
         var i: usize = 0;
         for (app.sprite.getVertices(app.sheet)) |element| {
             app.vertices[i] = element;
@@ -425,7 +425,7 @@ pub fn update(app: *App) !bool {
         try app.sprites.append(app.sprite_two);
         const sprites_buffer = app.core.device().createBuffer(&.{
             .usage = .{ .storage = true },
-            .size = @sizeOf(Sprite) * 2,
+            .size = @sizeOf(Sprite) * app.sprites.items.len,
             .mapped_at_creation = true,
         });
         var sprites_mapped = sprites_buffer.getMappedRange(Sprite, 0, app.sprites.items.len);
