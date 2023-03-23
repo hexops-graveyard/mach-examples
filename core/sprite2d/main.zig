@@ -321,7 +321,7 @@ pub fn update(app: *App) !bool {
         try app.sprites.append(app.sprite);
         try app.sprites.append(app.sprite_two);
         const sprites_buffer = app.core.device().createBuffer(&.{
-            .usage = .{ .storage = true },
+            .usage = .{ .storage = true, .copy_dst = true },
             .size = @sizeOf(Sprite) * app.sprites.items.len,
             .mapped_at_creation = true,
         });
@@ -349,6 +349,7 @@ pub fn update(app: *App) !bool {
             .mat = zm.transpose(mvp),
         };
         encoder.writeBuffer(app.uniform_buffer, 0, &[_]UniformBufferObject{ubo});
+        encoder.writeBuffer(app.sprites_buffer, 0, app.sprites.items);
     }
 
     const pass = encoder.beginRenderPass(&render_pass_info);
