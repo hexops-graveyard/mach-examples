@@ -6,7 +6,6 @@ struct Uniforms {
 struct VertexOutput {
   @builtin(position) Position : vec4<f32>,
   @location(0) fragUV : vec2<f32>,
-  @location(1) fragPosition: vec4<f32>,
 };
 
 struct Sprite {
@@ -21,8 +20,7 @@ struct Sprite {
 fn vertex_main(
   @builtin(vertex_index) VertexIndex : u32
 ) -> VertexOutput {
-  var sprite_index = VertexIndex / 6;
-  var sprite = sprites[sprite_index];
+  var sprite = sprites[VertexIndex / 6];
 
   // Calculate the vertex position
   var positions = array<vec2<f32>, 6>(
@@ -41,28 +39,31 @@ fn vertex_main(
 
   // Calculate the UV coordinate
   var uvs = array<vec2<f32>, 6>(
-      vec2<f32>((sprite.pos.x / sprite.sheet_size.x), ((sprite.pos.y + sprite.size.y) / sprite.sheet_size.y)), // bottom-left
-      vec2<f32>((sprite.pos.x / sprite.sheet_size.x), (sprite.pos.y / sprite.sheet_size.y)), // top-left
-      vec2<f32>(((sprite.pos.x + sprite.size.x) / sprite.sheet_size.x), ((sprite.pos.y + sprite.size.y) / sprite.sheet_size.y)), // bottom-right
-      vec2<f32>(((sprite.pos.x + sprite.size.x) / sprite.sheet_size.x), ((sprite.pos.y + sprite.size.y) / sprite.sheet_size.y)), // bottom-right
-      vec2<f32>((sprite.pos.x / sprite.sheet_size.x), (sprite.pos.y / sprite.sheet_size.y)), // top-left
-      vec2<f32>(((sprite.pos.x + sprite.size.x) / sprite.sheet_size.x), (sprite.pos.y / sprite.sheet_size.y)), // top-right
+      vec2<f32>(0.0, 1.0), // bottom-left
+      vec2<f32>(0.0, 0.0), // top-left
+      vec2<f32>(1.0, 1.0), // bottom-right
+      vec2<f32>(1.0, 1.0), // bottom-right
+      vec2<f32>(0.0, 0.0), // top-left
+      vec2<f32>(1.0, 0.0), // top-right
   );
   var uv = uvs[VertexIndex % 6];
+  uv.x *= sprite.size.x / sprite.sheet_size.x;
+  uv.y *= sprite.size.y / sprite.sheet_size.y;
+  uv.x += sprite.pos.x / sprite.sheet_size.x;
+  uv.y += sprite.pos.y / sprite.sheet_size.y;
 
   var output : VertexOutput;
   output.Position = vec4<f32>(pos.x, 0.0, pos.y, 1.0) * uniforms.modelViewProjectionMatrix;
   output.fragUV = uv;
-
-  output.fragPosition = 0.5 * (output.Position + vec4<f32>(1.0, 1.0, 1.0, 1.0));
   return output;
 }
 
-@group(0) @binding(1) var mySampler: sampler;
-@group(0) @binding(2) var myTexture: texture_2d<f32>;
+@group(0) @binding(1) var spriteSampler: sampler;
+@group(0) @binding(2) var spriteTexture: texture_2d<f32>;
 
 @fragment
-fn frag_main(@location(0) fragUV: vec2<f32>,
-        @location(1) fragPosition: vec4<f32>) -> @location(0) vec4<f32> {
-    return textureSample(myTexture, mySampler, fragUV);
+fn frag_main(
+  @location(0) fragUV: vec2<f32>
+) -> @location(0) vec4<f32> {
+    return textureSample(spriteTexture, spriteSampler, fragUV);
 }
