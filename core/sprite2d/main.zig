@@ -316,6 +316,7 @@ pub fn update(app: *App) !bool {
 
         app.sprite_two.updateWorldX(entity_position[0]);
 
+        app.sprites.deinit();
         app.sprites = std.ArrayList(Sprite).init(gpa.allocator());
         try app.sprites.append(app.sprite);
         try app.sprites.append(app.sprite_two);
