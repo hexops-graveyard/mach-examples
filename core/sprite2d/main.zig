@@ -127,7 +127,7 @@ pub fn init(app: *App) !void {
     var img = try zigimg.Image.fromMemory(allocator, assets.example_spritesheet_image);
     defer img.deinit();
     const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
-    const cube_texture = app.core.device().createTexture(&.{
+    const texture = app.core.device().createTexture(&.{
         .size = img_size,
         .format = .rgba8_unorm,
         .usage = .{
@@ -141,11 +141,11 @@ pub fn init(app: *App) !void {
         .rows_per_image = @intCast(u32, img.height),
     };
     switch (img.pixels) {
-        .rgba32 => |pixels| queue.writeTexture(&.{ .texture = cube_texture }, &data_layout, &img_size, pixels),
+        .rgba32 => |pixels| queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, pixels),
         .rgb24 => |pixels| {
             const data = try rgb24ToRgba32(allocator, pixels);
             defer data.deinit(allocator);
-            queue.writeTexture(&.{ .texture = cube_texture }, &data_layout, &img_size, data.rgba32);
+            queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, data.rgba32);
         },
         else => @panic("unsupported image color format"),
     }
@@ -162,7 +162,7 @@ pub fn init(app: *App) !void {
             .entries = &.{
                 gpu.BindGroup.Entry.buffer(0, uniform_buffer, 0, @sizeOf(UniformBufferObject)),
                 gpu.BindGroup.Entry.sampler(1, sampler),
-                gpu.BindGroup.Entry.textureView(2, cube_texture.createView(&gpu.TextureView.Descriptor{})),
+                gpu.BindGroup.Entry.textureView(2, texture.createView(&gpu.TextureView.Descriptor{})),
                 gpu.BindGroup.Entry.buffer(3, sprites_buffer, 0, @sizeOf(Sprite) * app.sprites.items.len),
             },
         }),
