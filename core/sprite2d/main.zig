@@ -130,7 +130,7 @@ pub fn init(app: *App) !void {
     const pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
 
     const sprites_buffer = app.core.device().createBuffer(&.{
-        .usage = .{ .storage = true },
+        .usage = .{ .storage = true, .copy_dst = true },
         .size = @sizeOf(Sprite) * app.sprites.items.len,
         .mapped_at_creation = true,
     });
@@ -320,15 +320,6 @@ pub fn update(app: *App) !bool {
         app.sprites = std.ArrayList(Sprite).init(gpa.allocator());
         try app.sprites.append(app.sprite);
         try app.sprites.append(app.sprite_two);
-        const sprites_buffer = app.core.device().createBuffer(&.{
-            .usage = .{ .storage = true, .copy_dst = true },
-            .size = @sizeOf(Sprite) * app.sprites.items.len,
-            .mapped_at_creation = true,
-        });
-        var sprites_mapped = sprites_buffer.getMappedRange(Sprite, 0, app.sprites.items.len);
-        std.mem.copy(Sprite, sprites_mapped.?, app.sprites.items[0..]);
-        sprites_buffer.unmap();
-        app.sprites_buffer = sprites_buffer;
 
         const view = zm.lookAtRh(
             zm.f32x4(0, 1000, 0, 1),
