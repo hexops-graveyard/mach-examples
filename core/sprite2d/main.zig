@@ -49,8 +49,8 @@ pipeline: *gpu.RenderPipeline,
 queue: *gpu.Queue,
 uniform_buffer: *gpu.Buffer,
 bind_group: *gpu.BindGroup,
-sprite: Sprite,
-sprite_two: Sprite,
+sprite1: usize,
+sprite2: usize,
 sheet: SpriteSheet,
 sprites_buffer: *gpu.Buffer,
 sprites: std.ArrayList(Sprite),
@@ -62,12 +62,13 @@ pub fn init(app: *App) !void {
     entity_position = zm.f32x4(0, 0, 0, 0);
 
     app.sheet = SpriteSheet{ .width = 384.0, .height = 96.0 };
-    app.sprite = Sprite.init(0.0, 0.0, 64.0, 96.0, 0.0, 0.0, app.sheet.width, app.sheet.height);
-    app.sprite_two = Sprite.init(64.0, 0.0, 64.0, 96.0, 128.0, 128.0, app.sheet.width, app.sheet.height);
-
     app.sprites = std.ArrayList(Sprite).init(allocator);
-    try app.sprites.append(app.sprite);
-    try app.sprites.append(app.sprite_two);
+
+    app.sprite1 = app.sprites.items.len;
+    try app.sprites.append(Sprite.init(0.0, 0.0, 64.0, 96.0, 0.0, 0.0, app.sheet.width, app.sheet.height));
+
+    app.sprite2 = app.sprites.items.len;
+    try app.sprites.append(Sprite.init(64.0, 0.0, 64.0, 96.0, 128.0, 128.0, app.sheet.width, app.sheet.height));
 
     const shader_module = app.core.device().createShaderModuleWGSL("sprite-shader.wgsl", @embedFile("sprite-shader.wgsl"));
 
@@ -178,6 +179,7 @@ pub fn deinit(app: *App) void {
     defer _ = gpa.deinit();
     defer app.core.deinit();
 
+    app.sprites.deinit();
     app.uniform_buffer.release();
     app.bind_group.release();
     app.sprites_buffer.release();
@@ -233,12 +235,8 @@ pub fn update(app: *App) !bool {
     {
         const model = zm.translation(entity_position[0], entity_position[1], entity_position[2]);
 
-        app.sprite_two.updateWorldX(entity_position[0]);
-
-        app.sprites.deinit();
-        app.sprites = std.ArrayList(Sprite).init(gpa.allocator());
-        try app.sprites.append(app.sprite);
-        try app.sprites.append(app.sprite_two);
+        const sprite2 = &app.sprites.items[app.sprite2];
+        sprite2.updateWorldX(entity_position[0]);
 
         const view = zm.lookAtRh(
             zm.f32x4(0, 1000, 0, 1),
