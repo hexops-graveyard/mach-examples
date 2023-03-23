@@ -7,10 +7,6 @@ const assets = @import("assets");
 
 pub const App = @This();
 
-pub const Vertex = extern struct {
-    pos: @Vector(4, f32),
-    uv: @Vector(2, f32),
-};
 const UniformBufferObject = struct {
     mat: zm.Mat,
 };
@@ -64,7 +60,6 @@ depth_texture_view: *gpu.TextureView,
 sprite: Sprite,
 sprite_two: Sprite,
 sheet: SpriteSheet,
-vertices: [12]Vertex,
 sprites_buffer: *gpu.Buffer,
 sprites: std.ArrayList(Sprite),
 
@@ -144,8 +139,6 @@ pub fn init(app: *App) !void {
         .min_filter = .linear,
     });
     const queue = app.core.device().getQueue();
-    // var img = try zigimg.Image.fromMemory(allocator, assets.gotta_go_fast_image);
-    // defer img.deinit();
     var img = try zigimg.Image.fromMemory(allocator, assets.example_spritesheet_image);
     defer img.deinit();
     const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
