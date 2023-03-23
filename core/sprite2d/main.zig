@@ -183,6 +183,7 @@ pub fn deinit(app: *App) void {
 }
 
 pub fn update(app: *App) !bool {
+    // Handle input by determining the direction the player wants to go.
     var iter = app.core.pollEvents();
     while (iter.next()) |event| {
         switch (event) {
@@ -210,13 +211,31 @@ pub fn update(app: *App) !bool {
         }
     }
 
+    // Calculate the player position, by moving in the direction the player wants to go
+    // by the speed amount. Multiply by delta_time to ensure that movement is the same speed
+    // regardless of the frame rate.
     const delta_time = app.fps_timer.lap();
     app.player_pos += app.direction * Vec2{ speed, speed } * Vec2{ delta_time, delta_time };
 
+    // Render the frame
+    try app.render();
+
+    // Every second, update the window title with the FPS
+    if (app.window_title_timer.read() >= 1.0) {
+        app.window_title_timer.reset();
+        var buf: [32]u8 = undefined;
+        const title = try std.fmt.bufPrintZ(&buf, "Sprite2D [ FPS: {d} ]", .{@floor(1 / delta_time)});
+        app.core.setTitle(title);
+    }
+    return false;
+}
+
+fn render(app: *App) !void {
     const back_buffer_view = app.core.swapChain().getCurrentTextureView();
     const color_attachment = gpu.RenderPassColorAttachment{
         .view = back_buffer_view,
-        .clear_value = .{ .r = 0.5, .g = 0.5, .b = 0.5, .a = 0.0 },
+        // sky blue background color:
+        .clear_value = .{ .r = 0.52, .g = 0.8, .b = 0.92, .a = 1.0 },
         .load_op = .clear,
         .store_op = .store,
     };
@@ -226,56 +245,47 @@ pub fn update(app: *App) !bool {
         .color_attachments = &.{color_attachment},
     });
 
-    {
-        const sprite2 = &app.sprites.items[app.sprite2];
-        sprite2.world_pos = app.player_pos;
+    const sprite2 = &app.sprites.items[app.sprite2];
+    sprite2.world_pos = app.player_pos;
 
-        const view = zm.lookAtRh(
-            zm.f32x4(0, 1000, 0, 1),
-            zm.f32x4(0, 0, 0, 1),
-            zm.f32x4(0, 0, 1, 0),
-        );
+    // One pixel in our scene will equal one window pixel (i.e. be roughly the same size
+    // irrespective of whether the user has a Retina/HDPI display.)
+    const proj = zm.orthographicRh(
+        @intToFloat(f32, app.core.size().width),
+        @intToFloat(f32, app.core.size().height),
+        0.1,
+        1000,
+    );
+    const view = zm.lookAtRh(
+        zm.f32x4(0, 1000, 0, 1),
+        zm.f32x4(0, 0, 0, 1),
+        zm.f32x4(0, 0, 1, 0),
+    );
+    const mvp = zm.mul(view, proj);
+    const ubo = UniformBufferObject{
+        .mat = zm.transpose(mvp),
+    };
 
-        // One pixel in our scene will equal one window pixel (i.e. be roughly the same size
-        // irrespective of whether the user has a Retina/HDPI display.)
-        const proj = zm.orthographicRh(
-            @intToFloat(f32, app.core.size().width),
-            @intToFloat(f32, app.core.size().height),
-            0.1,
-            1000,
-        );
-        const mvp = zm.mul(view, proj);
-        const ubo = UniformBufferObject{
-            .mat = zm.transpose(mvp),
-        };
-        encoder.writeBuffer(app.uniform_buffer, 0, &[_]UniformBufferObject{ubo});
-        encoder.writeBuffer(app.sprites_buffer, 0, app.sprites.items);
-    }
+    // Pass the latest uniform values & sprite values to the shader program.
+    encoder.writeBuffer(app.uniform_buffer, 0, &[_]UniformBufferObject{ubo});
+    encoder.writeBuffer(app.sprites_buffer, 0, app.sprites.items);
 
+    // Draw the sprite batch
+    const total_vertices = @intCast(u32, app.sprites.items.len * 6);
     const pass = encoder.beginRenderPass(&render_pass_info);
     pass.setPipeline(app.pipeline);
     pass.setBindGroup(0, app.bind_group, &.{});
-    var total_vertices = @intCast(u32, app.sprites.items.len * 6);
     pass.draw(total_vertices, 1, 0, 0);
     pass.end();
     pass.release();
 
+    // Submit the frame.
     var command = encoder.finish(null);
     encoder.release();
-
     app.queue.submit(&[_]*gpu.CommandBuffer{command});
     command.release();
     app.core.swapChain().present();
     back_buffer_view.release();
-
-    if (app.window_title_timer.read() >= 1.0) {
-        app.window_title_timer.reset();
-        var buf: [32]u8 = undefined;
-        const title = try std.fmt.bufPrintZ(&buf, "Sprite2D [ FPS: {d} ]", .{@floor(1 / delta_time)});
-        app.core.setTitle(title);
-    }
-
-    return false;
 }
 
 fn rgb24ToRgba32(allocator: std.mem.Allocator, in: []zigimg.color.Rgb24) !zigimg.color.PixelStorage {
