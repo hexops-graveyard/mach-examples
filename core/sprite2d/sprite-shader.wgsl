@@ -24,7 +24,7 @@ fn vertex_main(
   var sprite_index = VertexIndex / 6;
   var sprite = sprites[sprite_index];
 
-  // Starting vertex positions & uv coordinates that represent a square (two triangles)
+  // Calculate the vertex position
   var positions = array<vec2<f32>, 6>(
       vec2<f32>(0.0, 0.0), // bottom-left
       vec2<f32>(0.0, 1.0), // top-left
@@ -33,25 +33,13 @@ fn vertex_main(
       vec2<f32>(0.0, 1.0), // top-left
       vec2<f32>(1.0, 1.0), // top-right
   );
-  /*
-  var uvs = array<vec2<f32>, 6>(
-      vec2<f32>(0.0, 0.0), // bottom-left
-      vec2<f32>(0.0, 1.0), // top-left
-      vec2<f32>(1.0, 0.0), // bottom-right
-      vec2<f32>(1.0, 0.0), // bottom-right
-      vec2<f32>(0.0, 1.0), // top-left
-      vec2<f32>(1.0, 1.0), // top-right
-  );
-  */
-
-  // Make the vertex position account for the sprite size and world position.
   var pos = positions[VertexIndex % 6];
   pos.x *= sprite.size.x;
   pos.y *= sprite.size.y;
   pos.x += sprite.world_pos.x;
   pos.y += sprite.world_pos.y;
 
-  // Make the UV account for the sprite position in the sprite sheet.
+  // Calculate the UV coordinate
   var uvs = array<vec2<f32>, 6>(
       vec2<f32>((sprite.pos.x / sprite.sheet_size.x), ((sprite.pos.y + sprite.size.y) / sprite.sheet_size.y)), // bottom-left
       vec2<f32>((sprite.pos.x / sprite.sheet_size.x), (sprite.pos.y / sprite.sheet_size.y)), // top-left
@@ -60,11 +48,11 @@ fn vertex_main(
       vec2<f32>((sprite.pos.x / sprite.sheet_size.x), (sprite.pos.y / sprite.sheet_size.y)), // top-left
       vec2<f32>(((sprite.pos.x + sprite.size.x) / sprite.sheet_size.x), (sprite.pos.y / sprite.sheet_size.y)), // top-right
   );
+  var uv = uvs[VertexIndex % 6];
 
   var output : VertexOutput;
   output.Position = vec4<f32>(pos.x, 0.0, pos.y, 1.0) * uniforms.modelViewProjectionMatrix;
-  output.fragUV = uvs[VertexIndex % 6];
-  // output.fragUV.y = 1.0 - output.fragUV.y; // flip UV because .tga files are stored upside down
+  output.fragUV = uv;
 
   output.fragPosition = 0.5 * (output.Position + vec4<f32>(1.0, 1.0, 1.0, 1.0));
   return output;
