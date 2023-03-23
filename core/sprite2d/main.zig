@@ -55,8 +55,6 @@ pipeline: *gpu.RenderPipeline,
 queue: *gpu.Queue,
 uniform_buffer: *gpu.Buffer,
 bind_group: *gpu.BindGroup,
-depth_texture: *gpu.Texture,
-depth_texture_view: *gpu.TextureView,
 sprite: Sprite,
 sprite_two: Sprite,
 sheet: SpriteSheet,
@@ -104,23 +102,10 @@ pub fn init(app: *App) !void {
 
     const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
         .fragment = &fragment,
-        // Enable depth testing so that the fragment closest to the camera
-        // is rendered in front.
-        .depth_stencil = &.{
-            .format = .depth24_plus,
-            .depth_write_enabled = true,
-            .depth_compare = .less,
-        },
         .vertex = gpu.VertexState.init(.{
             .module = shader_module,
             .entry_point = "vertex_main",
         }),
-        .primitive = .{
-            // Backface culling since the cube is solid piece of geometry.
-            // Faces pointing away from the camera will be occluded by faces
-            // pointing toward the camera.
-            .cull_mode = .back,
-        },
     };
     const pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
 
@@ -183,25 +168,6 @@ pub fn init(app: *App) !void {
         }),
     );
 
-    const depth_texture = app.core.device().createTexture(&gpu.Texture.Descriptor{
-        .size = gpu.Extent3D{
-            .width = app.core.descriptor().width,
-            .height = app.core.descriptor().height,
-        },
-        .format = .depth24_plus,
-        .usage = .{
-            .render_attachment = true,
-            .texture_binding = true,
-        },
-    });
-
-    const depth_texture_view = depth_texture.createView(&gpu.TextureView.Descriptor{
-        .format = .depth24_plus,
-        .dimension = .dimension_2d,
-        .array_layer_count = 1,
-        .mip_level_count = 1,
-    });
-
     app.timer = try mach.Timer.start();
     app.fps_timer = try mach.Timer.start();
     app.window_title_timer = try mach.Timer.start();
@@ -209,8 +175,6 @@ pub fn init(app: *App) !void {
     app.queue = queue;
     app.uniform_buffer = uniform_buffer;
     app.bind_group = bind_group;
-    app.depth_texture = depth_texture;
-    app.depth_texture_view = depth_texture_view;
     app.sprites_buffer = sprites_buffer;
 
     shader_module.release();
@@ -222,8 +186,6 @@ pub fn deinit(app: *App) void {
 
     app.uniform_buffer.release();
     app.bind_group.release();
-    app.depth_texture.release();
-    app.depth_texture_view.release();
     app.sprites_buffer.release();
 }
 var entity_position = zm.f32x4(0, 0, 0, 0);
@@ -253,30 +215,6 @@ pub fn update(app: *App) !bool {
                     else => {},
                 }
             },
-            .framebuffer_resize => |ev| {
-                // If window is resized, recreate depth buffer otherwise we cannot use it.
-                app.depth_texture.release();
-
-                app.depth_texture = app.core.device().createTexture(&gpu.Texture.Descriptor{
-                    .size = gpu.Extent3D{
-                        .width = ev.width,
-                        .height = ev.height,
-                    },
-                    .format = .depth24_plus,
-                    .usage = .{
-                        .render_attachment = true,
-                        .texture_binding = true,
-                    },
-                });
-
-                app.depth_texture_view.release();
-                app.depth_texture_view = app.depth_texture.createView(&gpu.TextureView.Descriptor{
-                    .format = .depth24_plus,
-                    .dimension = .dimension_2d,
-                    .array_layer_count = 1,
-                    .mip_level_count = 1,
-                });
-            },
             .close => return true,
             else => {},
         }
@@ -296,12 +234,6 @@ pub fn update(app: *App) !bool {
     const encoder = app.core.device().createCommandEncoder(null);
     const render_pass_info = gpu.RenderPassDescriptor.init(.{
         .color_attachments = &.{color_attachment},
-        .depth_stencil_attachment = &.{
-            .view = app.depth_texture_view,
-            .depth_clear_value = 1.0,
-            .depth_load_op = .clear,
-            .depth_store_op = .store,
-        },
     });
 
     {
