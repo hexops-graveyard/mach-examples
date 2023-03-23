@@ -25,7 +25,7 @@ struct Sprite {
 fn vertex_main(
   @builtin(vertex_index) VertexIndex : u32
 ) -> VertexOutput {
-  var sprite_index = 1;
+  var sprite_index = VertexIndex / 6;
   var sprite = sprites[sprite_index];
   var width = sprite.width;
   var height = sprite.height;
