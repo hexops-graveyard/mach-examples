@@ -15,19 +15,6 @@ const UniformBufferObject = struct {
     mat: zm.Mat,
 };
 const Sprite = extern struct {
-    const Self = @This();
-
-    fn init(pos_x: f32, pos_y: f32, width: f32, height: f32, world_x: f32, world_y: f32, sheet_width: f32, sheet_height: f32) Self {
-        var self: Self = .{
-            .pos = Vec2{ pos_x, pos_y },
-            .size = Vec2{ width, height },
-            .world_pos = Vec2{ world_x, world_y },
-            .sheet_size = Vec2{ sheet_width, sheet_height },
-        };
-
-        return self;
-    }
-
     pos: Vec2,
     size: Vec2,
     world_pos: Vec2,
@@ -59,16 +46,26 @@ pub fn init(app: *App) !void {
     const allocator = gpa.allocator();
     try app.core.init(allocator, .{});
 
-    app.player_pos = Vec2{0, 0};
-    app.direction = Vec2{0, 0};
+    app.player_pos = Vec2{ 0, 0 };
+    app.direction = Vec2{ 0, 0 };
     app.sheet = SpriteSheet{ .width = 384.0, .height = 96.0 };
     app.sprites = std.ArrayList(Sprite).init(allocator);
 
     app.sprite1 = app.sprites.items.len;
-    try app.sprites.append(Sprite.init(0.0, 0.0, 64.0, 96.0, 0.0, 0.0, app.sheet.width, app.sheet.height));
+    try app.sprites.append(.{
+        .pos = Vec2{ 0, 0 },
+        .size = Vec2{ 64, 96 },
+        .world_pos = Vec2{ 0, 0 },
+        .sheet_size = Vec2{ app.sheet.width, app.sheet.height },
+    });
 
     app.sprite2 = app.sprites.items.len;
-    try app.sprites.append(Sprite.init(64.0, 0.0, 64.0, 96.0, 128.0, 128.0, app.sheet.width, app.sheet.height));
+    try app.sprites.append(.{
+        .pos = Vec2{ 64, 0 },
+        .size = Vec2{ 64, 96 },
+        .world_pos = Vec2{ 128, 128 },
+        .sheet_size = Vec2{ app.sheet.width, app.sheet.height },
+    });
 
     const shader_module = app.core.device().createShaderModuleWGSL("sprite-shader.wgsl", @embedFile("sprite-shader.wgsl"));
 
@@ -214,7 +211,7 @@ pub fn update(app: *App) !bool {
     }
 
     const delta_time = app.fps_timer.lap();
-    app.player_pos += app.direction * Vec2{speed, speed} * Vec2{delta_time, delta_time};
+    app.player_pos += app.direction * Vec2{ speed, speed } * Vec2{ delta_time, delta_time };
 
     const back_buffer_view = app.core.swapChain().getCurrentTextureView();
     const color_attachment = gpu.RenderPassColorAttachment{
