@@ -63,7 +63,6 @@ sprites_buffer: *gpu.Buffer,
 sprites: std.ArrayList(Sprite),
 sprites_frames: std.ArrayList(SpriteFrames),
 player_pos: Vec2,
-player_direction: f32,
 direction: Vec2,
 player_sprite_index: usize,
 
@@ -82,7 +81,6 @@ pub fn init(app: *App) !void {
     defer std.json.parseFree(JSONData, root, .{ .allocator = allocator });
 
     app.player_pos = Vec2{ 0, 0 };
-    app.player_direction = 0.0;
     app.direction = Vec2{ 0, 0 };
     app.sheet = root.sheet;
     std.log.info("Sheet Dimensions: {} {}", .{ app.sheet.width, app.sheet.height });
@@ -230,22 +228,10 @@ pub fn update(app: *App) !bool {
             .key_press => |ev| {
                 switch (ev.key) {
                     .space => return true,
-                    .left => {
-                        app.direction[0] += 1;
-                        app.player_direction = 2.0;
-                    },
-                    .right => {
-                        app.direction[0] -= 1;
-                        app.player_direction = 3.0;
-                    },
-                    .up => {
-                        app.direction[1] += 1;
-                        app.player_direction = 0.0;
-                    },
-                    .down => {
-                        app.direction[1] -= 1;
-                        app.player_direction = 1.0;
-                    },
+                    .left => app.direction[0] += 1,
+                    .right => app.direction[0] -= 1,
+                    .up => app.direction[1] += 1,
+                    .down => app.direction[1] -= 1,
                     else => {},
                 }
             },
@@ -299,14 +285,14 @@ fn render(app: *App) !void {
 
     const player_sprite = &app.sprites.items[app.player_sprite_index];
     const player_sprite_frame = &app.sprites_frames.items[app.player_sprite_index];
-    if (app.player_direction == 0.0) {
-        player_sprite.pos = player_sprite_frame.up;
-    } else if (app.player_direction == 1.0) {
-        player_sprite.pos = player_sprite_frame.down;
-    } else if (app.player_direction == 2.0) {
+    if (app.direction[0] == -1.0) {
         player_sprite.pos = player_sprite_frame.left;
-    } else if (app.player_direction == 3.0) {
+    } else if (app.direction[0] == 1.0) {
         player_sprite.pos = player_sprite_frame.right;
+    } else if (app.direction[1] == -1.0) {
+        player_sprite.pos = player_sprite_frame.down;
+    } else if (app.direction[1] == 1.0) {
+        player_sprite.pos = player_sprite_frame.up;
     }
     player_sprite.world_pos = app.player_pos;
 
