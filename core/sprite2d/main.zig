@@ -212,6 +212,170 @@ const SpriteRenderer = struct {
         return @intCast(u32, self.sprites.items.len * 6);
     }
 };
+const SpriteRendererRed = struct {
+    const Self = @This();
+
+    pipeline: *gpu.RenderPipeline,
+    texture: *gpu.Texture,
+    sprites_buffer: ?*gpu.Buffer,
+    sprites: std.ArrayList(Sprite),
+    bind_group: ?*gpu.BindGroup,
+    uniform_buffer: ?*gpu.Buffer,
+
+    fn init(core: *mach.Core, allocator: std.mem.Allocator, queue: *gpu.Queue) !Self {
+        const device = core.device();
+
+        var img = try zigimg.Image.fromMemory(allocator, assets.example_spritesheet_red_image);
+        defer img.deinit();
+
+        const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
+        std.log.info("Image Dimensions: {} {}", .{ img.width, img.height });
+
+        const texture = device.createTexture(&.{
+            .size = img_size,
+            .format = .rgba8_unorm,
+            .usage = .{
+                .texture_binding = true,
+                .copy_dst = true,
+                .render_attachment = true,
+            },
+        });
+        const data_layout = gpu.Texture.DataLayout{
+            .bytes_per_row = @intCast(u32, img.width * 4),
+            .rows_per_image = @intCast(u32, img.height),
+        };
+        switch (img.pixels) {
+            .rgba32 => |pixels| queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, pixels),
+            .rgb24 => |pixels| {
+                const data = try rgb24ToRgba32(allocator, pixels);
+                defer data.deinit(allocator);
+                queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, data.rgba32);
+            },
+            else => @panic("unsupported image color format"),
+        }
+
+        return Self{
+            .texture = texture,
+            .pipeline = Self.pipeline(core),
+            .sprites = std.ArrayList(Sprite).init(allocator),
+            .sprites_buffer = null,
+            .bind_group = null,
+            .uniform_buffer = null,
+        };
+    }
+
+    fn pipeline(core: *mach.Core) *gpu.RenderPipeline {
+        const device = core.device();
+
+        const shader_module = device.createShaderModuleWGSL("world-shader.wgsl", @embedFile("world-shader.wgsl"));
+        // TODO: At the end of the app init, shader_module is being released via shader_module.release() and we need to do that again in this struct
+
+        const blend = gpu.BlendState{
+            .color = .{
+                .operation = .add,
+                .src_factor = .src_alpha,
+                .dst_factor = .one_minus_src_alpha,
+            },
+            .alpha = .{
+                .operation = .add,
+                .src_factor = .one,
+                .dst_factor = .zero,
+            },
+        };
+        const color_target = gpu.ColorTargetState{
+            .format = core.descriptor().format,
+            .blend = &blend,
+            .write_mask = gpu.ColorWriteMaskFlags.all,
+        };
+        const fragment = gpu.FragmentState.init(.{
+            .module = shader_module,
+            .entry_point = "frag_main",
+            .targets = &.{color_target},
+        });
+
+        const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
+            .fragment = &fragment,
+            .vertex = gpu.VertexState.init(.{
+                .module = shader_module,
+                .entry_point = "vertex_main",
+            }),
+        };
+        return device.createRenderPipeline(&pipeline_descriptor);
+    }
+
+    fn addSpriteFromJSON(self: *Self, sprite: JSONSprite, sheet: SpriteSheet) !void {
+        try self.sprites.append(.{
+            .pos = Vec2{ sprite.pos[0], sprite.pos[1] },
+            .size = Vec2{ sprite.size[0], sprite.size[1] },
+            .world_pos = Vec2{ sprite.world_pos[0], sprite.world_pos[1] },
+            .sheet_size = Vec2{ sheet.width, sheet.height },
+        });
+    }
+
+    fn initSpritesBuffer(self: *Self, core: *mach.Core) void {
+        const sprites_buffer = core.device().createBuffer(&.{
+            .usage = .{ .storage = true, .copy_dst = true },
+            .size = @sizeOf(Sprite) * self.sprites.items.len,
+            .mapped_at_creation = true,
+        });
+        var sprites_mapped = sprites_buffer.getMappedRange(Sprite, 0, self.sprites.items.len);
+        std.mem.copy(Sprite, sprites_mapped.?, self.sprites.items[0..]);
+        sprites_buffer.unmap();
+
+        self.sprites_buffer = sprites_buffer;
+    }
+
+    fn initBindGroup(self: *Self, core: *mach.Core) void {
+        const uniform_buffer = core.device().createBuffer(&.{
+            .usage = .{ .copy_dst = true, .uniform = true },
+            .size = @sizeOf(UniformBufferObject),
+            .mapped_at_creation = false,
+        });
+
+        self.uniform_buffer = uniform_buffer;
+
+        // Create a sampler with linear filtering for smooth interpolation.
+        const sampler = core.device().createSampler(&.{
+            .mag_filter = .linear,
+            .min_filter = .linear,
+        });
+
+        const bind_group = core.device().createBindGroup(
+            &gpu.BindGroup.Descriptor.init(.{
+                .layout = self.pipeline.getBindGroupLayout(0),
+                .entries = &.{
+                    gpu.BindGroup.Entry.buffer(0, self.uniform_buffer.?, 0, @sizeOf(UniformBufferObject)),
+                    gpu.BindGroup.Entry.sampler(1, sampler),
+                    gpu.BindGroup.Entry.textureView(2, self.texture.createView(&gpu.TextureView.Descriptor{})),
+                    gpu.BindGroup.Entry.buffer(3, self.sprites_buffer.?, 0, @sizeOf(Sprite) * self.sprites.items.len),
+                },
+            }),
+        );
+
+        self.bind_group = bind_group;
+    }
+
+    fn getSprite(self: *Self, index: usize) *Sprite {
+        return &self.sprites.items[index];
+    }
+
+    fn deinit(self: *Self) void {
+        self.sprites.deinit();
+        // if (self.sprites_buffer != null) {
+        //     self.sprites_buffer.deinit();
+        // }
+        // if (self.uniform_buffer != null) {
+        //     self.uniform_buffer.deinit();
+        // }
+        // if (self.bind_group != null) {
+        //     self.bind_group.deinit();
+        // }
+    }
+
+    fn getTotalVertices(self: *Self) u32 {
+        return @intCast(u32, self.sprites.items.len * 6);
+    }
+};
 // const Player = struct {
 //     pos: vec2,
 //     direction: f32,
@@ -222,18 +386,14 @@ core: mach.Core,
 timer: mach.Timer,
 fps_timer: mach.Timer,
 window_title_timer: mach.Timer,
-pipeline: *gpu.RenderPipeline,
 queue: *gpu.Queue,
-uniform_buffer: *gpu.Buffer,
-bind_group: *gpu.BindGroup,
 sheet: SpriteSheet,
-sprites_buffer: *gpu.Buffer,
-sprites: std.ArrayList(Sprite),
-sprites_frames: std.ArrayList(SpriteFrames),
 player_pos: Vec2,
 direction: Vec2,
 player_sprite_index: usize,
 sprite_renderer: SpriteRenderer,
+sprite_renderer_red: SpriteRendererRed,
+sprites_frames: std.ArrayList(SpriteFrames),
 allocator: std.mem.Allocator,
 
 pub fn init(app: *App) !void {
@@ -244,6 +404,7 @@ pub fn init(app: *App) !void {
     app.queue = queue;
 
     app.sprite_renderer = try SpriteRenderer.init(&app.core, app.allocator, app.queue);
+    app.sprite_renderer_red = try SpriteRendererRed.init(&app.core, app.allocator, app.queue);
 
     const sprites_file = try std.fs.cwd().openFile(assets.example_spritesheet_json_path, .{ .mode = .read_only });
     defer sprites_file.close();
@@ -259,7 +420,6 @@ pub fn init(app: *App) !void {
     app.direction = Vec2{ 0, 0 };
     app.sheet = root.sheet;
     std.log.info("Sheet Dimensions: {} {}", .{ app.sheet.width, app.sheet.height });
-    app.sprites = std.ArrayList(Sprite).init(app.allocator);
     app.sprites_frames = std.ArrayList(SpriteFrames).init(app.allocator);
     for (root.sprites) |sprite| {
         std.log.info("Typeof Sprite {}", .{@TypeOf(sprite)});
@@ -267,16 +427,19 @@ pub fn init(app: *App) !void {
         std.log.info("Sprite Texture Position: {} {}", .{ sprite.pos[0], sprite.pos[1] });
         std.log.info("Sprite Dimensions: {} {}", .{ sprite.size[0], sprite.size[1] });
         if (sprite.is_player) {
-            app.player_sprite_index = app.sprites.items.len;
+            app.player_sprite_index = app.sprite_renderer.sprites.items.len;
         }
         try app.sprite_renderer.addSpriteFromJSON(sprite, app.sheet);
+        try app.sprite_renderer_red.addSpriteFromJSON(sprite, app.sheet);
         try app.sprites_frames.append(.{ .up = Vec2{ sprite.frames.up[0], sprite.frames.up[1] }, .down = Vec2{ sprite.frames.down[0], sprite.frames.down[1] }, .left = Vec2{ sprite.frames.left[0], sprite.frames.left[1] }, .right = Vec2{ sprite.frames.right[0], sprite.frames.right[1] } });
     }
-    std.log.info("Number of sprites: {}", .{app.sprites.items.len});
+    std.log.info("Number of sprites: {}", .{app.sprite_renderer.sprites.items.len});
 
     app.sprite_renderer.initSpritesBuffer(&app.core);
+    app.sprite_renderer_red.initSpritesBuffer(&app.core);
 
     app.sprite_renderer.initBindGroup(&app.core);
+    app.sprite_renderer_red.initBindGroup(&app.core);
 
     app.timer = try mach.Timer.start();
     app.fps_timer = try mach.Timer.start();
@@ -289,7 +452,7 @@ pub fn deinit(app: *App) void {
     defer app.core.deinit();
 
     app.sprite_renderer.deinit();
-
+    app.sprite_renderer_red.deinit();
     app.sprites_frames.deinit();
 }
 
@@ -390,14 +553,23 @@ fn render(app: *App) !void {
     // Pass the latest uniform values & sprite values to the shader program.
     encoder.writeBuffer(app.sprite_renderer.uniform_buffer.?, 0, &[_]UniformBufferObject{ubo});
     encoder.writeBuffer(app.sprite_renderer.sprites_buffer.?, 0, app.sprite_renderer.sprites.items);
+    encoder.writeBuffer(app.sprite_renderer_red.uniform_buffer.?, 0, &[_]UniformBufferObject{ubo});
+    encoder.writeBuffer(app.sprite_renderer_red.sprites_buffer.?, 0, app.sprite_renderer_red.sprites.items);
+    // TODO: Maybe we need something like the update function in structs in advanced-gen-texture-light where the queue is written into?
 
     // Draw the sprite batch
     const pass = encoder.beginRenderPass(&render_pass_info);
+    defer pass.release();
+
     pass.setPipeline(app.sprite_renderer.pipeline);
     pass.setBindGroup(0, app.sprite_renderer.bind_group.?, &.{});
     pass.draw(app.sprite_renderer.getTotalVertices(), 1, 0, 0);
+
+    pass.setPipeline(app.sprite_renderer_red.pipeline);
+    pass.setBindGroup(0, app.sprite_renderer_red.bind_group.?, &.{});
+    pass.draw(app.sprite_renderer_red.getTotalVertices(), 1, 0, 0);
+
     pass.end();
-    pass.release();
 
     // Submit the frame.
     var command = encoder.finish(null);
