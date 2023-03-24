@@ -20,7 +20,6 @@ const Sprite = extern struct {
     size: Vec2,
     world_pos: Vec2,
     sheet_size: Vec2,
-    frames: SpriteFrames,
 };
 const SpriteFrames = extern struct {
     up: Vec2,
@@ -62,6 +61,7 @@ bind_group: *gpu.BindGroup,
 sheet: SpriteSheet,
 sprites_buffer: *gpu.Buffer,
 sprites: std.ArrayList(Sprite),
+sprites_frames: std.ArrayList(SpriteFrames),
 player_pos: Vec2,
 player_direction: f32,
 direction: Vec2,
@@ -87,6 +87,7 @@ pub fn init(app: *App) !void {
     app.sheet = root.sheet;
     std.log.info("Sheet Dimensions: {} {}", .{ app.sheet.width, app.sheet.height });
     app.sprites = std.ArrayList(Sprite).init(allocator);
+    app.sprites_frames = std.ArrayList(SpriteFrames).init(allocator);
     for (root.sprites) |sprite| {
         std.log.info("Sprite World Position: {} {}", .{ sprite.world_pos[0], sprite.world_pos[1] });
         std.log.info("Sprite Texture Position: {} {}", .{ sprite.pos[0], sprite.pos[1] });
@@ -99,8 +100,8 @@ pub fn init(app: *App) !void {
             .size = Vec2{ sprite.size[0], sprite.size[1] },
             .world_pos = Vec2{ sprite.world_pos[0], sprite.world_pos[1] },
             .sheet_size = Vec2{ app.sheet.width, app.sheet.height },
-            .frames = SpriteFrames{ .up = Vec2{ sprite.frames.up[0], sprite.frames.up[1] }, .down = Vec2{ sprite.frames.down[0], sprite.frames.down[1] }, .left = Vec2{ sprite.frames.left[0], sprite.frames.left[1] }, .right = Vec2{ sprite.frames.right[0], sprite.frames.right[1] } },
         });
+        try app.sprites_frames.append(.{ .up = Vec2{ sprite.frames.up[0], sprite.frames.up[1] }, .down = Vec2{ sprite.frames.down[0], sprite.frames.down[1] }, .left = Vec2{ sprite.frames.left[0], sprite.frames.left[1] }, .right = Vec2{ sprite.frames.right[0], sprite.frames.right[1] } });
     }
     std.log.info("Number of sprites: {}", .{app.sprites.items.len});
 
@@ -215,6 +216,7 @@ pub fn deinit(app: *App) void {
     defer app.core.deinit();
 
     app.sprites.deinit();
+    app.sprites_frames.deinit();
     app.uniform_buffer.release();
     app.bind_group.release();
     app.sprites_buffer.release();
@@ -296,14 +298,15 @@ fn render(app: *App) !void {
     });
 
     const player_sprite = &app.sprites.items[app.player_sprite_index];
+    const player_sprite_frame = &app.sprites_frames.items[app.player_sprite_index];
     if (app.player_direction == 0.0) {
-        player_sprite.pos = player_sprite.frames.up;
+        player_sprite.pos = player_sprite_frame.up;
     } else if (app.player_direction == 1.0) {
-        player_sprite.pos = player_sprite.frames.down;
+        player_sprite.pos = player_sprite_frame.down;
     } else if (app.player_direction == 2.0) {
-        player_sprite.pos = player_sprite.frames.left;
+        player_sprite.pos = player_sprite_frame.left;
     } else if (app.player_direction == 3.0) {
-        player_sprite.pos = player_sprite.frames.right;
+        player_sprite.pos = player_sprite_frame.right;
     }
     player_sprite.world_pos = app.player_pos;
 
