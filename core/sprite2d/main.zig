@@ -3,14 +3,50 @@ const mach = @import("mach");
 const gpu = mach.gpu;
 const zm = @import("zmath");
 const zigimg = @import("zigimg");
-const Vertex = @import("cube_mesh.zig").Vertex;
-const vertices = @import("cube_mesh.zig").vertices;
 const assets = @import("assets");
+const json = std.json;
 
 pub const App = @This();
 
+const speed = 2.0 * 100.0; // pixels per second
+
+const Vec2 = @Vector(2, f32);
+
 const UniformBufferObject = struct {
     mat: zm.Mat,
+};
+const Sprite = extern struct {
+    pos: Vec2,
+    size: Vec2,
+    world_pos: Vec2,
+    sheet_size: Vec2,
+};
+const SpriteFrames = extern struct {
+    up: Vec2,
+    down: Vec2,
+    left: Vec2,
+    right: Vec2,
+};
+const JSONFrames = struct {
+    up: []f32,
+    down: []f32,
+    left: []f32,
+    right: []f32,
+};
+const JSONSprite = struct {
+    pos: []f32,
+    size: []f32,
+    world_pos: []f32,
+    is_player: bool = false,
+    frames: JSONFrames,
+};
+const SpriteSheet = struct {
+    width: f32,
+    height: f32,
+};
+const JSONData = struct {
+    sheet: SpriteSheet,
+    sprites: []JSONSprite,
 };
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
@@ -20,29 +56,54 @@ fps_timer: mach.Timer,
 window_title_timer: mach.Timer,
 pipeline: *gpu.RenderPipeline,
 queue: *gpu.Queue,
-vertex_buffer: *gpu.Buffer,
 uniform_buffer: *gpu.Buffer,
 bind_group: *gpu.BindGroup,
-depth_texture: *gpu.Texture,
-depth_texture_view: *gpu.TextureView,
+sheet: SpriteSheet,
+sprites_buffer: *gpu.Buffer,
+sprites: std.ArrayList(Sprite),
+sprites_frames: std.ArrayList(SpriteFrames),
+player_pos: Vec2,
+direction: Vec2,
+player_sprite_index: usize,
 
 pub fn init(app: *App) !void {
     const allocator = gpa.allocator();
     try app.core.init(allocator, .{});
 
-    entity_position = zm.f32x4(0, 0, 0, 0);
+    const sprites_file = try std.fs.cwd().openFile(assets.example_spritesheet_json_path, .{ .mode = .read_only });
+    defer sprites_file.close();
+    const file_size = (try sprites_file.stat()).size;
+    var buffer = try allocator.alloc(u8, file_size);
+    defer allocator.free(buffer);
+    try sprites_file.reader().readNoEof(buffer);
+    var stream = std.json.TokenStream.init(buffer);
+    const root = try std.json.parse(JSONData, &stream, .{ .allocator = allocator });
+    defer std.json.parseFree(JSONData, root, .{ .allocator = allocator });
 
-    const shader_module = app.core.device().createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
+    app.player_pos = Vec2{ 0, 0 };
+    app.direction = Vec2{ 0, 0 };
+    app.sheet = root.sheet;
+    std.log.info("Sheet Dimensions: {} {}", .{ app.sheet.width, app.sheet.height });
+    app.sprites = std.ArrayList(Sprite).init(allocator);
+    app.sprites_frames = std.ArrayList(SpriteFrames).init(allocator);
+    for (root.sprites) |sprite| {
+        std.log.info("Sprite World Position: {} {}", .{ sprite.world_pos[0], sprite.world_pos[1] });
+        std.log.info("Sprite Texture Position: {} {}", .{ sprite.pos[0], sprite.pos[1] });
+        std.log.info("Sprite Dimensions: {} {}", .{ sprite.size[0], sprite.size[1] });
+        if (sprite.is_player) {
+            app.player_sprite_index = app.sprites.items.len;
+        }
+        try app.sprites.append(.{
+            .pos = Vec2{ sprite.pos[0], sprite.pos[1] },
+            .size = Vec2{ sprite.size[0], sprite.size[1] },
+            .world_pos = Vec2{ sprite.world_pos[0], sprite.world_pos[1] },
+            .sheet_size = Vec2{ app.sheet.width, app.sheet.height },
+        });
+        try app.sprites_frames.append(.{ .up = Vec2{ sprite.frames.up[0], sprite.frames.up[1] }, .down = Vec2{ sprite.frames.down[0], sprite.frames.down[1] }, .left = Vec2{ sprite.frames.left[0], sprite.frames.left[1] }, .right = Vec2{ sprite.frames.right[0], sprite.frames.right[1] } });
+    }
+    std.log.info("Number of sprites: {}", .{app.sprites.items.len});
 
-    const vertex_attributes = [_]gpu.VertexAttribute{
-        .{ .format = .float32x4, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
-        .{ .format = .float32x2, .offset = @offsetOf(Vertex, "uv"), .shader_location = 1 },
-    };
-    const vertex_buffer_layout = gpu.VertexBufferLayout.init(.{
-        .array_stride = @sizeOf(Vertex),
-        .step_mode = .vertex,
-        .attributes = &vertex_attributes,
-    });
+    const shader_module = app.core.device().createShaderModuleWGSL("sprite-shader.wgsl", @embedFile("sprite-shader.wgsl"));
 
     const blend = gpu.BlendState{
         .color = .{
@@ -69,35 +130,21 @@ pub fn init(app: *App) !void {
 
     const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
         .fragment = &fragment,
-        // Enable depth testing so that the fragment closest to the camera
-        // is rendered in front.
-        .depth_stencil = &.{
-            .format = .depth24_plus,
-            .depth_write_enabled = true,
-            .depth_compare = .less,
-        },
         .vertex = gpu.VertexState.init(.{
             .module = shader_module,
             .entry_point = "vertex_main",
-            .buffers = &.{vertex_buffer_layout},
         }),
-        .primitive = .{
-            // Backface culling since the cube is solid piece of geometry.
-            // Faces pointing away from the camera will be occluded by faces
-            // pointing toward the camera.
-            .cull_mode = .back,
-        },
     };
     const pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
 
-    const vertex_buffer = app.core.device().createBuffer(&.{
-        .usage = .{ .vertex = true },
-        .size = @sizeOf(Vertex) * vertices.len,
+    const sprites_buffer = app.core.device().createBuffer(&.{
+        .usage = .{ .storage = true, .copy_dst = true },
+        .size = @sizeOf(Sprite) * app.sprites.items.len,
         .mapped_at_creation = true,
     });
-    var vertex_mapped = vertex_buffer.getMappedRange(Vertex, 0, vertices.len);
-    std.mem.copy(Vertex, vertex_mapped.?, vertices[0..]);
-    vertex_buffer.unmap();
+    var sprites_mapped = sprites_buffer.getMappedRange(Sprite, 0, app.sprites.items.len);
+    std.mem.copy(Sprite, sprites_mapped.?, app.sprites.items[0..]);
+    sprites_buffer.unmap();
 
     // Create a sampler with linear filtering for smooth interpolation.
     const sampler = app.core.device().createSampler(&.{
@@ -105,10 +152,11 @@ pub fn init(app: *App) !void {
         .min_filter = .linear,
     });
     const queue = app.core.device().getQueue();
-    var img = try zigimg.Image.fromMemory(allocator, assets.gotta_go_fast_image);
+    var img = try zigimg.Image.fromMemory(allocator, assets.example_spritesheet_image);
     defer img.deinit();
     const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
-    const cube_texture = app.core.device().createTexture(&.{
+    std.log.info("Image Dimensions: {} {}", .{ img.width, img.height });
+    const texture = app.core.device().createTexture(&.{
         .size = img_size,
         .format = .rgba8_unorm,
         .usage = .{
@@ -122,11 +170,11 @@ pub fn init(app: *App) !void {
         .rows_per_image = @intCast(u32, img.height),
     };
     switch (img.pixels) {
-        .rgba32 => |pixels| queue.writeTexture(&.{ .texture = cube_texture }, &data_layout, &img_size, pixels),
+        .rgba32 => |pixels| queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, pixels),
         .rgb24 => |pixels| {
             const data = try rgb24ToRgba32(allocator, pixels);
             defer data.deinit(allocator);
-            queue.writeTexture(&.{ .texture = cube_texture }, &data_layout, &img_size, data.rgba32);
+            queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, data.rgba32);
         },
         else => @panic("unsupported image color format"),
     }
@@ -143,40 +191,20 @@ pub fn init(app: *App) !void {
             .entries = &.{
                 gpu.BindGroup.Entry.buffer(0, uniform_buffer, 0, @sizeOf(UniformBufferObject)),
                 gpu.BindGroup.Entry.sampler(1, sampler),
-                gpu.BindGroup.Entry.textureView(2, cube_texture.createView(&gpu.TextureView.Descriptor{})),
+                gpu.BindGroup.Entry.textureView(2, texture.createView(&gpu.TextureView.Descriptor{})),
+                gpu.BindGroup.Entry.buffer(3, sprites_buffer, 0, @sizeOf(Sprite) * app.sprites.items.len),
             },
         }),
     );
-
-    const depth_texture = app.core.device().createTexture(&gpu.Texture.Descriptor{
-        .size = gpu.Extent3D{
-            .width = app.core.descriptor().width,
-            .height = app.core.descriptor().height,
-        },
-        .format = .depth24_plus,
-        .usage = .{
-            .render_attachment = true,
-            .texture_binding = true,
-        },
-    });
-
-    const depth_texture_view = depth_texture.createView(&gpu.TextureView.Descriptor{
-        .format = .depth24_plus,
-        .dimension = .dimension_2d,
-        .array_layer_count = 1,
-        .mip_level_count = 1,
-    });
 
     app.timer = try mach.Timer.start();
     app.fps_timer = try mach.Timer.start();
     app.window_title_timer = try mach.Timer.start();
     app.pipeline = pipeline;
     app.queue = queue;
-    app.vertex_buffer = vertex_buffer;
     app.uniform_buffer = uniform_buffer;
     app.bind_group = bind_group;
-    app.depth_texture = depth_texture;
-    app.depth_texture_view = depth_texture_view;
+    app.sprites_buffer = sprites_buffer;
 
     shader_module.release();
 }
@@ -185,75 +213,67 @@ pub fn deinit(app: *App) void {
     defer _ = gpa.deinit();
     defer app.core.deinit();
 
-    app.vertex_buffer.release();
+    app.sprites.deinit();
+    app.sprites_frames.deinit();
     app.uniform_buffer.release();
     app.bind_group.release();
-    app.depth_texture.release();
-    app.depth_texture_view.release();
+    app.sprites_buffer.release();
 }
-var entity_position = zm.f32x4(0, 0, 0, 0);
-var direction = zm.f32x4(0, 0, 0, 0);
 
-const speed = 2.0 * 100.0; // pixels per second
 pub fn update(app: *App) !bool {
+    // Handle input by determining the direction the player wants to go.
     var iter = app.core.pollEvents();
     while (iter.next()) |event| {
         switch (event) {
             .key_press => |ev| {
                 switch (ev.key) {
                     .space => return true,
-                    .left => direction[0] += 1,
-                    .right => direction[0] -= 1,
-                    .up => direction[2] += 1,
-                    .down => direction[2] -= 1,
+                    .left => app.direction[0] += 1,
+                    .right => app.direction[0] -= 1,
+                    .up => app.direction[1] += 1,
+                    .down => app.direction[1] -= 1,
                     else => {},
                 }
             },
             .key_release => |ev| {
                 switch (ev.key) {
-                    .left => direction[0] -= 1,
-                    .right => direction[0] += 1,
-                    .up => direction[2] -= 1,
-                    .down => direction[2] += 1,
+                    .left => app.direction[0] -= 1,
+                    .right => app.direction[0] += 1,
+                    .up => app.direction[1] -= 1,
+                    .down => app.direction[1] += 1,
                     else => {},
                 }
-            },
-            .framebuffer_resize => |ev| {
-                // If window is resized, recreate depth buffer otherwise we cannot use it.
-                app.depth_texture.release();
-
-                app.depth_texture = app.core.device().createTexture(&gpu.Texture.Descriptor{
-                    .size = gpu.Extent3D{
-                        .width = ev.width,
-                        .height = ev.height,
-                    },
-                    .format = .depth24_plus,
-                    .usage = .{
-                        .render_attachment = true,
-                        .texture_binding = true,
-                    },
-                });
-
-                app.depth_texture_view.release();
-                app.depth_texture_view = app.depth_texture.createView(&gpu.TextureView.Descriptor{
-                    .format = .depth24_plus,
-                    .dimension = .dimension_2d,
-                    .array_layer_count = 1,
-                    .mip_level_count = 1,
-                });
             },
             .close => return true,
             else => {},
         }
     }
 
+    // Calculate the player position, by moving in the direction the player wants to go
+    // by the speed amount. Multiply by delta_time to ensure that movement is the same speed
+    // regardless of the frame rate.
     const delta_time = app.fps_timer.lap();
-    entity_position += direction * zm.splat(@Vector(4, f32), speed) * zm.splat(@Vector(4, f32), delta_time);
+    app.player_pos += app.direction * Vec2{ speed, speed } * Vec2{ delta_time, delta_time };
 
+    // Render the frame
+    try app.render();
+
+    // Every second, update the window title with the FPS
+    if (app.window_title_timer.read() >= 1.0) {
+        app.window_title_timer.reset();
+        var buf: [32]u8 = undefined;
+        const title = try std.fmt.bufPrintZ(&buf, "Sprite2D [ FPS: {d} ]", .{@floor(1 / delta_time)});
+        app.core.setTitle(title);
+    }
+    return false;
+}
+
+fn render(app: *App) !void {
     const back_buffer_view = app.core.swapChain().getCurrentTextureView();
     const color_attachment = gpu.RenderPassColorAttachment{
         .view = back_buffer_view,
-        .clear_value = .{ .r = 0.5, .g = 0.5, .b = 0.5, .a = 0.0 },
+        // sky blue background color:
+        .clear_value = .{ .r = 0.52, .g = 0.8, .b = 0.92, .a = 1.0 },
         .load_op = .clear,
         .store_op = .store,
     };
@@ -261,61 +281,59 @@ pub fn update(app: *App) !bool {
     const encoder = app.core.device().createCommandEncoder(null);
     const render_pass_info = gpu.RenderPassDescriptor.init(.{
         .color_attachments = &.{color_attachment},
-        .depth_stencil_attachment = &.{
-            .view = app.depth_texture_view,
-            .depth_clear_value = 1.0,
-            .depth_load_op = .clear,
-            .depth_store_op = .store,
-        },
     });
 
-    {
-        const model = zm.translation(entity_position[0], entity_position[1], entity_position[2]);
-        const view = zm.lookAtRh(
-            zm.f32x4(0, 1000, 0, 1),
-            zm.f32x4(0, 0, 0, 1),
-            zm.f32x4(0, 0, 1, 0),
-        );
-
-        // One pixel in our scene will equal one window pixel (i.e. be roughly the same size
-        // irrespective of whether the user has a Retina/HDPI display.)
-        const proj = zm.orthographicRh(
-            @intToFloat(f32, app.core.size().width),
-            @intToFloat(f32, app.core.size().height),
-            0.1,
-            1000,
-        );
-        const mvp = zm.mul(zm.mul(model, view), proj);
-        const ubo = UniformBufferObject{
-            .mat = zm.transpose(mvp),
-        };
-        encoder.writeBuffer(app.uniform_buffer, 0, &[_]UniformBufferObject{ubo});
+    const player_sprite = &app.sprites.items[app.player_sprite_index];
+    const player_sprite_frame = &app.sprites_frames.items[app.player_sprite_index];
+    if (app.direction[0] == -1.0) {
+        player_sprite.pos = player_sprite_frame.left;
+    } else if (app.direction[0] == 1.0) {
+        player_sprite.pos = player_sprite_frame.right;
+    } else if (app.direction[1] == -1.0) {
+        player_sprite.pos = player_sprite_frame.down;
+    } else if (app.direction[1] == 1.0) {
+        player_sprite.pos = player_sprite_frame.up;
     }
+    player_sprite.world_pos = app.player_pos;
 
+    // One pixel in our scene will equal one window pixel (i.e. be roughly the same size
+    // irrespective of whether the user has a Retina/HDPI display.)
+    const proj = zm.orthographicRh(
+        @intToFloat(f32, app.core.size().width),
+        @intToFloat(f32, app.core.size().height),
+        0.1,
+        1000,
+    );
+    const view = zm.lookAtRh(
+        zm.f32x4(0, 1000, 0, 1),
+        zm.f32x4(0, 0, 0, 1),
+        zm.f32x4(0, 0, 1, 0),
+    );
+    const mvp = zm.mul(view, proj);
+    const ubo = UniformBufferObject{
+        .mat = zm.transpose(mvp),
+    };
+
+    // Pass the latest uniform values & sprite values to the shader program.
+    encoder.writeBuffer(app.uniform_buffer, 0, &[_]UniformBufferObject{ubo});
+    encoder.writeBuffer(app.sprites_buffer, 0, app.sprites.items);
+
+    // Draw the sprite batch
+    const total_vertices = @intCast(u32, app.sprites.items.len * 6);
     const pass = encoder.beginRenderPass(&render_pass_info);
     pass.setPipeline(app.pipeline);
-    pass.setVertexBuffer(0, app.vertex_buffer, 0, @sizeOf(Vertex) * vertices.len);
     pass.setBindGroup(0, app.bind_group, &.{});
-    pass.draw(6, 1, 0, 0);
+    pass.draw(total_vertices, 1, 0, 0);
     pass.end();
     pass.release();
 
+    // Submit the frame.
     var command = encoder.finish(null);
     encoder.release();
-
     app.queue.submit(&[_]*gpu.CommandBuffer{command});
     command.release();
     app.core.swapChain().present();
     back_buffer_view.release();
-
-    if (app.window_title_timer.read() >= 1.0) {
-        app.window_title_timer.reset();
-        var buf: [32]u8 = undefined;
-        const title = try std.fmt.bufPrintZ(&buf, "Sprite2D [ FPS: {d} ]", .{@floor(1 / delta_time)});
-        app.core.setTitle(title);
-    }
-
-    return false;
 }
 
 fn rgb24ToRgba32(allocator: std.mem.Allocator, in: []zigimg.color.Rgb24) !zigimg.color.PixelStorage {
