@@ -20,6 +20,8 @@ pub const gotta_go_fast_image = @embedFile("gotta-go-fast.png");
 
 const example_spritesheet_image_path = sprites_path ++ "sheet.png";
 pub const example_spritesheet_image = @embedFile("sprites/sheet.png");
+const example_spritesheet_red_image_path = sprites_path ++ "sheet-red.png";
+pub const example_spritesheet_red_image = @embedFile("sprites/sheet-red.png");
 
 pub const example_spritesheet_json_path = sprites_path ++ "sprites.json";
 
