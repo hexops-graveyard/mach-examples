@@ -18,7 +18,8 @@ pub const module = ecs.Module(.{
 
 pub const Vec2 = extern struct { x: f32, y: f32 };
 
-fn update(msg: Message) void {
+fn update(engine: anytype, msg: Message) !void {
+    _ = engine;
     switch (msg) {
         // TODO: implement queries, ability to set components, etc.
         .tick => std.log.debug("physics tick!", .{}),
