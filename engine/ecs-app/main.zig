@@ -64,6 +64,8 @@ fn update(engine: anytype, msg: Message) !void {
 
             // TODO: there could be an entities wrapper to interact with a single namespace so you don't
             // have to pass it in as a parameter always?
+
+            engine.set(.mach, .exit, true);
         },
     }
 }
