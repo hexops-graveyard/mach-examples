@@ -28,6 +28,7 @@ var uniform_buffer: *gpu.Buffer = undefined;
 var bind_group: *gpu.BindGroup = undefined;
 
 var primitives_data: [7]PrimitiveRenderData = undefined;
+
 pub var curr_primitive_index: u4 = 0;
 
 pub fn init(core: *mach.Core, allocator: std.mem.Allocator, timer: mach.Timer) !void {
@@ -82,7 +83,6 @@ pub fn init(core: *mach.Core, allocator: std.mem.Allocator, timer: mach.Timer) !
         defer cone_primitive.vertex_data.deinit();
         defer cone_primitive.index_data.deinit();
     }
-
     var bind_group_layout = createBindGroupLayout(core);
     createBindBuffer(core, bind_group_layout);
 
