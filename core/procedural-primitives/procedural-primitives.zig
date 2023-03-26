@@ -187,7 +187,7 @@ pub fn createCubePrimitive(allocator: std.mem.Allocator, size: f32) !Primitive {
 const VertexDataMAL = std.MultiArrayList(VertexData);
 
 pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height: f32, num_sides: u32) !Primitive {
-    const alloc_amt_vert: u32 = (num_sides * 12) / 3;
+    const alloc_amt_vert: u32 = num_sides * 2 + 2;
     const alloc_amt_idx: u32 = num_sides * 12;
 
     var vertex_data = VertexDataMAL{};
@@ -263,7 +263,7 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
 }
 
 pub fn createConePrimitive(allocator: std.mem.Allocator, radius: f32, height: f32, num_sides: u32) !Primitive {
-    const alloc_amt_vert: u32 = (num_sides * 6) / 3;
+    const alloc_amt_vert: u32 = num_sides + 2;
     const alloc_amt_idx: u32 = num_sides * 6;
 
     var vertex_data = VertexDataMAL{};
