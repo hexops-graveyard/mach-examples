@@ -38,7 +38,7 @@ pub fn update(app: *App) !bool {
                 // TODO(Rok Kos): Improve this, maybe even make ImGui for this
                 if (ev.key == .right) {
                     renderer.curr_primitive_index += 1;
-                    renderer.curr_primitive_index %= 6;
+                    renderer.curr_primitive_index %= 7;
                 }
             },
             .close => return true,

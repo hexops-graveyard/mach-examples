@@ -27,7 +27,7 @@ const UniformBufferObject = struct {
 var uniform_buffer: *gpu.Buffer = undefined;
 var bind_group: *gpu.BindGroup = undefined;
 
-var primitives_data: [6]PrimitiveRenderData = undefined;
+var primitives_data: [7]PrimitiveRenderData = undefined;
 pub var curr_primitive_index: u4 = 0;
 
 pub fn init(core: *mach.Core, allocator: std.mem.Allocator, timer: mach.Timer) !void {
@@ -74,6 +74,13 @@ pub fn init(core: *mach.Core, allocator: std.mem.Allocator, timer: mach.Timer) !
         primitives_data[5] = PrimitiveRenderData{ .vertex_buffer = createVertexBuffer(core, cylinder_primitive), .index_buffer = createIndexBuffer(core, cylinder_primitive), .vertex_count = cylinder_primitive.vertex_count, .index_count = cylinder_primitive.index_count };
         defer cylinder_primitive.vertex_data.deinit();
         defer cylinder_primitive.index_data.deinit();
+    }
+
+    {
+        const cone_primitive = try primitives.createConePrimitive(allocator, 0.7, 1.0, 15);
+        primitives_data[6] = PrimitiveRenderData{ .vertex_buffer = createVertexBuffer(core, cone_primitive), .index_buffer = createIndexBuffer(core, cone_primitive), .vertex_count = cone_primitive.vertex_count, .index_count = cone_primitive.index_count };
+        defer cone_primitive.vertex_data.deinit();
+        defer cone_primitive.index_data.deinit();
     }
 
     var bind_group_layout = createBindGroupLayout(core);
