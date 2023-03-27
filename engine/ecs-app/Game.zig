@@ -21,11 +21,11 @@ pub fn init(adapter: anytype) !void {
     var physics2d = adapter.mod(.physics2d);
 
     // The Mach .core is where we set window options, etc.
-    const core = mach.getState(.core);
+    const core = mach.state().core;
     core.setTitle("Hello, ECS!");
 
     // We can get the GPU device:
-    const device = mach.getState(.device);
+    const device = mach.state().device;
     _ = device; // TODO: actually show off using the GPU device
 
     // We can create entities, and set components on them. Note that components live in a module
@@ -36,5 +36,5 @@ pub fn init(adapter: anytype) !void {
     try renderer.set(player, .location, .{ .x = 0, .y = 0, .z = 0 });
     try physics2d.set(player, .location, .{ .x = 0, .y = 0 });
 
-    mach.setState(.exit, true);
+    try adapter.send(.machExit);
 }
