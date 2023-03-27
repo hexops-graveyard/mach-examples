@@ -1,6 +1,4 @@
 const std = @import("std");
-const mach = @import("mach");
-const ecs = mach.ecs;
 
 // Each module must have a globally unique name declared, it is impossible to use two modules with
 // the same name in a program. To avoid name conflicts, we follow naming conventions:
@@ -15,26 +13,28 @@ const ecs = mach.ecs;
 pub const name = .game;
 
 pub fn init(adapter: anytype) !void {
-    std.debug.print("game init!", .{});
+    std.debug.print("Game.init!\n", .{});
+
+    // The adapter lets us get a type-safe interface to interact with any module in our program.
+    var mach = adapter.mod(.mach);
+    var renderer = adapter.mod(.renderer);
+    var physics2d = adapter.mod(.physics2d);
+
     // The Mach .core is where we set window options, etc.
-    const core = adapter.get(.mach, .core);
+    const core = mach.getState(.core);
     core.setTitle("Hello, ECS!");
 
     // We can get the GPU device:
-    const device = adapter.get(.mach, .device);
+    const device = mach.getState(.device);
     _ = device; // TODO: actually show off using the GPU device
 
     // We can create entities, and set components on them. Note that components live in a module
-    // namespace, so we set the `.renderer, .location` component which is different than the
-    // `.physics2d, .location` component.
+    // namespace, the `.renderer` module `.location` component is a different type than the
+    // `.physics2d` module `.location` component.
 
-    // TODO: cut out the `.entities.` in this API to make it more brief
-    const player = try adapter.entities.new();
-    try adapter.entities.setComponent(player, .renderer, .location, .{ .x = 0, .y = 0, .z = 0 });
-    try adapter.entities.setComponent(player, .physics2d, .location, .{ .x = 0, .y = 0 });
+    const player = try adapter.newEntity();
+    try renderer.set(player, .location, .{ .x = 0, .y = 0, .z = 0 });
+    try physics2d.set(player, .location, .{ .x = 0, .y = 0 });
 
-    // TODO: there could be an entities wrapper to interact with a single namespace so you don't
-    // have to pass it in as a parameter always?
-
-    adapter.set(.mach, .exit, true);
+    mach.setState(.exit, true);
 }
