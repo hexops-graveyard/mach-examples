@@ -197,8 +197,8 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
     var out_vertex_data = try std.ArrayList(VertexData).initCapacity(allocator, alloc_amt_vert);
     var index_data = try std.ArrayList(u32).initCapacity(allocator, alloc_amt_idx);
 
-    vertex_data.appendAssumeCapacity(VertexData{.position = F32x3{0.0, (height/2.0), 0.0}, .normal = undefined});
-    vertex_data.appendAssumeCapacity(VertexData{.position = F32x3{0.0, -(height/2.0), 0.0}, .normal = undefined});
+    vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ 0.0, (height / 2.0), 0.0 }, .normal = undefined });
+    vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ 0.0, -(height / 2.0), 0.0 }, .normal = undefined });
 
     const angle = 2.0 * PI / @intToFloat(f32, num_sides);
 
@@ -208,9 +208,8 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
         const x: f32 = radius * zmath.sin(angle * float_i);
         const y: f32 = radius * zmath.cos(angle * float_i);
 
-        vertex_data.appendAssumeCapacity(VertexData{.position = F32x3{x, (height/2.0), y}, .normal = undefined});
-        vertex_data.appendAssumeCapacity(VertexData{.position = F32x3{x, -(height/2.0), y}, .normal = undefined});
-
+        vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ x, (height / 2.0), y }, .normal = undefined });
+        vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ x, -(height / 2.0), y }, .normal = undefined });
     }
 
     var group1: u32 = 1;
@@ -235,9 +234,9 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
             var indexB: u32 = index_data.items[i + 1];
             var indexC: u32 = index_data.items[i + 2];
 
-            var vert1: F32x4 = F32x4{ vertex_data.get(indexA).position[0],vertex_data.get(indexA).position[1],vertex_data.get(indexA).position[2], 1.0 };
-            var vert2: F32x4 = F32x4{ vertex_data.get(indexB).position[0],vertex_data.get(indexB).position[1],vertex_data.get(indexB).position[2], 1.0 };
-            var vert3: F32x4 = F32x4{ vertex_data.get(indexC).position[0],vertex_data.get(indexC).position[1],vertex_data.get(indexC).position[2], 1.0 };
+            var vert1: F32x4 = F32x4{ vertex_data.get(indexA).position[0], vertex_data.get(indexA).position[1], vertex_data.get(indexA).position[2], 1.0 };
+            var vert2: F32x4 = F32x4{ vertex_data.get(indexB).position[0], vertex_data.get(indexB).position[1], vertex_data.get(indexB).position[2], 1.0 };
+            var vert3: F32x4 = F32x4{ vertex_data.get(indexC).position[0], vertex_data.get(indexC).position[1], vertex_data.get(indexC).position[2], 1.0 };
 
             var edgeAB: F32x4 = vert2 - vert1;
             var edgeAC: F32x4 = vert3 - vert1;
@@ -256,8 +255,8 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
         }
     }
 
-    for(vertex_data.items(.position), vertex_data.items(.normal)) |pos, nor|{
-        out_vertex_data.appendAssumeCapacity(VertexData{.position = pos, .normal = nor});
+    for (vertex_data.items(.position), vertex_data.items(.normal)) |pos, nor| {
+        out_vertex_data.appendAssumeCapacity(VertexData{ .position = pos, .normal = nor });
     }
 
     return Primitive{ .vertex_data = out_vertex_data, .vertex_count = alloc_amt_vert, .index_data = index_data, .index_count = alloc_amt_idx, .type = .cylinder };
