@@ -2,6 +2,16 @@ const std = @import("std");
 const mach = @import("mach");
 const ecs = mach.ecs;
 
+// Each module must have a globally unique name declared, it is impossible to use two modules with
+// the same name in a program. To avoid name conflicts, we follow naming conventions:
+//
+// 1. `.mach` and the `.mach_foobar` namespace is reserved for Mach itself and the modules it
+//    provides.
+// 2. Single-word names like `.renderer`, `.game`, etc. are reserved for the application itself.
+// 3. Libraries which provide modules MUST be prefixed with an "owner" name, e.g. `.ziglibs_imgui`
+//    instead of `.imgui`. We encourage using e.g. your GitHub name, as these must be globally
+//    unique.
+//
 pub const name = .game;
 
 pub const Message = ecs.Messages(.{
