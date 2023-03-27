@@ -1,6 +1,4 @@
 // Experimental ECS app example. Not yet ready for actual use.
-
-const std = @import("std");
 const mach = @import("mach");
 
 const Renderer = @import("Renderer.zig");
