@@ -94,7 +94,11 @@ pub fn build(b: *std.Build) !void {
         .{ .name = "advanced-gen-texture-light", .deps = &.{.zmath} },
         .{ .name = "fractal-cube", .deps = &.{.zmath} },
         .{ .name = "textured-cube", .deps = &.{ .zmath, .zigimg, .assets } },
-        .{ .name = "sprite2d", .deps = &.{ .zmath, .zigimg, .assets } },
+        .{
+            .name = "sprite2d",
+            .deps = &.{ .zmath, .zigimg, .assets, .imgui },
+            .use_imgui = true,
+        },
         .{ .name = "ecs-app", .deps = &.{}, .mach_engine_example = true },
         .{ .name = "image-blur", .deps = &.{ .zigimg, .assets } },
         .{ .name = "cubemap", .deps = &.{ .zmath, .zigimg, .assets } },

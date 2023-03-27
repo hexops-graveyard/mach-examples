@@ -4,6 +4,7 @@ const gpu = mach.gpu;
 const zm = @import("zmath");
 const zigimg = @import("zigimg");
 const assets = @import("assets");
+const imgui = @import("imgui").MachImgui(mach);
 const json = std.json;
 
 pub const App = @This();
@@ -131,6 +132,11 @@ const SpriteRenderer = struct {
 
         const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
             .fragment = &fragment,
+            .depth_stencil = &.{
+                .format = .depth24_plus_stencil8,
+                .depth_write_enabled = true,
+                .depth_compare = .less,
+            },
             .vertex = gpu.VertexState.init(.{
                 .module = shader_module,
                 .entry_point = "vertex_main",
@@ -295,6 +301,11 @@ const SpriteRendererRed = struct {
 
         const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
             .fragment = &fragment,
+            .depth_stencil = &.{
+                .format = .depth24_plus_stencil8,
+                .depth_write_enabled = true,
+                .depth_compare = .less,
+            },
             .vertex = gpu.VertexState.init(.{
                 .module = shader_module,
                 .entry_point = "vertex_main",
@@ -395,6 +406,11 @@ sprite_renderer: SpriteRenderer,
 sprite_renderer_red: SpriteRendererRed,
 sprites_frames: std.ArrayList(SpriteFrames),
 allocator: std.mem.Allocator,
+imgui_render_pipeline: *gpu.RenderPipeline,
+color_attachment: gpu.RenderPassColorAttachment,
+depth_stencil_attachment_description: gpu.RenderPassDepthStencilAttachment,
+depth_texture: *gpu.Texture,
+depth_texture_view: *gpu.TextureView,
 
 pub fn init(app: *App) !void {
     app.allocator = gpa.allocator();
@@ -441,6 +457,45 @@ pub fn init(app: *App) !void {
     app.sprite_renderer.initBindGroup(&app.core);
     app.sprite_renderer_red.initBindGroup(&app.core);
 
+    imgui.init(gpa.allocator());
+    const font_normal = imgui.io.addFontFromFile(assets.fonts.roboto_medium.path, 18.0);
+    const blend_component_descriptor = gpu.BlendComponent{
+        .operation = .add,
+        .src_factor = .one,
+        .dst_factor = .zero,
+    };
+    const color_target_state = gpu.ColorTargetState{
+        .format = app.core.descriptor().format,
+        .blend = &.{
+            .color = blend_component_descriptor,
+            .alpha = blend_component_descriptor,
+        },
+    };
+    const shader_module = app.core.device().createShaderModuleWGSL("imgui", assets.shaders.imgui.bytes);
+    const imgui_pipeline_descriptor = gpu.RenderPipeline.Descriptor{
+        .depth_stencil = &.{
+            .format = .depth24_plus_stencil8,
+            .depth_write_enabled = true,
+        },
+        .fragment = &gpu.FragmentState.init(.{
+            .module = shader_module,
+            .entry_point = "frag_main",
+            .targets = &.{color_target_state},
+        }),
+        .vertex = gpu.VertexState.init(.{
+            .module = shader_module,
+            .entry_point = "vert_main",
+        }),
+    };
+    app.imgui_render_pipeline = app.core.device().createRenderPipeline(&imgui_pipeline_descriptor);
+    shader_module.release();
+    imgui.io.setDefaultFont(font_normal);
+    imgui.mach_backend.init(app.core.device(), app.core.descriptor().format, .{
+        .depth_stencil_format = @enumToInt(gpu.Texture.Format.depth24_plus_stencil8),
+    });
+
+    setupRenderPass(app);
+
     app.timer = try mach.Timer.start();
     app.fps_timer = try mach.Timer.start();
     app.window_title_timer = try mach.Timer.start();
@@ -454,6 +509,18 @@ pub fn deinit(app: *App) void {
     app.sprite_renderer.deinit();
     app.sprite_renderer_red.deinit();
     app.sprites_frames.deinit();
+}
+
+fn drawUI() void {
+    imgui.setNextWindowPos(.{ .x = 0, .y = 0 });
+    if (!imgui.begin("Settings", .{})) {
+        imgui.end();
+        return;
+    }
+
+    imgui.text("Text render!", .{});
+
+    imgui.end();
 }
 
 pub fn update(app: *App) !bool {
@@ -504,6 +571,47 @@ pub fn update(app: *App) !bool {
     return false;
 }
 
+fn setupRenderPass(app: *App) void {
+    app.color_attachment = gpu.RenderPassColorAttachment{
+        .clear_value = .{
+            .r = 0.0,
+            .g = 0.0,
+            .b = 0.0,
+            .a = 0.0,
+        },
+        .load_op = .clear,
+        .store_op = .store,
+    };
+
+    app.depth_texture = app.core.device().createTexture(&.{
+        .usage = .{ .render_attachment = true, .copy_src = true },
+        .format = .depth24_plus_stencil8,
+        .sample_count = 1,
+        .size = .{
+            .width = app.core.descriptor().width,
+            .height = app.core.descriptor().height,
+            .depth_or_array_layers = 1,
+        },
+    });
+
+    app.depth_texture_view = app.depth_texture.createView(&.{
+        .format = .depth24_plus_stencil8,
+        .dimension = .dimension_2d,
+        .array_layer_count = 1,
+        .aspect = .all,
+    });
+
+    app.depth_stencil_attachment_description = gpu.RenderPassDepthStencilAttachment{
+        .view = app.depth_texture_view,
+        .depth_load_op = .clear,
+        .depth_store_op = .store,
+        .depth_clear_value = 1.0,
+        .stencil_clear_value = 0,
+        .stencil_load_op = .clear,
+        .stencil_store_op = .store,
+    };
+}
+
 fn render(app: *App) !void {
     const back_buffer_view = app.core.swapChain().getCurrentTextureView();
     const color_attachment = gpu.RenderPassColorAttachment{
@@ -517,6 +625,7 @@ fn render(app: *App) !void {
     const encoder = app.core.device().createCommandEncoder(null);
     const render_pass_info = gpu.RenderPassDescriptor.init(.{
         .color_attachments = &.{color_attachment},
+        .depth_stencil_attachment = &app.depth_stencil_attachment_description,
     });
 
     const player_sprite = &app.sprite_renderer.sprites.items[app.player_sprite_index];
@@ -568,6 +677,16 @@ fn render(app: *App) !void {
     pass.setPipeline(app.sprite_renderer_red.pipeline);
     pass.setBindGroup(0, app.sprite_renderer_red.bind_group.?, &.{});
     pass.draw(app.sprite_renderer_red.getTotalVertices(), 1, 0, 0);
+
+    pass.setPipeline(app.imgui_render_pipeline);
+    const window_size = app.core.size();
+    imgui.mach_backend.newFrame(
+        &app.core,
+        window_size.width,
+        window_size.height,
+    );
+    drawUI();
+    imgui.mach_backend.draw(pass);
 
     pass.end();
 
