@@ -14,5 +14,5 @@ pub const Vec2 = extern struct { x: f32, y: f32 };
 
 pub fn tick(adapter: anytype) !void {
     _ = adapter;
-    std.log.debug("physics tick!", .{});
+    std.log.debug("Physics2D.tick!", .{});
 }
