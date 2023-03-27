@@ -16,8 +16,8 @@ pub const components = .{
 
 pub const Vec2 = extern struct { x: f32, y: f32 };
 
-pub fn update(engine: anytype, msg: Message) !void {
-    _ = engine;
+pub fn update(adapter: anytype, msg: Message) !void {
+    _ = adapter;
     switch (msg) {
         // TODO: implement queries, ability to set components, etc.
         .tick => std.log.debug("physics tick!", .{}),
