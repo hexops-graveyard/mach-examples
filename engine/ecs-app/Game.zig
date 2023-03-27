@@ -24,10 +24,6 @@ pub fn init(adapter: anytype) !void {
     const core = mach.state().core;
     core.setTitle("Hello, ECS!");
 
-    // We can get the GPU device:
-    const device = mach.state().device;
-    _ = device; // TODO: actually show off using the GPU device
-
     // We can create entities, and set components on them. Note that components live in a module
     // namespace, the `.renderer` module `.location` component is a different type than the
     // `.physics2d` module `.location` component.
@@ -35,6 +31,4 @@ pub fn init(adapter: anytype) !void {
     const player = try adapter.newEntity();
     try renderer.set(player, .location, .{ .x = 0, .y = 0, .z = 0 });
     try physics2d.set(player, .location, .{ .x = 0, .y = 0 });
-
-    try adapter.send(.machExit);
 }
