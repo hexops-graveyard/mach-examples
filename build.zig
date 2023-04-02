@@ -74,19 +74,6 @@ pub fn build(b: *std.Build) !void {
         .{ .name = "clear-color" },
         .{ .name = "procedural-primitives", .deps = &.{.zmath} },
         .{ .name = "boids" },
-        .{
-            .name = "pbr-basic",
-            .deps = &.{ .zmath, .model3d, .imgui, .assets },
-            .use_model3d = true,
-            .use_imgui = true,
-        },
-        .{
-            .name = "deferred-rendering",
-            .deps = &.{ .zmath, .model3d, .imgui, .assets },
-            .use_model3d = true,
-            .use_imgui = true,
-        },
-        .{ .name = "imgui", .deps = &.{ .imgui, .assets }, .use_imgui = true },
         .{ .name = "rotating-cube", .deps = &.{.zmath} },
         .{ .name = "pixel-post-process", .deps = &.{.zmath} },
         .{ .name = "two-cubes", .deps = &.{.zmath} },
@@ -101,6 +88,26 @@ pub fn build(b: *std.Build) !void {
         .{ .name = "map-async", .deps = &.{} },
         .{ .name = "sysaudio", .deps = &.{}, .mach_engine_example = true },
         .{
+            .name = "pbr-basic",
+            .deps = &.{ .zmath, .model3d, .imgui, .assets },
+            .std_platform_only = true,
+            .use_model3d = true,
+            .use_imgui = true,
+        },
+        .{
+            .name = "deferred-rendering",
+            .deps = &.{ .zmath, .model3d, .imgui, .assets },
+            .std_platform_only = true,
+            .use_model3d = true,
+            .use_imgui = true,
+        },
+        .{
+            .name = "imgui",
+            .deps = &.{ .imgui, .assets },
+            .std_platform_only = true,
+            .use_imgui = true,
+        },
+        .{
             .name = "gkurve",
             .deps = &.{ .zmath, .zigimg, .assets },
             .std_platform_only = true,
@@ -110,10 +117,10 @@ pub fn build(b: *std.Build) !void {
     }) |example| {
         // FIXME: this is workaround for a problem that some examples
         // (having the std_platform_only=true field) as well as zigimg
-        // uses IO which is not supported in freestanding environments.
-        // So break out of this loop as soon as any such examples is found.
-        // This does means that any example which works on wasm should be
-        // placed before those who dont.
+        // uses IO and imgui depends on gpu-dawn which is not supported
+        // in freestanding environments. So break out of this loop
+        // as soon as any such examples is found. This does means that any
+        // example which works on wasm should be placed before those who dont.
         if (example.std_platform_only)
             if (target.getCpuArch() == .wasm32)
                 break;
@@ -151,10 +158,10 @@ pub fn build(b: *std.Build) !void {
         const compile_step = b.step(example.name, "Compile " ++ example.name);
         compile_step.dependOn(&app.getInstallStep().?.step);
 
-        const run_cmd = try app.run();
-        run_cmd.dependOn(compile_step);
+        const run_cmd = app.run();
+        run_cmd.step.dependOn(compile_step);
         const run_step = b.step("run-" ++ example.name, "Run " ++ example.name);
-        run_step.dependOn(run_cmd);
+        run_step.dependOn(&run_cmd.step);
     }
 
     const compile_all = b.step("compile-all", "Compile all examples and applications");
