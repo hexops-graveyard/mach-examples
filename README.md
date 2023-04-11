@@ -28,29 +28,58 @@ In your `build.zig`, use `mach.App`:
 const std = @import("std");
 const mach = @import("libs/mach/build.zig");
 
+// Needs to be able to return an error with mach so, void -> !void
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const app = try mach.App.init(b, .{
+    //from:
+    //const exe = b.addExecutable(.{
+    //    .name = "myapp",
+    //    .root_source_file = .{ .path = "src/main.zig" },
+    //    .target = target,
+    //    .optimize = optimize,
+    //});
+    //
+    // to:
+    const exe = try mach.App.init(b, .{
         .name = "myapp",
         .src = "src/main.zig",
         .target = target,
         .deps = &[_]std.build.ModuleDependency{},
         .optimize = optimize,
     });
-    try app.link(.{});
-    app.install();
+    //used to link options if needed
+    try exe.link(.{});
 
-    const run_cmd = try app.run();
-    run_cmd.dependOn(b.getInstallStep());
+    //rest can stay the same
+    exe.install();
+
+    const run_cmd = exe.run();
+
+    run_cmd.step.dependOn(b.getInstallStep());
+
+    if (b.args) |args| {
+        run_cmd.addArgs(args);
+    }
 
     const run_step = b.step("run", "Run the app");
-    run_step.dependOn(run_cmd);
+    run_step.dependOn(&run_cmd.step);
+
+    const exe_tests = b.addTest(.{
+        .root_source_file = .{ .path = "src/main.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&exe_tests.step);
 }
 ```
 
 Your `src/main.zig` file can now `const mach = @import("mach");` and you can run your code using `zig build run`.
+
+For an example of how to further setup your main.zig to have an update loop etc. look at [Triangle demo's main.zig](https://github.com/hexops/mach-examples/blob/main/core/triangle/main.zig)
 
 ## Cross-compilation
 
