@@ -66,7 +66,7 @@ pub fn init(app: *App) !void {
 
     const pipeline_descriptor = gpu.RenderPipeline.Descriptor{ .fragment = &createFragmentState(fs_module, &.{color_target}), .vertex = createVertexState(vs_module) };
 
-    imgui.mach_backend.init(app.core.device(), app.core.descriptor().format, .{});
+    imgui.mach_backend.init(&app.core, app.core.device(), app.core.descriptor().format, .{});
     imgui.io.setDefaultFont(font_normal);
 
     const style = imgui.getStyle();
@@ -111,7 +111,7 @@ pub fn update(app: *App) !bool {
     pass.setPipeline(app.pipeline);
     pass.draw(3, 1, 0, 0);
 
-    content.renderContent(&app.core);
+    content.renderContent();
 
     imgui.mach_backend.draw(pass);
 

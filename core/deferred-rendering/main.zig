@@ -1121,12 +1121,7 @@ fn buildCommandBuffer(app: *App) !*gpu.CommandBuffer {
     }
 
     pass.setPipeline(app.imgui_render_pipeline);
-    const window_size = app.core.size();
-    imgui.mach_backend.newFrame(
-        &app.core,
-        window_size.width,
-        window_size.height,
-    );
+    imgui.mach_backend.newFrame();
     app.drawUI();
     imgui.mach_backend.draw(pass);
 
@@ -1172,7 +1167,7 @@ fn setupImgui(app: *App) void {
     shader_module.release();
 
     imgui.io.setDefaultFont(font_normal);
-    imgui.mach_backend.init(app.core.device(), app.core.descriptor().format, .{});
+    imgui.mach_backend.init(&app.core, app.core.device(), app.core.descriptor().format, .{});
 
     const style = imgui.getStyle();
     style.window_min_size = .{ 300.0, 100.0 };

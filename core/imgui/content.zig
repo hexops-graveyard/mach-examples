@@ -1,13 +1,8 @@
 const mach = @import("mach");
 const imgui = @import("imgui.zig");
 
-pub fn renderContent(core: *mach.Core) void {
-    const window_size = core.size();
-    imgui.mach_backend.newFrame(
-        core,
-        window_size.width,
-        window_size.height,
-    );
+pub fn renderContent() void {
+    imgui.mach_backend.newFrame();
 
     if (!imgui.begin("Demo Settings", .{})) {
         imgui.end();

@@ -491,12 +491,7 @@ pub fn update(app: *App) !bool {
 
     pass.setPipeline(app.imgui_render_pipeline);
 
-    const window_size = app.core.size();
-    imgui.mach_backend.newFrame(
-        &app.core,
-        window_size.width,
-        window_size.height,
-    );
+    imgui.mach_backend.newFrame();
 
     drawUI(app);
     imgui.mach_backend.draw(pass);
@@ -949,7 +944,7 @@ fn setupImgui(app: *App) void {
     shader_module.release();
 
     imgui.io.setDefaultFont(font_normal);
-    imgui.mach_backend.init(app.core.device(), app.core.descriptor().format, .{
+    imgui.mach_backend.init(&app.core, app.core.device(), app.core.descriptor().format, .{
         .depth_stencil_format = @enumToInt(gpu.Texture.Format.depth24_plus_stencil8),
     });
 

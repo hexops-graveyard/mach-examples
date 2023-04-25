@@ -158,7 +158,7 @@ pub fn build(b: *std.Build) !void {
         const compile_step = b.step(example.name, "Compile " ++ example.name);
         compile_step.dependOn(&app.getInstallStep().?.step);
 
-        const run_cmd = app.run();
+        const run_cmd = app.addRunArtifact();
         run_cmd.step.dependOn(compile_step);
         const run_step = b.step("run-" ++ example.name, "Run " ++ example.name);
         run_step.dependOn(&run_cmd.step);
