@@ -2,7 +2,6 @@
 const mach = @import("mach");
 
 const Renderer = @import("Renderer.zig");
-const Physics2D = @import("Physics2D.zig");
 const Game = @import("Game.zig");
 
 // A Mach app is just a list of all the modules in our application. Our game itself is implemented
@@ -14,5 +13,4 @@ pub const App = mach.App(.{
     Game,
     mach.Module,
     Renderer,
-    Physics2D,
 });
