@@ -91,13 +91,15 @@ pub fn tick(adapter: anytype) !void {
     game.state().spawning = spawning;
 
     var player_pos = renderer.get(game.state().player, .location).?;
-    if (spawning and game.state().spawn_timer.read() > 0.01) {
-        // Spawn a new follower entity
-        _ = game.state().spawn_timer.lap();
-        const new_entity = try adapter.newEntity();
-        try game.set(new_entity, .follower, {});
-        try renderer.set(new_entity, .location, player_pos);
-        try renderer.set(new_entity, .scale, 0.3);
+    if (spawning and game.state().spawn_timer.read() > 1.0 / 60.0) {
+        for (0..10) |_| {
+            // Spawn a new follower entity
+            _ = game.state().spawn_timer.lap();
+            const new_entity = try adapter.newEntity();
+            try game.set(new_entity, .follower, {});
+            try renderer.set(new_entity, .location, player_pos);
+            try renderer.set(new_entity, .scale, 1.0 / 6.0);
+        }
     }
 
     // Multiply by delta_time to ensure that movement is the same speed regardless of the frame rate.
@@ -113,7 +115,7 @@ pub fn tick(adapter: anytype) !void {
         var locations = archetype.slice(.renderer, .location);
         for (ids, locations) |id, location| {
             // Avoid other follower entities by moving away from them if they are close to us.
-            const close_dist = 0.1;
+            const close_dist = 1.0 / 15.0;
             var avoidance: Renderer.Vec3 = splat(0);
             var avoidance_div: f32 = 1.0;
             var archetypes_iter_2 = adapter.entities.query(.{ .all = &.{
@@ -131,14 +133,16 @@ pub fn tick(adapter: anytype) !void {
                 }
             }
             // Avoid the player
-            if (dist(location, player_pos) < close_dist * 4.0) {
+            var avoid_player_multiplier: f32 = 1.0;
+            if (dist(location, player_pos) < close_dist * 6.0) {
                 avoidance -= dir(location, player_pos);
                 avoidance_div += 1.0;
+                avoid_player_multiplier = 4.0;
             }
 
             // Move away from things we want to avoid
-            var move_speed = 0.5 * delta_time;
-            var new_location = location + ((avoidance / splat(avoidance_div)) * splat(move_speed * 2.0));
+            var move_speed = 1.0 * delta_time;
+            var new_location = location + ((avoidance / splat(avoidance_div)) * splat(move_speed * avoid_player_multiplier));
 
             // Move towards the center
             new_location = moveTowards(new_location, .{ 0, 0, 0 }, move_speed / avoidance_div);

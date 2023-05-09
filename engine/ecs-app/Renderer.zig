@@ -2,7 +2,7 @@ const std = @import("std");
 const gpu = @import("mach").gpu;
 const ecs = @import("mach").ecs;
 
-const num_bind_groups = 1024;
+const num_bind_groups = 1024 * 32;
 
 // uniform bind group offset must be 256-byte aligned
 const uniform_offset = 256;
