@@ -82,7 +82,6 @@ pub fn build(b: *std.Build) !void {
         .{ .name = "fractal-cube", .deps = &.{.zmath} },
         .{ .name = "textured-cube", .deps = &.{ .zmath, .zigimg, .assets } },
         .{ .name = "sprite2d", .deps = &.{ .zmath, .zigimg, .assets } },
-        .{ .name = "ecs-app", .deps = &.{}, .mach_engine_example = true },
         .{ .name = "image-blur", .deps = &.{ .zigimg, .assets } },
         .{ .name = "cubemap", .deps = &.{ .zmath, .zigimg, .assets } },
         .{ .name = "map-async", .deps = &.{} },
@@ -114,6 +113,7 @@ pub fn build(b: *std.Build) !void {
             .use_freetype = true,
             .mach_engine_example = true,
         },
+        .{ .name = "custom-renderer", .deps = &.{}, .mach_engine_example = true },
     }) |example| {
         // FIXME: this is workaround for a problem that some examples
         // (having the std_platform_only=true field) as well as zigimg
@@ -128,10 +128,11 @@ pub fn build(b: *std.Build) !void {
         const path_suffix = if (example.mach_engine_example) "engine/" else "core/";
         var deps = std.ArrayList(std.Build.ModuleDependency).init(b.allocator);
         for (example.deps) |d| try deps.append(d.moduleDependency(b, target, optimize));
+        const example_name = (if (example.mach_engine_example) "engine-" else "core-") ++ example.name;
         const app = try mach.App.init(
             b,
             .{
-                .name = example.name,
+                .name = example_name,
                 .src = path_suffix ++ example.name ++ "/main.zig",
                 .target = target,
                 .optimize = optimize,
@@ -155,12 +156,12 @@ pub fn build(b: *std.Build) !void {
         try app.link(options);
         app.install();
 
-        const compile_step = b.step(example.name, "Compile " ++ example.name);
+        const compile_step = b.step(example_name, "Compile " ++ example.name);
         compile_step.dependOn(&app.getInstallStep().?.step);
 
         const run_cmd = app.addRunArtifact();
         run_cmd.step.dependOn(compile_step);
-        const run_step = b.step("run-" ++ example.name, "Run " ++ example.name);
+        const run_step = b.step("run-" ++ example_name, "Run " ++ example.name);
         run_step.dependOn(&run_cmd.step);
     }
 

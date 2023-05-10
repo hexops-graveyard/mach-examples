@@ -11,7 +11,7 @@ More screenshots / example showcase: https://machengine.org/gpu
 ```sh
 git clone --recursive https://github.com/hexops/mach-examples
 cd mach-examples/
-zig build run-textured-cube
+zig build run-core-textured-cube
 ```
 
 ## Use Mach engine in your own project
