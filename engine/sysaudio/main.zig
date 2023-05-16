@@ -96,7 +96,7 @@ fn writeFn(app_op: ?*anyopaque, frames: usize) void {
             const sine_wave = std.math.sin(tone.frequency * 2.0 * std.math.pi * sample_counter / @intToFloat(f32, app.player.sampleRate())) * gain;
 
             // A number ranging from 0.0 to 1.0 in the first 1/64th of the duration of the tone.
-            const fade_in = std.math.min(sample_counter / (duration / 64.0), 1.0);
+            const fade_in = @min(sample_counter / (duration / 64.0), 1.0);
 
             // A number ranging from 1.0 to 0.0 over half the duration of the tone.
             const progression = sample_counter / duration; // 0.0 (tone start) to 1.0 (tone end)
