@@ -1,8 +1,6 @@
 const std = @import("std");
 const gpu = @import("mach").gpu;
 const ecs = @import("mach").ecs;
-const zigimg = @import("zigimg");
-const assets = @import("assets");
 
 const math = @import("../math.zig");
 const mat = math.mat;
@@ -11,6 +9,10 @@ const Vec3 = math.Vec3;
 const Mat3x3 = math.Mat3x3;
 const Mat4x4 = math.Mat4x4;
 
+/// Public state
+texture: *gpu.Texture,
+
+/// Internal state
 pipeline: *gpu.RenderPipeline,
 queue: *gpu.Queue,
 bind_group: *gpu.BindGroup,
@@ -49,7 +51,7 @@ const Uniforms = packed struct {
     texture_size: Vec2,
 };
 
-pub fn init(adapter: anytype) !void {
+pub fn machSprite2DInit(adapter: anytype) !void {
     var mach = adapter.mod(.mach);
     var sprite2d = adapter.mod(.mach_sprite2d);
     const core = mach.state().core;
@@ -62,37 +64,11 @@ pub fn init(adapter: anytype) !void {
     });
 
     // Create a sampler with linear filtering for smooth interpolation.
+    const queue = device.getQueue();
     const texture_sampler = device.createSampler(&.{
         .mag_filter = .linear,
         .min_filter = .linear,
     });
-    const queue = device.getQueue();
-    var img = try zigimg.Image.fromMemory(adapter.allocator, assets.example_spritesheet_image);
-    defer img.deinit();
-    const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
-    const texture = device.createTexture(&.{
-        .size = img_size,
-        .format = .rgba8_unorm,
-        .usage = .{
-            .texture_binding = true,
-            .copy_dst = true,
-            .render_attachment = true,
-        },
-    });
-    const texture_size = Vec2{ @intToFloat(f32, img.width), @intToFloat(f32, img.height) };
-    const data_layout = gpu.Texture.DataLayout{
-        .bytes_per_row = @intCast(u32, img.width * 4),
-        .rows_per_image = @intCast(u32, img.height),
-    };
-    switch (img.pixels) {
-        .rgba32 => |pixels| queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, pixels),
-        .rgb24 => |pixels| {
-            const data = try rgb24ToRgba32(adapter.allocator, pixels);
-            defer data.deinit(adapter.allocator);
-            queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, data.rgba32);
-        },
-        else => @panic("unsupported image color format"),
-    }
 
     const sprite_buffer_cap = 1024 * 128; // TODO: allow user to specify preallocation
     const sprite_transforms = device.createBuffer(&.{
@@ -132,7 +108,7 @@ pub fn init(adapter: anytype) !void {
                 gpu.BindGroup.Entry.buffer(2, sprite_uv_transforms, 0, @sizeOf(Mat3x3) * sprite_buffer_cap),
                 gpu.BindGroup.Entry.buffer(3, sprite_sizes, 0, @sizeOf(Vec2) * sprite_buffer_cap),
                 gpu.BindGroup.Entry.sampler(4, texture_sampler),
-                gpu.BindGroup.Entry.textureView(5, texture.createView(&gpu.TextureView.Descriptor{})),
+                gpu.BindGroup.Entry.textureView(5, sprite2d.state().texture.createView(&gpu.TextureView.Descriptor{})),
             },
         }),
     );
@@ -171,7 +147,11 @@ pub fn init(adapter: anytype) !void {
         .sprite_transforms = sprite_transforms,
         .sprite_uv_transforms = sprite_uv_transforms,
         .sprite_sizes = sprite_sizes,
-        .texture_size = texture_size,
+        .texture_size = Vec2{
+            @intToFloat(f32, sprite2d.state().texture.getWidth()),
+            @intToFloat(f32, sprite2d.state().texture.getHeight()),
+        },
+        .texture = sprite2d.state().texture,
     });
     shader_module.release();
 }
@@ -179,6 +159,7 @@ pub fn init(adapter: anytype) !void {
 pub fn deinit(adapter: anytype) !void {
     var sprite2d = adapter.mod(.mach_sprite2d);
 
+    sprite2d.state().texture.release();
     sprite2d.state().pipeline.release();
     sprite2d.state().queue.release();
     sprite2d.state().bind_group.release();
@@ -272,13 +253,4 @@ pub fn tick(adapter: anytype) !void {
     command.release();
     core.swapChain().present();
     back_buffer_view.release();
-}
-
-fn rgb24ToRgba32(allocator: std.mem.Allocator, in: []zigimg.color.Rgb24) !zigimg.color.PixelStorage {
-    const out = try zigimg.color.PixelStorage.init(allocator, .rgba32, in.len);
-    var i: usize = 0;
-    while (i < in.len) : (i += 1) {
-        out.rgba32[i] = zigimg.color.Rgba32{ .r = in[i].r, .g = in[i].g, .b = in[i].b, .a = 255 };
-    }
-    return out;
 }

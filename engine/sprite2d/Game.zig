@@ -1,5 +1,8 @@
 const std = @import("std");
+const zigimg = @import("zigimg");
+const assets = @import("assets");
 const mach_mod = @import("mach");
+const gpu = mach_mod.gpu;
 const Sprite2D = @import("gfx2d/Sprite2D.zig");
 const math = @import("math.zig");
 const vec = math.vec;
@@ -56,6 +59,9 @@ pub fn init(adapter: anytype) !void {
     try sprite2d.set(player, .transform, mat.translate3d(.{ -0.02, 0, 0 }));
     try sprite2d.set(player, .size, Vec2{ 32, 32 });
     try sprite2d.set(player, .uv_transform, mat.translate2d(.{ 0, 0 }));
+
+    try loadTexture(adapter);
+    try adapter.send(.machSprite2DInit);
 
     game.initState(.{
         .timer = try mach_mod.Timer.start(),
@@ -171,4 +177,53 @@ pub fn tick(adapter: anytype) !void {
     }
     game.state().frame_count += 1;
     game.state().time += delta_time;
+}
+
+// TODO: move this helper into gfx2d module
+fn loadTexture(adapter: anytype) !void {
+    var mach = adapter.mod(.mach);
+    var sprite2d = adapter.mod(.mach_sprite2d);
+    const device = mach.state().device;
+    const queue = device.getQueue();
+
+    // Load the image from memory
+    var img = try zigimg.Image.fromMemory(adapter.allocator, assets.example_spritesheet_image);
+    defer img.deinit();
+    const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
+
+    // Create a GPU texture
+    const texture = device.createTexture(&.{
+        .size = img_size,
+        .format = .rgba8_unorm,
+        .usage = .{
+            .texture_binding = true,
+            .copy_dst = true,
+            .render_attachment = true,
+        },
+    });
+    const data_layout = gpu.Texture.DataLayout{
+        .bytes_per_row = @intCast(u32, img.width * 4),
+        .rows_per_image = @intCast(u32, img.height),
+    };
+    switch (img.pixels) {
+        .rgba32 => |pixels| queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, pixels),
+        .rgb24 => |pixels| {
+            const data = try rgb24ToRgba32(adapter.allocator, pixels);
+            defer data.deinit(adapter.allocator);
+            queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, data.rgba32);
+        },
+        else => @panic("unsupported image color format"),
+    }
+
+    // Tell sprite2d to use the texture
+    sprite2d.state().texture = texture;
+}
+
+fn rgb24ToRgba32(allocator: std.mem.Allocator, in: []zigimg.color.Rgb24) !zigimg.color.PixelStorage {
+    const out = try zigimg.color.PixelStorage.init(allocator, .rgba32, in.len);
+    var i: usize = 0;
+    while (i < in.len) : (i += 1) {
+        out.rgba32[i] = zigimg.color.Rgba32{ .r = in[i].r, .g = in[i].g, .b = in[i].b, .a = 255 };
+    }
+    return out;
 }
