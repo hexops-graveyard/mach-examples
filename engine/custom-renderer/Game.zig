@@ -109,7 +109,6 @@ pub fn tick(adapter: anytype) !void {
     var archetypes_iter = adapter.entities.query(.{ .all = &.{
         .{ .game = &.{.follower} },
     } });
-    // TODO: bug in mach-ecs; for some reason we have many archetypes all with 1 entity in them.
     while (archetypes_iter.next()) |archetype| {
         var ids = archetype.slice(.entity, .id);
         var locations = archetype.slice(.renderer, .location);

@@ -114,6 +114,11 @@ pub fn build(b: *std.Build) !void {
             .mach_engine_example = true,
         },
         .{ .name = "custom-renderer", .deps = &.{}, .mach_engine_example = true },
+        .{
+            .name = "sprite2d",
+            .deps = &.{ .zigimg, .assets },
+            .mach_engine_example = true,
+        },
     }) |example| {
         // FIXME: this is workaround for a problem that some examples
         // (having the std_platform_only=true field) as well as zigimg
