@@ -27,6 +27,7 @@ pub fn build(b: *std.Build) !void {
             b2: *std.Build,
             target2: std.zig.CrossTarget,
             optimize2: std.builtin.OptimizeMode,
+            gpu_dawn_options: mach.gpu_dawn.Options,
         ) std.Build.ModuleDependency {
             if (dep == .zmath) return std.Build.ModuleDependency{
                 .name = @tagName(dep),
@@ -38,7 +39,10 @@ pub fn build(b: *std.Build) !void {
                 const imgui_pkg = imgui.Package(.{
                     .gpu_dawn = mach.gpu_dawn,
                 }).build(b2, target2, optimize2, .{
-                    .options = .{ .backend = .mach },
+                    .options = .{
+                        .backend = .mach,
+                    },
+                    .gpu_dawn_options = gpu_dawn_options,
                 }) catch unreachable;
                 return std.Build.ModuleDependency{
                     .name = @tagName(dep),
@@ -132,7 +136,7 @@ pub fn build(b: *std.Build) !void {
 
         const path_suffix = if (example.mach_engine_example) "engine/" else "core/";
         var deps = std.ArrayList(std.Build.ModuleDependency).init(b.allocator);
-        for (example.deps) |d| try deps.append(d.moduleDependency(b, target, optimize));
+        for (example.deps) |d| try deps.append(d.moduleDependency(b, target, optimize, options.core.gpu_dawn_options));
         const example_name = (if (example.mach_engine_example) "engine-" else "core-") ++ example.name;
         const app = try mach.App.init(
             b,
@@ -154,6 +158,7 @@ pub fn build(b: *std.Build) !void {
                 .gpu_dawn = mach.gpu_dawn,
             }).build(b, target, optimize, .{
                 .options = .{ .backend = .mach },
+                .gpu_dawn_options = options.core.gpu_dawn_options,
             });
             imgui_pkg.link(app.step);
         }
