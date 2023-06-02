@@ -112,7 +112,7 @@ pub fn init(app: *App) !void {
         .size = vert_buffer_data.len * @sizeOf(f32),
     });
     var vertex_mapped = sprite_vertex_buffer.getMappedRange(f32, 0, vert_buffer_data.len);
-    std.mem.copy(f32, vertex_mapped.?, vert_buffer_data[0..]);
+    @memcpy(vertex_mapped.?, vert_buffer_data[0..]);
     sprite_vertex_buffer.unmap();
 
     const sim_param_buffer = app.core.device().createBuffer(&gpu.Buffer.Descriptor{
@@ -147,7 +147,7 @@ pub fn init(app: *App) !void {
             .size = initial_particle_data.len * @sizeOf(f32),
         });
         var mapped = particle_buffers[i].getMappedRange(f32, 0, initial_particle_data.len);
-        std.mem.copy(f32, mapped.?, initial_particle_data[0..]);
+        @memcpy(mapped.?, initial_particle_data[0..]);
         particle_buffers[i].unmap();
     }
 
