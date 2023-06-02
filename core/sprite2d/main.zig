@@ -76,9 +76,6 @@ pub fn init(app: *App) !void {
     var buffer = try allocator.alloc(u8, file_size);
     defer allocator.free(buffer);
     try sprites_file.reader().readNoEof(buffer);
-    //var stream = std.json.TokenStream.init(buffer);
-    //const root = try std.json.parse(JSONData, &stream, .{ .allocator = allocator });
-    //defer std.json.parseFree(JSONData, root, .{ .allocator = allocator });
     const root = try std.json.parseFromSlice(JSONData, allocator, buffer, .{});
     defer std.json.parseFree(JSONData, allocator, root);
 
