@@ -226,7 +226,7 @@ pub fn Atlas(comptime T: type) type {
             self.data = try alloc.alloc(T, size_new * size_new);
             defer alloc.free(data_old); // Only defer after new data succeeded
             self.size = size_new; // Only set size after new alloc succeeded
-            std.mem.set(T, self.data, std.mem.zeroes(T));
+            @memset(self.data, std.mem.zeroes(T));
             self.set(.{
                 .x = 0, // don't bother skipping border so we can avoid strides
                 .y = 1, // skip the first border row
@@ -244,7 +244,7 @@ pub fn Atlas(comptime T: type) type {
 
         // Empty the atlas. This doesn't reclaim any previously allocated memory.
         pub fn clear(self: *Self) void {
-            std.mem.set(T, self.data, std.mem.zeroes(T));
+            @memset(self.data, std.mem.zeroes(T));
             self.nodes.clearRetainingCapacity();
 
             // Add our initial rectangle. This is the size of the full texture
