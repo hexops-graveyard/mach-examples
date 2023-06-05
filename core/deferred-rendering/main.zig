@@ -223,6 +223,7 @@ pub fn deinit(app: *App) void {
     app.camera_uniform_buffer.release();
 
     imgui.mach_backend.deinit();
+    imgui.deinit();
 }
 
 pub fn update(app: *App) !bool {

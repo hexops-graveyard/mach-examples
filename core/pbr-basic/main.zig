@@ -354,6 +354,7 @@ pub fn deinit(app: *App) void {
     app.uniform_buffers.material_params.buffer.release();
     app.uniform_buffers.object_params.buffer.release();
     imgui.mach_backend.deinit();
+    imgui.deinit();
 }
 
 pub fn update(app: *App) !bool {
