@@ -86,6 +86,7 @@ pub fn deinit(app: *App) void {
     defer app.core.deinit();
 
     imgui.mach_backend.deinit();
+    imgui.deinit();
 }
 
 pub fn update(app: *App) !bool {
