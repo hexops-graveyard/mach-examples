@@ -231,7 +231,7 @@ fn createPipeline(core: *mach.Core, shader_module: *gpu.ShaderModule, bind_group
 pub const F32x1 = @Vector(1, f32);
 
 pub fn update(core: *mach.Core) void {
-    const back_buffer_view = core.swapChain().getCurrentTextureView();
+    const back_buffer_view = core.swapChain().getCurrentTextureView().?;
     const color_attachment = gpu.RenderPassColorAttachment{
         .view = back_buffer_view,
         .clear_value = gpu.Color{ .r = 0.2, .g = 0.2, .b = 0.2, .a = 1.0 },

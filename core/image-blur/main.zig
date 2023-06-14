@@ -221,7 +221,7 @@ pub fn update(app: *App) !bool {
         if (event == .close) return true;
     }
 
-    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView().?;
     const encoder = app.core.device().createCommandEncoder(null);
 
     const compute_pass = encoder.beginComputePass(null);

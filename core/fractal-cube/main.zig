@@ -271,7 +271,7 @@ pub fn update(app: *App) !bool {
     }
 
     const cube_view = app.cube_texture_view_render;
-    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView().?;
 
     const cube_color_attachment = gpu.RenderPassColorAttachment{
         .view = cube_view,

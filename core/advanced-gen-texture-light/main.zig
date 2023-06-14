@@ -135,7 +135,7 @@ pub fn update(app: *App) !bool {
     const light_speed = delta_time * 2.5;
     app.light.update(app.queue, light_speed);
 
-    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView().?;
     defer back_buffer_view.release();
 
     const encoder = app.core.device().createCommandEncoder(null);

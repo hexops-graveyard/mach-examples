@@ -96,7 +96,7 @@ pub fn update(app: *App) !bool {
         }
     }
 
-    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView().?;
     const color_attachment = gpu.RenderPassColorAttachment{
         .view = app.texture_view,
         .resolve_target = back_buffer_view,

@@ -153,7 +153,7 @@ pub fn update(app: *App) !bool {
         normal_pass.release();
     }
 
-    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView().?;
     {
         // render to swap chain using previous passes
         const post_color_attachment = gpu.RenderPassColorAttachment{

@@ -275,7 +275,7 @@ pub fn update(app: *App) !bool {
 
     command.release();
     app.core.swapChain().present();
-    app.core.swapChain().getCurrentTextureView().release();
+    app.core.swapChain().getCurrentTextureView().?.release();
 
     if (!app.is_paused) {
         app.updateUniformBuffers();
@@ -1046,7 +1046,7 @@ fn prepareViewMatrices(app: *App) void {
 }
 
 fn buildCommandBuffer(app: *App) !*gpu.CommandBuffer {
-    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView().?;
     const encoder = app.core.device().createCommandEncoder(null);
     defer encoder.release();
 

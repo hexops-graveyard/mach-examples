@@ -268,7 +268,7 @@ pub fn update(app: *App) !bool {
 }
 
 fn render(app: *App) !void {
-    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView().?;
     const color_attachment = gpu.RenderPassColorAttachment{
         .view = back_buffer_view,
         // sky blue background color:

@@ -69,7 +69,7 @@ pub fn update(app: *App) !bool {
     }
 
     if (builtin.cpu.arch != .wasm32) {
-        const back_buffer_view = app.core.swapChain().getCurrentTextureView();
+        const back_buffer_view = app.core.swapChain().getCurrentTextureView().?;
 
         app.core.swapChain().present();
         back_buffer_view.release();

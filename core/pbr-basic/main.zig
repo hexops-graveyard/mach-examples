@@ -439,7 +439,7 @@ pub fn update(app: *App) !bool {
         app.uniform_buffers_dirty = false;
     }
 
-    const back_buffer_view = app.core.swapChain().getCurrentTextureView();
+    const back_buffer_view = app.core.swapChain().getCurrentTextureView().?;
     app.color_attachment.view = back_buffer_view;
     app.render_pass_descriptor = gpu.RenderPassDescriptor{
         .color_attachment_count = 1,
