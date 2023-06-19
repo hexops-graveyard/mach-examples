@@ -14,45 +14,21 @@ cd mach-examples/
 zig build run-core-textured-cube
 ```
 
-## Use Mach engine in your own project
+## Use Mach in your own project
 
-First run `zig init-exe` to create your project, then add Mach as a Git submodule:
+See [this guide](https://machengine.org/next/core/getting-started/) for now.
 
-```
-git submodule add https://github.com/hexops/mach libs/mach
-```
+### WebAssembly examples
 
-In your `build.zig`, use `mach.App`:
+We don't yet support graphics in the browser ([hexops/mach#90](https://github.com/hexops/mach/issues/90)) but you can run the virtual piano example in the browser:
 
-```zig
-const std = @import("std");
-const mach = @import("libs/mach/build.zig");
-
-pub fn build(b: *std.Build) !void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-
-    const app = try mach.App.init(b, .{
-        .name = "myapp",
-        .src = "src/main.zig",
-        .target = target,
-        .deps = &[_]std.build.ModuleDependency{},
-        .optimize = optimize,
-    });
-    try app.link(.{});
-    app.install();
-
-    const run_cmd = try app.run();
-    run_cmd.dependOn(b.getInstallStep());
-
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(run_cmd);
-}
+```sh
+zig build run-sysaudio -Dtarget=wasm32-freestanding
 ```
 
-Your `src/main.zig` file can now `const mach = @import("mach");` and you can run your code using `zig build run`.
+Then navigate to http://localhost:8080/sysaudio.html and click inside the border area + type on your keyboard to play notes.
 
-## Cross-compilation
+### Cross-compilation
 
 You can cross-compile to every OS using:
 
@@ -62,16 +38,6 @@ zig build -Dtarget=x86_64-linux
 zig build -Dtarget=x86_64-macos.12
 zig build -Dtarget=aarch64-macos.12
 ```
-
-## WebAssembly examples
-
-We don't yet support graphics in the browser ([hexops/mach#90](https://github.com/hexops/mach/issues/90)) but you can run the virtual piano example in the browser:
-
-```sh
-zig build run-sysaudio -Dtarget=wasm32-freestanding
-```
-
-Then navigate to http://localhost:8080/sysaudio.html and click inside the border area + type on your keyboard to play notes.
 
 ## Join the community
 
