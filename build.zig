@@ -1,6 +1,6 @@
 const std = @import("std");
 const mach = @import("libs/mach/build.zig");
-const imgui = @import("libs/imgui/build.zig");
+// const imgui = @import("libs/imgui/build.zig");
 const zmath = @import("libs/zmath/build.zig");
 
 pub fn build(b: *std.Build) !void {
@@ -70,7 +70,7 @@ pub fn build(b: *std.Build) !void {
         has_assets: bool = false,
         use_freetype: bool = false,
         use_model3d: bool = false,
-        use_imgui: bool = false,
+        // use_imgui: bool = false,
         mach_engine_example: bool = false,
     }{
         .{ .name = "triangle" },
@@ -90,26 +90,26 @@ pub fn build(b: *std.Build) !void {
         .{ .name = "cubemap", .deps = &.{ .zmath, .zigimg, .assets } },
         .{ .name = "map-async", .deps = &.{} },
         .{ .name = "sysaudio", .deps = &.{}, .mach_engine_example = true },
-        .{
-            .name = "pbr-basic",
-            .deps = &.{ .zmath, .model3d, .imgui, .assets },
-            .std_platform_only = true,
-            .use_model3d = true,
-            .use_imgui = true,
-        },
-        .{
-            .name = "deferred-rendering",
-            .deps = &.{ .zmath, .model3d, .imgui, .assets },
-            .std_platform_only = true,
-            .use_model3d = true,
-            .use_imgui = true,
-        },
-        .{
-            .name = "imgui",
-            .deps = &.{ .imgui, .assets },
-            .std_platform_only = true,
-            .use_imgui = true,
-        },
+        // .{
+        //     .name = "pbr-basic",
+        //     .deps = &.{ .zmath, .model3d, .imgui, .assets },
+        //     .std_platform_only = true,
+        //     .use_model3d = true,
+        //     .use_imgui = true,
+        // },
+        // .{
+        //     .name = "deferred-rendering",
+        //     .deps = &.{ .zmath, .model3d, .imgui, .assets },
+        //     .std_platform_only = true,
+        //     .use_model3d = true,
+        //     .use_imgui = true,
+        // },
+        // .{
+        //     .name = "imgui",
+        //     .deps = &.{ .imgui, .assets },
+        //     .std_platform_only = true,
+        //     .use_imgui = true,
+        // },
         .{
             .name = "gkurve",
             .deps = &.{ .zmath, .zigimg, .assets },
@@ -153,15 +153,15 @@ pub fn build(b: *std.Build) !void {
             },
         );
 
-        if (example.use_imgui) {
-            const imgui_pkg = try imgui.Package(.{
-                .gpu_dawn = mach.gpu_dawn,
-            }).build(b, target, optimize, .{
-                .options = .{ .backend = .mach },
-                .gpu_dawn_options = options.core.gpu_dawn_options,
-            });
-            imgui_pkg.link(app.step);
-        }
+        // if (example.use_imgui) {
+        //     const imgui_pkg = try imgui.Package(.{
+        //         .gpu_dawn = mach.gpu_dawn,
+        //     }).build(b, target, optimize, .{
+        //         .options = .{ .backend = .mach },
+        //         .gpu_dawn_options = options.core.gpu_dawn_options,
+        //     });
+        //     imgui_pkg.link(app.step);
+        // }
 
         try app.link(options);
         app.install();
