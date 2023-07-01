@@ -88,7 +88,7 @@ pub fn init(app: *App) !void {
     var img = try zigimg.Image.fromMemory(allocator, assets.gotta_go_fast_image);
     defer img.deinit();
 
-    const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
+    const img_size = gpu.Extent3D{ .width = @as(u32, @intCast(img.width)), .height = @as(u32, @intCast(img.height)) };
 
     const cube_texture = app.core.device().createTexture(&.{
         .size = img_size,
@@ -101,8 +101,8 @@ pub fn init(app: *App) !void {
     });
 
     const data_layout = gpu.Texture.DataLayout{
-        .bytes_per_row = @intCast(u32, img.width * 4),
-        .rows_per_image = @intCast(u32, img.height),
+        .bytes_per_row = @as(u32, @intCast(img.width * 4)),
+        .rows_per_image = @as(u32, @intCast(img.height)),
     };
 
     switch (img.pixels) {
@@ -139,7 +139,7 @@ pub fn init(app: *App) !void {
         });
 
         const buffer_mapped = buffer.getMappedRange(u32, 0, 1);
-        buffer_mapped.?[0] = @intCast(u32, i);
+        buffer_mapped.?[0] = @as(u32, @intCast(i));
         buffer.unmap();
 
         flip[i] = buffer;
@@ -228,8 +228,8 @@ pub fn update(app: *App) !bool {
     compute_pass.setPipeline(app.blur_pipeline);
     compute_pass.setBindGroup(0, app.compute_constants, &.{});
 
-    const width: u32 = @intCast(u32, app.img_size.width);
-    const height: u32 = @intCast(u32, app.img_size.height);
+    const width: u32 = @as(u32, @intCast(app.img_size.width));
+    const height: u32 = @as(u32, @intCast(app.img_size.height));
     compute_pass.setBindGroup(1, app.compute_bind_group_0, &.{});
     compute_pass.dispatchWorkgroups(try std.math.divCeil(u32, width, block_dimension), try std.math.divCeil(u32, height, batch[1]), 1);
 

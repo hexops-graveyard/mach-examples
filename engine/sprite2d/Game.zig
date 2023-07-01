@@ -189,7 +189,7 @@ fn loadTexture(adapter: anytype) !void {
     // Load the image from memory
     var img = try zigimg.Image.fromMemory(adapter.allocator, assets.example_spritesheet_image);
     defer img.deinit();
-    const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
+    const img_size = gpu.Extent3D{ .width = @as(u32, @intCast(img.width)), .height = @as(u32, @intCast(img.height)) };
 
     // Create a GPU texture
     const texture = device.createTexture(&.{
@@ -202,8 +202,8 @@ fn loadTexture(adapter: anytype) !void {
         },
     });
     const data_layout = gpu.Texture.DataLayout{
-        .bytes_per_row = @intCast(u32, img.width * 4),
-        .rows_per_image = @intCast(u32, img.height),
+        .bytes_per_row = @as(u32, @intCast(img.width * 4)),
+        .rows_per_image = @as(u32, @intCast(img.height)),
     };
     switch (img.pixels) {
         .rgba32 => |pixels| queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, pixels),

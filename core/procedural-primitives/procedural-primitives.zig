@@ -69,14 +69,14 @@ pub fn createPlanePrimitive(allocator: std.mem.Allocator, x_subdivision: u32, y_
     const vertex_count = x_num_vertices * y_num_vertices;
     var vertex_data = try std.ArrayList(VertexData).initCapacity(allocator, vertex_count);
 
-    const vertices_distance_y = (size / @intToFloat(f32, y_subdivision));
-    const vertices_distance_x = (size / @intToFloat(f32, x_subdivision));
+    const vertices_distance_y = (size / @as(f32, @floatFromInt(y_subdivision)));
+    const vertices_distance_x = (size / @as(f32, @floatFromInt(x_subdivision)));
     var y: u32 = 0;
     while (y < y_num_vertices) : (y += 1) {
         var x: u32 = 0;
-        const pos_y = (-size / 2.0) + @intToFloat(f32, y) * vertices_distance_y;
+        const pos_y = (-size / 2.0) + @as(f32, @floatFromInt(y)) * vertices_distance_y;
         while (x < x_num_vertices) : (x += 1) {
-            const pos_x = (-size / 2.0) + @intToFloat(f32, x) * vertices_distance_x;
+            const pos_x = (-size / 2.0) + @as(f32, @floatFromInt(x)) * vertices_distance_x;
             vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ pos_x, pos_y, 0.0 }, .normal = F32x3{ pos_x, pos_y, 0.0 } });
         }
     }
@@ -111,9 +111,9 @@ pub fn createCirclePrimitive(allocator: std.mem.Allocator, vertices: u32, radius
     vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ 0, 0, 0.0 }, .normal = F32x3{ 0, 0, 0.0 } });
 
     var x: u32 = 0;
-    var angle = 2 * PI / @intToFloat(f32, vertices);
+    var angle = 2 * PI / @as(f32, @floatFromInt(vertices));
     while (x < vertices) : (x += 1) {
-        const x_f = @intToFloat(f32, x);
+        const x_f = @as(f32, @floatFromInt(x));
         const pos_x = radius * zmath.cos(angle * x_f);
         const pos_y = radius * zmath.sin(angle * x_f);
 
@@ -200,10 +200,10 @@ pub fn createCylinderPrimitive(allocator: std.mem.Allocator, radius: f32, height
     vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ 0.0, (height / 2.0), 0.0 }, .normal = undefined });
     vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ 0.0, -(height / 2.0), 0.0 }, .normal = undefined });
 
-    const angle = 2.0 * PI / @intToFloat(f32, num_sides);
+    const angle = 2.0 * PI / @as(f32, @floatFromInt(num_sides));
 
     for (1..num_sides + 1) |i| {
-        var float_i = @intToFloat(f32, i);
+        var float_i = @as(f32, @floatFromInt(i));
 
         const x: f32 = radius * zmath.sin(angle * float_i);
         const y: f32 = radius * zmath.cos(angle * float_i);
@@ -276,10 +276,10 @@ pub fn createConePrimitive(allocator: std.mem.Allocator, radius: f32, height: f3
     vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ 0.0, (height / 2.0), 0.0 }, .normal = undefined });
     vertex_data.appendAssumeCapacity(VertexData{ .position = F32x3{ 0.0, -(height / 2.0), 0.0 }, .normal = undefined });
 
-    const angle = 2.0 * PI / @intToFloat(f32, num_sides);
+    const angle = 2.0 * PI / @as(f32, @floatFromInt(num_sides));
 
     for (1..num_sides + 1) |i| {
-        var float_i = @intToFloat(f32, i);
+        var float_i = @as(f32, @floatFromInt(i));
 
         const x: f32 = radius * zmath.sin(angle * float_i);
         const y: f32 = radius * zmath.cos(angle * float_i);

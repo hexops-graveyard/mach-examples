@@ -69,7 +69,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
         switch (char) {
             '\n' => {
                 offset[0] = 0;
-                offset[1] -= @intToFloat(f32, ctx.label.face.size().metrics().height >> 6);
+                offset[1] -= @as(f32, @floatFromInt(ctx.label.face.size().metrics().height >> 6));
             },
             ' ' => {
                 const v = try ctx.label.char_map.getOrPut(char);
@@ -82,7 +82,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                         .metrics = glyph.metrics(),
                     };
                 }
-                offset[0] += @intToFloat(f32, v.value_ptr.metrics.horiAdvance >> 6);
+                offset[0] += @as(f32, @floatFromInt(v.value_ptr.metrics.horiAdvance >> 6));
             },
             else => {
                 const v = try ctx.label.char_map.getOrPut(char);
@@ -119,7 +119,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                     glyph_atlas_region.y += 1;
                     glyph_atlas_region.width -= 2;
                     glyph_atlas_region.height -= 2;
-                    const glyph_uv_data = glyph_atlas_region.getUVData(@intToFloat(f32, ctx.app.texture_atlas_data.size));
+                    const glyph_uv_data = glyph_atlas_region.getUVData(@as(f32, @floatFromInt(ctx.app.texture_atlas_data.size)));
 
                     v.value_ptr.* = GlyphInfo{
                         .uv_data = glyph_uv_data,
@@ -129,12 +129,12 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
 
                 try draw.quad(
                     ctx.app,
-                    ctx.position + offset + Vec2{ @intToFloat(f32, v.value_ptr.metrics.horiBearingX >> 6), @intToFloat(f32, (v.value_ptr.metrics.horiBearingY - v.value_ptr.metrics.height) >> 6) },
-                    .{ @intToFloat(f32, v.value_ptr.metrics.width >> 6), @intToFloat(f32, v.value_ptr.metrics.height >> 6) },
+                    ctx.position + offset + Vec2{ @as(f32, @floatFromInt(v.value_ptr.metrics.horiBearingX >> 6)), @as(f32, @floatFromInt((v.value_ptr.metrics.horiBearingY - v.value_ptr.metrics.height) >> 6)) },
+                    .{ @as(f32, @floatFromInt(v.value_ptr.metrics.width >> 6)), @as(f32, @floatFromInt(v.value_ptr.metrics.height >> 6)) },
                     .{ .blend_color = ctx.text_color },
                     v.value_ptr.uv_data,
                 );
-                offset[0] += @intToFloat(f32, v.value_ptr.metrics.horiAdvance >> 6);
+                offset[0] += @as(f32, @floatFromInt(v.value_ptr.metrics.horiAdvance >> 6));
             },
         }
     }

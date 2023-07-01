@@ -262,7 +262,7 @@ pub fn update(core: *mach.Core) void {
         );
         const proj = zmath.perspectiveFovRh(
             (std.math.pi / 4.0),
-            @intToFloat(f32, core.descriptor().width) / @intToFloat(f32, core.descriptor().height),
+            @as(f32, @floatFromInt(core.descriptor().width)) / @as(f32, @floatFromInt(core.descriptor().height)),
             0.1,
             10,
         );

@@ -130,14 +130,14 @@ pub fn init(app: *App) !void {
 
     // Use the first image of the set for sizing
     const img_size = gpu.Extent3D{
-        .width = @intCast(u32, images[0].width),
-        .height = @intCast(u32, images[0].height),
+        .width = @as(u32, @intCast(images[0].width)),
+        .height = @as(u32, @intCast(images[0].height)),
     };
 
     // We set depth_or_array_layers to 6 here to indicate there are 6 images in this texture
     const tex_size = gpu.Extent3D{
-        .width = @intCast(u32, images[0].width),
-        .height = @intCast(u32, images[0].height),
+        .width = @as(u32, @intCast(images[0].width)),
+        .height = @as(u32, @intCast(images[0].height)),
         .depth_or_array_layers = 6,
     };
 
@@ -154,8 +154,8 @@ pub fn init(app: *App) !void {
     });
 
     const data_layout = gpu.Texture.DataLayout{
-        .bytes_per_row = @intCast(u32, images[0].width * 4),
-        .rows_per_image = @intCast(u32, images[0].height),
+        .bytes_per_row = @as(u32, @intCast(images[0].width * 4)),
+        .rows_per_image = @as(u32, @intCast(images[0].height)),
     };
 
     const encoder = app.core.device().createCommandEncoder(null);
@@ -169,24 +169,24 @@ pub fn init(app: *App) !void {
     while (i < 6) : (i += 1) {
         staging_buff[i] = app.core.device().createBuffer(&.{
             .usage = .{ .copy_src = true, .map_write = true },
-            .size = @intCast(u64, images[0].width) * @intCast(u64, images[0].height) * @sizeOf(u32),
+            .size = @as(u64, @intCast(images[0].width)) * @as(u64, @intCast(images[0].height)) * @sizeOf(u32),
             .mapped_at_creation = true,
         });
         switch (images[i].pixels) {
             .rgba32 => |pixels| {
                 // Map a section of the staging buffer
-                var staging_map = staging_buff[i].getMappedRange(u32, 0, @intCast(u64, images[i].width) * @intCast(u64, images[i].height));
+                var staging_map = staging_buff[i].getMappedRange(u32, 0, @as(u64, @intCast(images[i].width)) * @as(u64, @intCast(images[i].height)));
                 // Copy the image data into the mapped buffer
-                std.mem.copy(u32, staging_map.?, @ptrCast([]u32, @alignCast(@alignOf([]u32), pixels)));
+                std.mem.copy(u32, staging_map.?, @as([]u32, @ptrCast(@alignCast(@alignOf([]u32), pixels))));
                 // And release the mapping
                 staging_buff[i].unmap();
             },
             .rgb24 => |pixels| {
-                var staging_map = staging_buff[i].getMappedRange(u32, 0, @intCast(u64, images[i].width) * @intCast(u64, images[i].height));
+                var staging_map = staging_buff[i].getMappedRange(u32, 0, @as(u64, @intCast(images[i].width)) * @as(u64, @intCast(images[i].height)));
                 // In this case, we have to convert the data to rgba32 first
                 const data = try rgb24ToRgba32(allocator, pixels);
                 defer data.deinit(allocator);
-                std.mem.copy(u32, staging_map.?, @ptrCast([]u32, @alignCast(@alignOf([]u32), data.rgba32)));
+                std.mem.copy(u32, staging_map.?, @as([]u32, @ptrCast(@alignCast(@alignOf([]u32), data.rgba32))));
                 staging_buff[i].unmap();
             },
             else => @panic("unsupported image color format"),
@@ -320,7 +320,7 @@ pub fn update(app: *App) !bool {
 
     {
         const time = app.timer.read();
-        const aspect = @intToFloat(f32, app.core.descriptor().width) / @intToFloat(f32, app.core.descriptor().height);
+        const aspect = @as(f32, @floatFromInt(app.core.descriptor().width)) / @as(f32, @floatFromInt(app.core.descriptor().height));
         const proj = zm.perspectiveFovRh((2 * std.math.pi) / 5.0, aspect, 0.1, 3000);
         const model = zm.mul(
             zm.scaling(1000, 1000, 1000),

@@ -147,7 +147,7 @@ pub fn update(app: *App) !bool {
     {
         const proj = zm.perspectiveFovRh(
             (std.math.pi / 3.0),
-            @intToFloat(f32, app.core.descriptor().width) / @intToFloat(f32, app.core.descriptor().height),
+            @as(f32, @floatFromInt(app.core.descriptor().width)) / @as(f32, @floatFromInt(app.core.descriptor().height)),
             10,
             30,
         );
@@ -160,8 +160,8 @@ pub fn update(app: *App) !bool {
         while (x < 4) : (x += 1) {
             var y: u8 = 0;
             while (y < 4) : (y += 1) {
-                const trans = zm.translation(step * (@intToFloat(f32, x) - 2.0 + 0.5), step * (@intToFloat(f32, y) - 2.0 + 0.5), -20);
-                const localTime = time + @intToFloat(f32, m) * 0.5;
+                const trans = zm.translation(step * (@as(f32, @floatFromInt(x)) - 2.0 + 0.5), step * (@as(f32, @floatFromInt(y)) - 2.0 + 0.5), -20);
+                const localTime = time + @as(f32, @floatFromInt(m)) * 0.5;
                 const model = zm.mul(zm.mul(zm.mul(zm.rotationX(localTime * (std.math.pi / 2.1)), zm.rotationY(localTime * (std.math.pi / 0.9))), zm.rotationZ(localTime * (std.math.pi / 1.3))), trans);
                 const mvp = zm.mul(model, proj);
                 const ubo = UniformBufferObject{

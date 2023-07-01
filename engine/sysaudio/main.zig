@@ -79,7 +79,7 @@ pub fn update(app: *App) !bool {
 }
 
 fn writeFn(app_op: ?*anyopaque, frames: usize) void {
-    const app: *App = @ptrCast(*App, @alignCast(@alignOf(App), app_op));
+    const app: *App = @as(*App, @ptrCast(@alignCast(@alignOf(App), app_op)));
 
     var frame: usize = 0;
     while (frame < frames) : (frame += 1) {
@@ -88,12 +88,12 @@ fn writeFn(app_op: ?*anyopaque, frames: usize) void {
             if (tone.sample_counter >= tone.duration) continue;
 
             tone.sample_counter += 1;
-            const sample_counter = @intToFloat(f32, tone.sample_counter);
-            const duration = @intToFloat(f32, tone.duration);
+            const sample_counter = @as(f32, @floatFromInt(tone.sample_counter));
+            const duration = @as(f32, @floatFromInt(tone.duration));
 
             // The sine wave that plays the frequency.
             const gain = 0.1;
-            const sine_wave = std.math.sin(tone.frequency * 2.0 * std.math.pi * sample_counter / @intToFloat(f32, app.player.sampleRate())) * gain;
+            const sine_wave = std.math.sin(tone.frequency * 2.0 * std.math.pi * sample_counter / @as(f32, @floatFromInt(app.player.sampleRate()))) * gain;
 
             // A number ranging from 0.0 to 1.0 in the first 1/64th of the duration of the tone.
             const fade_in = @min(sample_counter / (duration / 64.0), 1.0);
@@ -119,7 +119,7 @@ pub fn fillTone(app: *App, frequency: f32) void {
             tone.* = Tone{
                 .frequency = frequency,
                 .sample_counter = 0,
-                .duration = @floatToInt(usize, 1.5 * @intToFloat(f32, app.player.sampleRate())), // play the tone for 1.5s
+                .duration = @as(usize, @intFromFloat(1.5 * @as(f32, @floatFromInt(app.player.sampleRate())))), // play the tone for 1.5s
             };
             return;
         }

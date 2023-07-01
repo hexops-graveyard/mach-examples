@@ -44,7 +44,7 @@ pub fn init(app: *App) !void {
     const target = vec3(0.0, 0.0, 0.0);
 
     const size = app.core.framebufferSize();
-    const aspect_ratio = @intToFloat(f32, size.width) / @intToFloat(f32, size.height);
+    const aspect_ratio = @as(f32, @floatFromInt(size.width)) / @as(f32, @floatFromInt(size.height));
 
     app.queue = app.core.device().getQueue();
     app.cube = Cube.init(&app.core);
@@ -237,7 +237,7 @@ const Camera = struct {
         };
 
         const buffer = .{
-            .buffer = initBuffer(device, .{ .uniform = true }, &@bitCast([20]f32, uniform)),
+            .buffer = initBuffer(device, .{ .uniform = true }, &@as([20]f32, @bitCast(uniform))),
             .size = @sizeOf(@TypeOf(uniform)),
         };
 
@@ -501,7 +501,7 @@ fn asFloats(comptime arr: anytype) [arr.len]f32 {
     comptime var out: [len]f32 = undefined;
     comptime var i = 0;
     inline while (i < len) : (i += 1) {
-        out[i] = @intToFloat(f32, arr[i]);
+        out[i] = @as(f32, @floatFromInt(arr[i]));
     }
     return out;
 }
@@ -708,7 +708,7 @@ const Light = struct {
         };
 
         const buffer = .{
-            .buffer = initBuffer(device, .{ .uniform = true }, &@bitCast([8]f32, uniform)),
+            .buffer = initBuffer(device, .{ .uniform = true }, &@as([8]f32, @bitCast(uniform))),
             .size = @sizeOf(@TypeOf(uniform)),
         };
 
@@ -819,11 +819,11 @@ inline fn initBuffer(device: *gpu.Device, usage: gpu.Buffer.UsageFlags, data: an
 }
 
 fn vec3i(x: isize, y: isize, z: isize) Vec {
-    return zm.f32x4(@intToFloat(f32, x), @intToFloat(f32, y), @intToFloat(f32, z), 0.0);
+    return zm.f32x4(@as(f32, @floatFromInt(x)), @as(f32, @floatFromInt(y)), @as(f32, @floatFromInt(z)), 0.0);
 }
 
 fn vec3u(x: usize, y: usize, z: usize) Vec {
-    return zm.f32x4(@intToFloat(f32, x), @intToFloat(f32, y), @intToFloat(f32, z), 0.0);
+    return zm.f32x4(@as(f32, @floatFromInt(x)), @as(f32, @floatFromInt(y)), @as(f32, @floatFromInt(z)), 0.0);
 }
 
 fn vec3(x: f32, y: f32, z: f32) Vec {

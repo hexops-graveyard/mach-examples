@@ -304,9 +304,9 @@ fn loadMeshFromFile(app: *App, allocator: std.mem.Allocator, model_path: []const
 
     var vertex_writer = try VertexWriter(Vertex, u16).init(
         allocator,
-        @intCast(u16, app.index_count),
-        @intCast(u16, vertex_count),
-        @intCast(u16, face_count * 3),
+        @as(u16, @intCast(app.index_count)),
+        @as(u16, @intCast(vertex_count)),
+        @as(u16, @intCast(face_count * 3)),
     );
     defer vertex_writer.deinit(allocator);
 
@@ -336,14 +336,14 @@ fn loadMeshFromFile(app: *App, allocator: std.mem.Allocator, model_path: []const
                 vertices[normal_index].y,
                 vertices[normal_index].z,
             }, .uv = .{ position[plane_xy[0]], position[plane_xy[1]] } };
-            vertex_writer.put(vertex, @intCast(u16, vertex_index));
+            vertex_writer.put(vertex, @as(u16, @intCast(vertex_index)));
         }
     }
 
     const vertex_buffer = vertex_writer.vertices[0 .. vertex_writer.next_packed_index + 4];
     const index_buffer = vertex_writer.indices;
 
-    app.vertex_count = @intCast(u32, vertex_buffer.len);
+    app.vertex_count = @as(u32, @intCast(vertex_buffer.len));
 
     //
     // Compute UV values
@@ -359,7 +359,7 @@ fn loadMeshFromFile(app: *App, allocator: std.mem.Allocator, model_path: []const
     // Manually append ground plane to mesh
     //
     {
-        const last_vertex_index: u16 = @intCast(u16, vertex_buffer.len - 4);
+        const last_vertex_index: u16 = @as(u16, @intCast(vertex_buffer.len - 4));
         const index_base = index_buffer.len - 6;
         index_buffer[index_base + 0] = last_vertex_index;
         index_buffer[index_base + 1] = last_vertex_index + 2;
@@ -999,8 +999,8 @@ fn prepareLights(app: *App) void {
 
 fn prepareViewMatrices(app: *App) void {
     const screen_dimensions = Dimensions2D(f32){
-        .width = @intToFloat(f32, app.screen_dimensions.width),
-        .height = @intToFloat(f32, app.screen_dimensions.height),
+        .width = @as(f32, @floatFromInt(app.screen_dimensions.width)),
+        .height = @as(f32, @floatFromInt(app.screen_dimensions.height)),
     };
     const aspect: f32 = screen_dimensions.width / screen_dimensions.height;
     const fov: f32 = 2.0 * std.math.pi / 5.0;
@@ -1054,8 +1054,8 @@ fn buildCommandBuffer(app: *App) !*gpu.CommandBuffer {
     std.debug.assert(app.screen_dimensions.height == app.core.descriptor().height);
 
     const dimensions = Dimensions2D(f32){
-        .width = @intToFloat(f32, app.core.descriptor().width),
-        .height = @intToFloat(f32, app.core.descriptor().height),
+        .width = @as(f32, @floatFromInt(app.core.descriptor().width)),
+        .height = @as(f32, @floatFromInt(app.core.descriptor().height)),
     };
 
     {
@@ -1185,13 +1185,13 @@ fn drawUI(app: *App) void {
     _ = imgui.checkbox("Paused", .{ .v = &app.is_paused });
     var update_uniform_buffers: bool = false;
     const modes = [_][:0]const u8{ "rendering", "gbuffers view" };
-    const mode_index = @enumToInt(app.settings.render_mode);
+    const mode_index = @intFromEnum(app.settings.render_mode);
     if (imgui.beginCombo("Mode", .{ .preview_value = modes[mode_index] })) {
         for (modes, 0..) |mode, mode_i| {
-            const i = @intCast(u32, mode_i);
+            const i = @as(u32, @intCast(mode_i));
             if (imgui.selectable(mode, .{ .selected = mode_index == i })) {
                 update_uniform_buffers = true;
-                app.settings.render_mode = @intToEnum(RenderMode, mode_i);
+                app.settings.render_mode = @as(RenderMode, @enumFromInt(mode_i));
             }
         }
         imgui.endCombo();

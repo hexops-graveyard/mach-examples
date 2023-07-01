@@ -174,7 +174,7 @@ pub fn update(app: *App) !bool {
         );
         const proj = zm.perspectiveFovRh(
             (2.0 * std.math.pi / 5.0),
-            @intToFloat(f32, app.core.descriptor().width) / @intToFloat(f32, app.core.descriptor().height),
+            @as(f32, @floatFromInt(app.core.descriptor().width)) / @as(f32, @floatFromInt(app.core.descriptor().height)),
             1,
             100,
         );

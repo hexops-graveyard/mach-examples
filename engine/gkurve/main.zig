@@ -43,7 +43,7 @@ pub fn init(app: *App) !void {
     // TODO: Refactor texture atlas size number
     app.texture_atlas_data = try AtlasRGB8.init(app.allocator, 1280);
     const atlas_size = gpu.Extent3D{ .width = app.texture_atlas_data.size, .height = app.texture_atlas_data.size };
-    const atlas_float_size = @intToFloat(f32, app.texture_atlas_data.size);
+    const atlas_float_size = @as(f32, @floatFromInt(app.texture_atlas_data.size));
 
     const texture = app.core.device().createTexture(&.{
         .size = atlas_size,
@@ -55,14 +55,14 @@ pub fn init(app: *App) !void {
         },
     });
     const data_layout = gpu.Texture.DataLayout{
-        .bytes_per_row = @intCast(u32, atlas_size.width * 4),
-        .rows_per_image = @intCast(u32, atlas_size.height),
+        .bytes_per_row = @as(u32, @intCast(atlas_size.width * 4)),
+        .rows_per_image = @as(u32, @intCast(atlas_size.height)),
     };
 
     var img = try zigimg.Image.fromMemory(app.allocator, assets.gotta_go_fast_image);
     defer img.deinit();
 
-    const atlas_img_region = try app.texture_atlas_data.reserve(app.allocator, @truncate(u32, img.width), @truncate(u32, img.height));
+    const atlas_img_region = try app.texture_atlas_data.reserve(app.allocator, @as(u32, @truncate(img.width)), @as(u32, @truncate(img.height)));
     const img_uv_data = atlas_img_region.getUVData(atlas_float_size);
 
     switch (img.pixels) {
@@ -111,8 +111,8 @@ pub fn init(app: *App) !void {
     );
 
     const wsize = app.core.size();
-    const window_width = @intToFloat(f32, wsize.width);
-    const window_height = @intToFloat(f32, wsize.height);
+    const window_width = @as(f32, @floatFromInt(wsize.width));
+    const window_height = @as(f32, @floatFromInt(wsize.height));
     const triangle_scale = 250;
     switch (demo_mode) {
         .gkurves => {
@@ -316,7 +316,7 @@ pub fn update(app: *App) !bool {
     pass.setPipeline(app.pipeline);
     pass.setVertexBuffer(0, app.vertex_buffer, 0, @sizeOf(draw.Vertex) * app.vertices.items.len);
     pass.setBindGroup(0, app.bind_group, &.{ 0, 0 });
-    pass.draw(@truncate(u32, app.vertices.items.len), 1, 0, 0);
+    pass.draw(@as(u32, @truncate(app.vertices.items.len)), 1, 0, 0);
     pass.end();
     pass.release();
 
@@ -348,8 +348,8 @@ pub fn getVertexUniformBufferObject(app: *App) !draw.VertexUniform {
     // coordinate system.
     const window_size = app.core.size();
     const proj = zm.orthographicRh(
-        @intToFloat(f32, window_size.width),
-        @intToFloat(f32, window_size.height),
+        @as(f32, @floatFromInt(window_size.width)),
+        @as(f32, @floatFromInt(window_size.height)),
         -100,
         100,
     );

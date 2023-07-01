@@ -40,8 +40,8 @@ pub const Region = struct {
 
     pub fn getUVData(region: Region, atlas_float_size: f32) UVData {
         return .{
-            .bottom_left = .{ @intToFloat(f32, region.x) / atlas_float_size, (atlas_float_size - @intToFloat(f32, region.y + region.height)) / atlas_float_size },
-            .width_and_height = .{ @intToFloat(f32, region.width) / atlas_float_size, @intToFloat(f32, region.height) / atlas_float_size },
+            .bottom_left = .{ @as(f32, @floatFromInt(region.x)) / atlas_float_size, (atlas_float_size - @as(f32, @floatFromInt(region.y + region.height))) / atlas_float_size },
+            .width_and_height = .{ @as(f32, @floatFromInt(region.width)) / atlas_float_size, @as(f32, @floatFromInt(region.height)) / atlas_float_size },
         };
     }
 };

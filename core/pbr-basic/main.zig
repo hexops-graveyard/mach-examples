@@ -365,8 +365,8 @@ pub fn update(app: *App) !bool {
             .mouse_motion => |ev| {
                 if (app.is_rotating) {
                     const delta = Vec2{
-                        @floatCast(f32, (app.mouse_position.x - ev.pos.x) * app.camera.rotation_speed),
-                        @floatCast(f32, (app.mouse_position.y - ev.pos.y) * app.camera.rotation_speed),
+                        @as(f32, @floatCast((app.mouse_position.x - ev.pos.x) * app.camera.rotation_speed)),
+                        @as(f32, @floatCast((app.mouse_position.y - ev.pos.y) * app.camera.rotation_speed)),
                     };
                     app.mouse_position = ev.pos;
                     app.camera.rotate(delta);
@@ -420,7 +420,7 @@ pub fn update(app: *App) !bool {
                     .stencil_store_op = .store,
                 };
 
-                const aspect_ratio = @intToFloat(f32, ev.width) / @intToFloat(f32, ev.height);
+                const aspect_ratio = @as(f32, @floatFromInt(ev.width)) / @as(f32, @floatFromInt(ev.height));
                 app.camera.setPerspective(60.0, aspect_ratio, 0.1, 256.0);
                 app.uniform_buffers_dirty = true;
             },
@@ -452,8 +452,8 @@ pub fn update(app: *App) !bool {
     const pass = encoder.beginRenderPass(&app.render_pass_descriptor);
 
     const dimensions = Dimensions2D(f32){
-        .width = @intToFloat(f32, app.core.descriptor().width),
-        .height = @intToFloat(f32, app.core.descriptor().height),
+        .width = @as(f32, @floatFromInt(app.core.descriptor().width)),
+        .height = @as(f32, @floatFromInt(app.core.descriptor().height)),
     };
     pass.setViewport(
         0,
@@ -473,7 +473,7 @@ pub fn update(app: *App) !bool {
     var i: usize = 0;
     while (i < (grid_dimensions * grid_dimensions)) : (i += 1) {
         const alignment = 256;
-        const dynamic_offset: u32 = @intCast(u32, i) * alignment;
+        const dynamic_offset: u32 = @as(u32, @intCast(i)) * alignment;
         const dynamic_offsets = [2]u32{ dynamic_offset, dynamic_offset };
         pass.setBindGroup(0, app.bind_group, &dynamic_offsets);
         if (!app.buffers_bound) {
@@ -519,14 +519,14 @@ fn prepareUniformBuffers(app: *App) void {
         std.debug.assert(@sizeOf(MaterialParamsDynamic) == 256);
     }
 
-    app.uniform_buffers.ubo_matrices.size = roundToMultipleOf4(u32, @intCast(u32, @sizeOf(UboMatrices))) + 4;
+    app.uniform_buffers.ubo_matrices.size = roundToMultipleOf4(u32, @as(u32, @intCast(@sizeOf(UboMatrices)))) + 4;
     app.uniform_buffers.ubo_matrices.buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = app.uniform_buffers.ubo_matrices.size,
         .mapped_at_creation = false,
     });
 
-    app.uniform_buffers.ubo_params.size = roundToMultipleOf4(u32, @intCast(u32, @sizeOf(UboParams))) + 4;
+    app.uniform_buffers.ubo_params.size = roundToMultipleOf4(u32, @as(u32, @intCast(@sizeOf(UboParams)))) + 4;
     app.uniform_buffers.ubo_params.buffer = app.core.device().createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = app.uniform_buffers.ubo_params.size,
@@ -568,12 +568,12 @@ fn updateDynamicUniformBuffer(app: *App) void {
     while (y < grid_dimensions) : (y += 1) {
         var x: usize = 0;
         while (x < grid_dimensions) : (x += 1) {
-            const grid_dimensions_float = @intToFloat(f32, grid_dimensions);
-            app.object_params_dynamic[index].position[0] = (@intToFloat(f32, x) - (grid_dimensions_float / 2) * 2.5);
+            const grid_dimensions_float = @as(f32, @floatFromInt(grid_dimensions));
+            app.object_params_dynamic[index].position[0] = (@as(f32, @floatFromInt(x)) - (grid_dimensions_float / 2) * 2.5);
             app.object_params_dynamic[index].position[1] = 0;
-            app.object_params_dynamic[index].position[2] = (@intToFloat(f32, y) - (grid_dimensions_float / 2) * 2.5);
-            app.material_params_dynamic[index].metallic = zm.clamp(@intToFloat(f32, x) / (grid_dimensions_float - 1), 0.1, 1.0);
-            app.material_params_dynamic[index].roughness = zm.clamp(@intToFloat(f32, y) / (grid_dimensions_float - 1), 0.05, 1.0);
+            app.object_params_dynamic[index].position[2] = (@as(f32, @floatFromInt(y)) - (grid_dimensions_float / 2) * 2.5);
+            app.material_params_dynamic[index].metallic = zm.clamp(@as(f32, @floatFromInt(x)) / (grid_dimensions_float - 1), 0.1, 1.0);
+            app.material_params_dynamic[index].roughness = zm.clamp(@as(f32, @floatFromInt(y)) / (grid_dimensions_float - 1), 0.05, 1.0);
             app.material_params_dynamic[index].color = materials[app.current_material_index].params.color;
             index += 1;
         }
@@ -852,7 +852,7 @@ fn loadModels(allocator: std.mem.Allocator, app: *App) !void {
         const vertex_buffer = vertex_writer.vertexBuffer();
         const index_buffer = vertex_writer.indexBuffer();
 
-        model.vertex_count = @intCast(u32, vertex_buffer.len);
+        model.vertex_count = @as(u32, @intCast(vertex_buffer.len));
 
         model.vertex_buffer = app.core.device().createBuffer(&.{
             .usage = .{ .copy_dst = true, .vertex = true },
@@ -881,7 +881,7 @@ fn drawUI(app: *App) void {
     var update_uniform_buffers: bool = false;
     if (imgui.beginCombo("Material", .{ .preview_value = material_names[app.current_material_index] })) {
         for (material_names, 0..) |material, material_i| {
-            const i = @intCast(u32, material_i);
+            const i = @as(u32, @intCast(material_i));
             if (imgui.selectable(material, .{ .selected = app.current_material_index == i })) {
                 update_uniform_buffers = true;
                 app.current_material_index = i;
@@ -891,7 +891,7 @@ fn drawUI(app: *App) void {
     }
     if (imgui.beginCombo("Object type", .{ .preview_value = object_names[app.current_object_index] })) {
         for (object_names, 0..) |object, object_i| {
-            const i = @intCast(u32, object_i);
+            const i = @as(u32, @intCast(object_i));
             if (imgui.selectable(object, .{ .selected = app.current_object_index == i })) {
                 update_uniform_buffers = true;
                 app.current_object_index = i;
@@ -946,7 +946,7 @@ fn setupImgui(app: *App) void {
 
     imgui.io.setDefaultFont(font_normal);
     imgui.mach_backend.init(&app.core, app.core.device(), app.core.descriptor().format, .{
-        .depth_stencil_format = @enumToInt(gpu.Texture.Format.depth24_plus_stencil8),
+        .depth_stencil_format = @intFromEnum(gpu.Texture.Format.depth24_plus_stencil8),
     });
 
     const style = imgui.getStyle();
@@ -960,7 +960,7 @@ fn setupCamera(app: *App) void {
         .rotation_speed = 1.0,
         .movement_speed = 1.0,
     };
-    const aspect_ratio: f32 = @intToFloat(f32, app.core.descriptor().width) / @intToFloat(f32, app.core.descriptor().height);
+    const aspect_ratio: f32 = @as(f32, @floatFromInt(app.core.descriptor().width)) / @as(f32, @floatFromInt(app.core.descriptor().height));
     app.camera.setPosition(.{ 10.0, 6.0, 6.0 });
     app.camera.setRotation(.{ 62.5, 90.0, 0.0 });
     app.camera.setMovementSpeed(0.5);

@@ -105,7 +105,7 @@ pub fn init(app: *App) !void {
     const queue = app.core.device().getQueue();
     var img = try zigimg.Image.fromMemory(allocator, assets.gotta_go_fast_image);
     defer img.deinit();
-    const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
+    const img_size = gpu.Extent3D{ .width = @as(u32, @intCast(img.width)), .height = @as(u32, @intCast(img.height)) };
     const cube_texture = app.core.device().createTexture(&.{
         .size = img_size,
         .format = .rgba8_unorm,
@@ -116,8 +116,8 @@ pub fn init(app: *App) !void {
         },
     });
     const data_layout = gpu.Texture.DataLayout{
-        .bytes_per_row = @intCast(u32, img.width * 4),
-        .rows_per_image = @intCast(u32, img.height),
+        .bytes_per_row = @as(u32, @intCast(img.width * 4)),
+        .rows_per_image = @as(u32, @intCast(img.height)),
     };
     switch (img.pixels) {
         .rgba32 => |pixels| queue.writeTexture(&.{ .texture = cube_texture }, &data_layout, &img_size, pixels),
@@ -262,7 +262,7 @@ pub fn update(app: *App) !bool {
         );
         const proj = zm.perspectiveFovRh(
             (std.math.pi / 4.0),
-            @intToFloat(f32, app.core.descriptor().width) / @intToFloat(f32, app.core.descriptor().height),
+            @as(f32, @floatFromInt(app.core.descriptor().width)) / @as(f32, @floatFromInt(app.core.descriptor().height)),
             0.1,
             10,
         );

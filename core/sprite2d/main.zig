@@ -153,7 +153,7 @@ pub fn init(app: *App) !void {
     const queue = app.core.device().getQueue();
     var img = try zigimg.Image.fromMemory(allocator, assets.example_spritesheet_image);
     defer img.deinit();
-    const img_size = gpu.Extent3D{ .width = @intCast(u32, img.width), .height = @intCast(u32, img.height) };
+    const img_size = gpu.Extent3D{ .width = @as(u32, @intCast(img.width)), .height = @as(u32, @intCast(img.height)) };
     std.log.info("Image Dimensions: {} {}", .{ img.width, img.height });
     const texture = app.core.device().createTexture(&.{
         .size = img_size,
@@ -165,8 +165,8 @@ pub fn init(app: *App) !void {
         },
     });
     const data_layout = gpu.Texture.DataLayout{
-        .bytes_per_row = @intCast(u32, img.width * 4),
-        .rows_per_image = @intCast(u32, img.height),
+        .bytes_per_row = @as(u32, @intCast(img.width * 4)),
+        .rows_per_image = @as(u32, @intCast(img.height)),
     };
     switch (img.pixels) {
         .rgba32 => |pixels| queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, pixels),
@@ -298,8 +298,8 @@ fn render(app: *App) !void {
     // One pixel in our scene will equal one window pixel (i.e. be roughly the same size
     // irrespective of whether the user has a Retina/HDPI display.)
     const proj = zm.orthographicRh(
-        @intToFloat(f32, app.core.size().width),
-        @intToFloat(f32, app.core.size().height),
+        @as(f32, @floatFromInt(app.core.size().width)),
+        @as(f32, @floatFromInt(app.core.size().height)),
         0.1,
         1000,
     );
@@ -318,7 +318,7 @@ fn render(app: *App) !void {
     encoder.writeBuffer(app.sprites_buffer, 0, app.sprites.items);
 
     // Draw the sprite batch
-    const total_vertices = @intCast(u32, app.sprites.items.len * 6);
+    const total_vertices = @as(u32, @intCast(app.sprites.items.len * 6));
     const pass = encoder.beginRenderPass(&render_pass_info);
     pass.setPipeline(app.pipeline);
     pass.setBindGroup(0, app.bind_group, &.{});

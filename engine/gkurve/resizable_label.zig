@@ -107,7 +107,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
         switch (char) {
             '\n' => {
                 offset[0] = 0;
-                offset[1] -= @intToFloat(f32, ctx.label.face.glyph().metrics().vertAdvance) * (@intToFloat(f32, ctx.text_size) / 1024);
+                offset[1] -= @as(f32, @floatFromInt(ctx.label.face.glyph().metrics().vertAdvance)) * (@as(f32, @floatFromInt(ctx.text_size)) / 1024);
             },
             ' ' => {
                 @panic("TODO: Space character not implemented yet");
@@ -204,9 +204,9 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
 
                         for (ctx.label.tessellator.triangles.items) |idx| {
                             try all_outlines.append(Vec2{ polygon.items[idx * 2], polygon.items[(idx * 2) + 1] });
-                            try all_indices.append(@intCast(u16, (idx * 2) + idx_offset));
+                            try all_indices.append(@as(u16, @intCast((idx * 2) + idx_offset)));
                         }
-                        idx_offset += @intCast(u16, ctx.label.tessellator.triangles.items.len);
+                        idx_offset += @as(u16, @intCast(ctx.label.tessellator.triangles.items.len));
                     }
 
                     for (all_outlines.items) |item| {
@@ -222,7 +222,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                     for (outline_ctx.concave_vertices.items) |concave_control| {
                         for (all_outlines.items, 0..) |item, j| {
                             if (vec2Equal(item, concave_control)) {
-                                try v.value_ptr.concave_vertices.append(@truncate(u16, j));
+                                try v.value_ptr.concave_vertices.append(@as(u16, @truncate(j)));
                                 break;
                             }
                         }
@@ -239,11 +239,11 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                         var found: usize = 0;
                         for (all_outlines.items, 0..) |item, j| {
                             if (vec2Equal(item, outline_ctx.convex_vertices.items[i + 1])) {
-                                try v.value_ptr.convex_vertices_indices.append(@truncate(u16, j));
+                                try v.value_ptr.convex_vertices_indices.append(@as(u16, @truncate(j)));
                                 found += 1;
                             }
                             if (vec2Equal(item, outline_ctx.convex_vertices.items[i + 2])) {
-                                try v.value_ptr.convex_vertices_indices.append(@truncate(u16, j));
+                                try v.value_ptr.convex_vertices_indices.append(@as(u16, @truncate(j)));
                                 found += 1;
                             }
                             if (found == 2) break;
@@ -258,7 +258,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                 defer ctx.label.allocator.free(filled_vertices_after_offset);
                 for (filled_vertices_after_offset, 0..) |*vert, i| {
                     vert.* = v.value_ptr.filled_vertices.items[i];
-                    vert.pos *= Vec4{ @intToFloat(f32, ctx.text_size) / 1024, @intToFloat(f32, ctx.text_size) / 1024, 0, 1 };
+                    vert.pos *= Vec4{ @as(f32, @floatFromInt(ctx.text_size)) / 1024, @as(f32, @floatFromInt(ctx.text_size)) / 1024, 0, 1 };
                     vert.pos += ctx.position + offset;
                     vert.uv = vert.uv * ctx.label.white_texture.width_and_height + ctx.label.white_texture.bottom_left;
                 }
@@ -279,7 +279,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                     convex_vertices_after_offset[j] = v.value_ptr.convex_vertices.items[j / 3];
                     convex_vertices_consumed += 1;
 
-                    convex_vertices_after_offset[j].pos *= Vec4{ @intToFloat(f32, ctx.text_size) / 1024, @intToFloat(f32, ctx.text_size) / 1024, 0, 1 };
+                    convex_vertices_after_offset[j].pos *= Vec4{ @as(f32, @floatFromInt(ctx.text_size)) / 1024, @as(f32, @floatFromInt(ctx.text_size)) / 1024, 0, 1 };
                     convex_vertices_after_offset[j].pos += ctx.position + offset;
                     convex_vertices_after_offset[j].uv = convex_vertices_after_offset[j].uv * ctx.label.white_texture.width_and_height + ctx.label.white_texture.bottom_left;
 
@@ -312,7 +312,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                 ctx.app.update_vertex_buffer = true;
                 ctx.app.update_frag_uniform_buffer = true;
 
-                offset[0] += @intToFloat(f32, ctx.label.face.glyph().metrics().horiAdvance) * (@intToFloat(f32, ctx.text_size) / 1024);
+                offset[0] += @as(f32, @floatFromInt(ctx.label.face.glyph().metrics().horiAdvance)) * (@as(f32, @floatFromInt(ctx.text_size)) / 1024);
             },
         }
     }
@@ -388,7 +388,7 @@ fn uniteOutsideAndInsideVertices(ctx: *OutlineContext) void {
 fn moveToFunction(ctx: *OutlineContext, _to: ft.Vector) ft.Error!void {
     uniteOutsideAndInsideVertices(ctx);
 
-    const to = Vec2{ @intToFloat(f32, _to.x), @intToFloat(f32, _to.y) };
+    const to = Vec2{ @as(f32, @floatFromInt(_to.x)), @as(f32, @floatFromInt(_to.y)) };
 
     // To check wether a point is carving a polygon, use the point-in-polygon test to determine if
     // we're inside or outside of the polygon.
@@ -412,10 +412,10 @@ fn lineToFunction(ctx: *OutlineContext, to: ft.Vector) ft.Error!void {
 
     // If inside_verts is not empty, we need to fill it
     if (ctx.inside_verts.items.len != 0) {
-        ctx.inside_verts.append(.{ @intToFloat(f32, to.x), @intToFloat(f32, to.y) }) catch unreachable;
+        ctx.inside_verts.append(.{ @as(f32, @floatFromInt(to.x)), @as(f32, @floatFromInt(to.y)) }) catch unreachable;
     } else {
         // Otherwise append the new point to the last polygon
-        ctx.outline_verts.items[ctx.outline_verts.items.len - 1].append(.{ @intToFloat(f32, to.x), @intToFloat(f32, to.y) }) catch unreachable;
+        ctx.outline_verts.items[ctx.outline_verts.items.len - 1].append(.{ @as(f32, @floatFromInt(to.x)), @as(f32, @floatFromInt(to.y)) }) catch unreachable;
     }
 }
 
@@ -424,8 +424,8 @@ fn lineToFunction(ctx: *OutlineContext, to: ft.Vector) ft.Error!void {
 /// point.
 fn conicToFunction(ctx: *OutlineContext, _control: ft.Vector, _to: ft.Vector) ft.Error!void {
     // std.log.info("C {} {} {} {}", .{ control.x, control.y, to.x, to.y });
-    const control = Vec2{ @intToFloat(f32, _control.x), @intToFloat(f32, _control.y) };
-    const to = Vec2{ @intToFloat(f32, _to.x), @intToFloat(f32, _to.y) };
+    const control = Vec2{ @as(f32, @floatFromInt(_control.x)), @as(f32, @floatFromInt(_control.y)) };
+    const to = Vec2{ @as(f32, @floatFromInt(_to.x)), @as(f32, @floatFromInt(_to.y)) };
 
     // If our last point was inside the glyph (e.g. the hole in the letter 'o') then this is a
     // continuation of that path, and we should write this vertex to inside_verts. Otherwise we're
