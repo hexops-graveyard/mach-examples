@@ -19,7 +19,7 @@ pub fn build(b: *std.Build) !void {
         zmath,
         zigimg,
         model3d,
-        imgui,
+        // imgui,
         assets,
 
         pub fn moduleDependency(
@@ -29,31 +29,32 @@ pub fn build(b: *std.Build) !void {
             optimize2: std.builtin.OptimizeMode,
             gpu_dawn_options: mach.gpu_dawn.Options,
         ) std.Build.ModuleDependency {
+            _ = gpu_dawn_options;
             if (dep == .zmath) return std.Build.ModuleDependency{
                 .name = @tagName(dep),
-                .module = zmath.Package.build(b2, .{
+                .module = zmath.package(b2, target2, optimize2, .{
                     .options = .{ .enable_cross_platform_determinism = true },
                 }).zmath,
             };
-            if (dep == .imgui) {
-                const imgui_pkg = imgui.Package(.{
-                    .gpu_dawn = mach.gpu_dawn,
-                }).build(b2, target2, optimize2, .{
-                    .options = .{
-                        .backend = .mach,
-                    },
-                    .gpu_dawn_options = gpu_dawn_options,
-                }) catch unreachable;
-                return std.Build.ModuleDependency{
-                    .name = @tagName(dep),
-                    .module = imgui_pkg.zgui,
-                };
-            }
+            // if (dep == .imgui) {
+            //     const imgui_pkg = imgui.Package(.{
+            //         .gpu_dawn = mach.gpu_dawn,
+            //     }).build(b2, target2, optimize2, .{
+            //         .options = .{
+            //             .backend = .mach,
+            //         },
+            //         .gpu_dawn_options = gpu_dawn_options,
+            //     }) catch unreachable;
+            //     return std.Build.ModuleDependency{
+            //         .name = @tagName(dep),
+            //         .module = imgui_pkg.zgui,
+            //     };
+            // }
             const path = switch (dep) {
                 .zmath => unreachable,
                 .zigimg => "libs/zigimg/zigimg.zig",
                 .model3d => "libs/mach/libs/model3d/src/main.zig",
-                .imgui => "libs/imgui/src/main.zig",
+                // .imgui => "libs/imgui/src/main.zig",
                 .assets => "assets/assets.zig",
             };
             return std.Build.ModuleDependency{

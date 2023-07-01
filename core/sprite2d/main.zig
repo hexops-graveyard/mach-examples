@@ -77,15 +77,15 @@ pub fn init(app: *App) !void {
     defer allocator.free(buffer);
     try sprites_file.reader().readNoEof(buffer);
     const root = try std.json.parseFromSlice(JSONData, allocator, buffer, .{});
-    defer std.json.parseFree(JSONData, allocator, root);
+    defer root.deinit();
 
     app.player_pos = Vec2{ 0, 0 };
     app.direction = Vec2{ 0, 0 };
-    app.sheet = root.sheet;
+    app.sheet = root.value.sheet;
     std.log.info("Sheet Dimensions: {} {}", .{ app.sheet.width, app.sheet.height });
     app.sprites = std.ArrayList(Sprite).init(allocator);
     app.sprites_frames = std.ArrayList(SpriteFrames).init(allocator);
-    for (root.sprites) |sprite| {
+    for (root.value.sprites) |sprite| {
         std.log.info("Sprite World Position: {} {}", .{ sprite.world_pos[0], sprite.world_pos[1] });
         std.log.info("Sprite Texture Position: {} {}", .{ sprite.pos[0], sprite.pos[1] });
         std.log.info("Sprite Dimensions: {} {}", .{ sprite.size[0], sprite.size[1] });
