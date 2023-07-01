@@ -177,7 +177,7 @@ pub fn init(app: *App) !void {
                 // Map a section of the staging buffer
                 var staging_map = staging_buff[i].getMappedRange(u32, 0, @as(u64, @intCast(images[i].width)) * @as(u64, @intCast(images[i].height)));
                 // Copy the image data into the mapped buffer
-                std.mem.copy(u32, staging_map.?, @as([]u32, @ptrCast(@alignCast(@alignOf([]u32), pixels))));
+                std.mem.copy(u32, staging_map.?, @as([]u32, @ptrCast(@alignCast(pixels))));
                 // And release the mapping
                 staging_buff[i].unmap();
             },
@@ -186,7 +186,7 @@ pub fn init(app: *App) !void {
                 // In this case, we have to convert the data to rgba32 first
                 const data = try rgb24ToRgba32(allocator, pixels);
                 defer data.deinit(allocator);
-                std.mem.copy(u32, staging_map.?, @as([]u32, @ptrCast(@alignCast(@alignOf([]u32), data.rgba32))));
+                std.mem.copy(u32, staging_map.?, @as([]u32, @ptrCast(@alignCast(data.rgba32))));
                 staging_buff[i].unmap();
             },
             else => @panic("unsupported image color format"),

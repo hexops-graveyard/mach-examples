@@ -57,8 +57,8 @@ pub fn update(app: *App) !bool {
             .key_press => |ev| {
                 const vol = try app.player.volume();
                 switch (ev.key) {
-                    .down => try app.player.setVolume(std.math.max(0.0, vol - 0.1)),
-                    .up => try app.player.setVolume(std.math.min(1.0, vol + 0.1)),
+                    .down => try app.player.setVolume(@max(0.0, vol - 0.1)),
+                    .up => try app.player.setVolume(@min(1.0, vol + 0.1)),
                     else => {},
                 }
                 app.fillTone(keyToFrequency(ev.key));
@@ -79,7 +79,7 @@ pub fn update(app: *App) !bool {
 }
 
 fn writeFn(app_op: ?*anyopaque, frames: usize) void {
-    const app: *App = @as(*App, @ptrCast(@alignCast(@alignOf(App), app_op)));
+    const app: *App = @as(*App, @ptrCast(@alignCast(app_op)));
 
     var frame: usize = 0;
     while (frame < frames) : (frame += 1) {
