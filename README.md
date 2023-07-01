@@ -35,8 +35,8 @@ You can cross-compile to every OS using:
 ```sh
 zig build -Dtarget=x86_64-windows
 zig build -Dtarget=x86_64-linux
-zig build -Dtarget=x86_64-macos.12
-zig build -Dtarget=aarch64-macos.12
+zig build -Dtarget=x86_64-macos
+zig build -Dtarget=aarch64-macos
 ```
 
 ## Join the community
