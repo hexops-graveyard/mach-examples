@@ -41,13 +41,6 @@ pub const fonts = struct {
     };
 };
 
-pub const shaders = struct {
-    pub const imgui = struct {
-        pub const path = root_path ++ "shaders/imgui.wgsl";
-        pub const bytes = @embedFile("shaders/imgui.wgsl");
-    };
-};
-
 pub const skybox = struct {
     const negx_image_path = root_path ++ "skybox/negx.png";
     const negy_image_path = root_path ++ "skybox/negy.png";

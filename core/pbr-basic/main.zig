@@ -4,7 +4,6 @@ const gpu = mach.gpu;
 const m3d = @import("model3d");
 const zm = @import("zmath");
 const assets = @import("assets");
-const imgui = @import("imgui").MachImgui(mach);
 const VertexWriter = mach.gfx.VertexWriter;
 
 pub const App = @This();
@@ -311,7 +310,6 @@ buffers_bound: bool,
 is_paused: bool,
 current_material_index: usize,
 current_object_index: usize,
-imgui_render_pipeline: *gpu.RenderPipeline,
 mouse_position: mach.Core.Position,
 is_rotating: bool,
 
@@ -338,7 +336,7 @@ pub fn init(app: *App) !void {
     prepareUniformBuffers(app);
     setupPipeline(app);
     setupRenderPass(app);
-    setupImgui(app);
+    app.printControls();
 }
 
 pub fn deinit(app: *App) void {
@@ -353,14 +351,12 @@ pub fn deinit(app: *App) void {
     app.uniform_buffers.ubo_params.buffer.release();
     app.uniform_buffers.material_params.buffer.release();
     app.uniform_buffers.object_params.buffer.release();
-    imgui.mach_backend.deinit();
-    imgui.deinit();
 }
 
 pub fn update(app: *App) !bool {
     var iter = app.core.pollEvents();
     while (iter.next()) |event| {
-        imgui.mach_backend.passEvent(event);
+        app.updateUI(event);
         switch (event) {
             .mouse_motion => |ev| {
                 if (app.is_rotating) {
@@ -489,13 +485,6 @@ pub fn update(app: *App) !bool {
             0, // first_instance
         );
     }
-
-    pass.setPipeline(app.imgui_render_pipeline);
-
-    imgui.mach_backend.newFrame();
-
-    drawUI(app);
-    imgui.mach_backend.draw(pass);
 
     pass.end();
     pass.release();
@@ -870,89 +859,36 @@ fn loadModels(allocator: std.mem.Allocator, app: *App) !void {
     }
 }
 
-fn drawUI(app: *App) void {
-    imgui.setNextWindowPos(.{ .x = 0, .y = 0 });
-    if (!imgui.begin("Settings", .{})) {
-        imgui.end();
-        return;
-    }
-
-    _ = imgui.checkbox("Paused", .{ .v = &app.is_paused });
-    var update_uniform_buffers: bool = false;
-    if (imgui.beginCombo("Material", .{ .preview_value = material_names[app.current_material_index] })) {
-        for (material_names, 0..) |material, material_i| {
-            const i = @as(u32, @intCast(material_i));
-            if (imgui.selectable(material, .{ .selected = app.current_material_index == i })) {
-                update_uniform_buffers = true;
-                app.current_material_index = i;
-            }
-        }
-        imgui.endCombo();
-    }
-    if (imgui.beginCombo("Object type", .{ .preview_value = object_names[app.current_object_index] })) {
-        for (object_names, 0..) |object, object_i| {
-            const i = @as(u32, @intCast(object_i));
-            if (imgui.selectable(object, .{ .selected = app.current_object_index == i })) {
-                update_uniform_buffers = true;
-                app.current_object_index = i;
-            }
-        }
-        imgui.endCombo();
-    }
-    if (update_uniform_buffers) {
-        updateDynamicUniformBuffer(app);
-    }
-    imgui.end();
+fn printControls(app: *App) void {
+    std.debug.print("[controls]\n", .{});
+    std.debug.print("[p] paused: {}\n", .{app.is_paused});
+    std.debug.print("[m] material: {s}\n", .{material_names[app.current_material_index]});
+    std.debug.print("[o] object: {s}\n", .{object_names[app.current_object_index]});
 }
 
-fn setupImgui(app: *App) void {
-    imgui.init(gpa.allocator());
-    const font_normal = imgui.io.addFontFromFile(assets.fonts.roboto_medium.path, 18.0);
-    const blend_component_descriptor = gpu.BlendComponent{
-        .operation = .add,
-        .src_factor = .one,
-        .dst_factor = .zero,
-    };
-
-    const color_target_state = gpu.ColorTargetState{
-        .format = app.core.descriptor().format,
-        .blend = &.{
-            .color = blend_component_descriptor,
-            .alpha = blend_component_descriptor,
+fn updateUI(app: *App, event: mach.Core.Event) void {
+    switch (event) {
+        .key_press => |ev| {
+            var update_uniform_buffers: bool = false;
+            switch (ev.key) {
+                .p => app.is_paused = !app.is_paused,
+                .m => {
+                    app.current_material_index = (app.current_material_index + 1) % material_names.len;
+                    update_uniform_buffers = true;
+                },
+                .o => {
+                    app.current_object_index = (app.current_object_index + 1) % object_names.len;
+                    update_uniform_buffers = true;
+                },
+                else => return,
+            }
+            app.printControls();
+            if (update_uniform_buffers) {
+                updateDynamicUniformBuffer(app);
+            }
         },
-    };
-
-    const shader_module = app.core.device().createShaderModuleWGSL("imgui", assets.shaders.imgui.bytes);
-
-    const imgui_pipeline_descriptor = gpu.RenderPipeline.Descriptor{
-        .depth_stencil = &.{
-            .format = .depth24_plus_stencil8,
-            .depth_write_enabled = true,
-        },
-        .fragment = &gpu.FragmentState.init(.{
-            .module = shader_module,
-            .entry_point = "frag_main",
-            .targets = &.{color_target_state},
-        }),
-        .vertex = gpu.VertexState.init(.{
-            .module = shader_module,
-            .entry_point = "vert_main",
-        }),
-    };
-
-    app.imgui_render_pipeline = app.core.device().createRenderPipeline(&imgui_pipeline_descriptor);
-
-    shader_module.release();
-
-    imgui.io.setDefaultFont(font_normal);
-    imgui.mach_backend.init(&app.core, app.core.device(), app.core.descriptor().format, .{
-        .depth_stencil_format = @intFromEnum(gpu.Texture.Format.depth24_plus_stencil8),
-    });
-
-    const style = imgui.getStyle();
-    style.window_min_size = .{ 350.0, 150.0 };
-    style.window_border_size = 8.0;
-    style.scrollbar_size = 6.0;
+        else => {},
+    }
 }
 
 fn setupCamera(app: *App) void {

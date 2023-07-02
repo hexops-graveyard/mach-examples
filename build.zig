@@ -1,6 +1,5 @@
 const std = @import("std");
 const mach = @import("libs/mach/build.zig");
-// const imgui = @import("libs/imgui/build.zig");
 const zmath = @import("libs/zmath/build.zig");
 
 pub fn build(b: *std.Build) !void {
@@ -19,7 +18,6 @@ pub fn build(b: *std.Build) !void {
         zmath,
         zigimg,
         model3d,
-        // imgui,
         assets,
 
         pub fn moduleDependency(
@@ -36,25 +34,10 @@ pub fn build(b: *std.Build) !void {
                     .options = .{ .enable_cross_platform_determinism = true },
                 }).zmath,
             };
-            // if (dep == .imgui) {
-            //     const imgui_pkg = imgui.Package(.{
-            //         .gpu_dawn = mach.gpu_dawn,
-            //     }).build(b2, target2, optimize2, .{
-            //         .options = .{
-            //             .backend = .mach,
-            //         },
-            //         .gpu_dawn_options = gpu_dawn_options,
-            //     }) catch unreachable;
-            //     return std.Build.ModuleDependency{
-            //         .name = @tagName(dep),
-            //         .module = imgui_pkg.zgui,
-            //     };
-            // }
             const path = switch (dep) {
                 .zmath => unreachable,
                 .zigimg => "libs/zigimg/zigimg.zig",
                 .model3d => "libs/mach/libs/model3d/src/main.zig",
-                // .imgui => "libs/imgui/src/main.zig",
                 .assets => "assets/assets.zig",
             };
             return std.Build.ModuleDependency{
@@ -71,7 +54,6 @@ pub fn build(b: *std.Build) !void {
         has_assets: bool = false,
         use_freetype: bool = false,
         use_model3d: bool = false,
-        // use_imgui: bool = false,
         mach_engine_example: bool = false,
     }{
         .{ .name = "triangle" },
@@ -91,26 +73,18 @@ pub fn build(b: *std.Build) !void {
         .{ .name = "cubemap", .deps = &.{ .zmath, .zigimg, .assets } },
         .{ .name = "map-async", .deps = &.{} },
         .{ .name = "sysaudio", .deps = &.{}, .mach_engine_example = true },
-        // .{
-        //     .name = "pbr-basic",
-        //     .deps = &.{ .zmath, .model3d, .imgui, .assets },
-        //     .std_platform_only = true,
-        //     .use_model3d = true,
-        //     .use_imgui = true,
-        // },
-        // .{
-        //     .name = "deferred-rendering",
-        //     .deps = &.{ .zmath, .model3d, .imgui, .assets },
-        //     .std_platform_only = true,
-        //     .use_model3d = true,
-        //     .use_imgui = true,
-        // },
-        // .{
-        //     .name = "imgui",
-        //     .deps = &.{ .imgui, .assets },
-        //     .std_platform_only = true,
-        //     .use_imgui = true,
-        // },
+        .{
+            .name = "pbr-basic",
+            .deps = &.{ .zmath, .model3d, .assets },
+            .std_platform_only = true,
+            .use_model3d = true,
+        },
+        .{
+            .name = "deferred-rendering",
+            .deps = &.{ .zmath, .model3d, .assets },
+            .std_platform_only = true,
+            .use_model3d = true,
+        },
         .{
             .name = "gkurve",
             .deps = &.{ .zmath, .zigimg, .assets },
@@ -127,7 +101,7 @@ pub fn build(b: *std.Build) !void {
     }) |example| {
         // FIXME: this is workaround for a problem that some examples
         // (having the std_platform_only=true field) as well as zigimg
-        // uses IO and imgui depends on gpu-dawn which is not supported
+        // uses IO and depends on gpu-dawn which is not supported
         // in freestanding environments. So break out of this loop
         // as soon as any such examples is found. This does means that any
         // example which works on wasm should be placed before those who dont.
@@ -153,16 +127,6 @@ pub fn build(b: *std.Build) !void {
                 .use_model3d = example.use_model3d,
             },
         );
-
-        // if (example.use_imgui) {
-        //     const imgui_pkg = try imgui.Package(.{
-        //         .gpu_dawn = mach.gpu_dawn,
-        //     }).build(b, target, optimize, .{
-        //         .options = .{ .backend = .mach },
-        //         .gpu_dawn_options = options.core.gpu_dawn_options,
-        //     });
-        //     imgui_pkg.link(app.step);
-        // }
 
         try app.link(options);
         app.install();

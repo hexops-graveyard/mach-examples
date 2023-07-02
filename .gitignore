@@ -19,6 +19,3 @@ zig-out/
 
 **/*.png
 !assets/*.png
-imgui.ini
-
-.DS_Store

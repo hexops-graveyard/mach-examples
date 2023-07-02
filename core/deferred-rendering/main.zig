@@ -4,7 +4,6 @@ const gpu = mach.gpu;
 const m3d = @import("model3d");
 const zm = @import("zmath");
 const assets = @import("assets");
-const imgui = @import("imgui").MachImgui(mach);
 const VertexWriter = mach.gfx.VertexWriter;
 
 pub const App = @This();
@@ -40,7 +39,7 @@ const TextureQuadPass = struct {
 };
 
 const WriteGBufferPass = struct {
-    color_attachments: [3]gpu.RenderPassColorAttachment,
+    color_attachments: [2]gpu.RenderPassColorAttachment,
     depth_stencil_attachment: gpu.RenderPassDepthStencilAttachment,
     descriptor: gpu.RenderPassDescriptor,
 };
@@ -124,7 +123,6 @@ write_gbuffers_pipeline: *gpu.RenderPipeline,
 gbuffers_debug_view_pipeline: *gpu.RenderPipeline,
 deferred_render_pipeline: *gpu.RenderPipeline,
 light_update_compute_pipeline: *gpu.ComputePipeline,
-imgui_render_pipeline: *gpu.RenderPipeline,
 
 // Pipeline layouts
 write_gbuffers_pipeline_layout: *gpu.PipelineLayout,
@@ -174,8 +172,7 @@ pub fn init(app: *App) !void {
     app.prepareLightUpdateComputePipeline();
     app.prepareLights();
     app.prepareViewMatrices();
-
-    app.setupImgui();
+    app.printControls();
 }
 
 pub fn deinit(app: *App) void {
@@ -221,9 +218,6 @@ pub fn deinit(app: *App) void {
     app.index_buffer.release();
     app.model_uniform_buffer.release();
     app.camera_uniform_buffer.release();
-
-    imgui.mach_backend.deinit();
-    imgui.deinit();
 }
 
 pub fn update(app: *App) !bool {
@@ -231,6 +225,7 @@ pub fn update(app: *App) !bool {
 
     var iter = app.core.pollEvents();
     while (iter.next()) |event| {
+        app.updateUI(event);
         switch (event) {
             .framebuffer_resize => |ev| {
                 app.screen_dimensions.width = ev.width;
@@ -266,13 +261,10 @@ pub fn update(app: *App) !bool {
             .close => return true,
             else => {},
         }
-
-        imgui.mach_backend.passEvent(event);
     }
 
     const command = try app.buildCommandBuffer();
     app.queue.submit(&[_]*gpu.CommandBuffer{command});
-
     command.release();
     app.core.swapChain().present();
     app.core.swapChain().getCurrentTextureView().?.release();
@@ -573,7 +565,7 @@ fn prepareWriteGBuffersPipeline(app: *App) void {
     const color_target_states = [_]gpu.ColorTargetState{
         .{ .format = .rgba32_float },
         .{ .format = .rgba32_float },
-        .{ .format = .bgra8_unorm },
+        // .{ .format = .bgra8_unorm },
     };
 
     const write_gbuffers_vertex_buffer_layout = gpu.VertexBufferLayout.init(.{
@@ -596,6 +588,7 @@ fn prepareWriteGBuffersPipeline(app: *App) void {
     );
 
     const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
+        .label = "gbuffers_pipeline",
         .layout = app.write_gbuffers_pipeline_layout,
         .primitive = .{ .cull_mode = .back },
         .depth_stencil = &.{
@@ -709,7 +702,7 @@ fn prepareDeferredRenderPipeline(app: *App) void {
 fn setupRenderPasses(app: *App) void {
     {
         // Write GBuffer pass
-        app.write_gbuffer_pass.color_attachments = [3]gpu.RenderPassColorAttachment{
+        app.write_gbuffer_pass.color_attachments = [_]gpu.RenderPassColorAttachment{
             .{
                 .view = app.gbuffer.texture_views[0],
                 .clear_value = .{
@@ -732,17 +725,17 @@ fn setupRenderPasses(app: *App) void {
                 .load_op = .clear,
                 .store_op = .store,
             },
-            .{
-                .view = app.gbuffer.texture_views[2],
-                .clear_value = .{
-                    .r = 0.0,
-                    .g = 0.0,
-                    .b = 0.0,
-                    .a = 1.0,
-                },
-                .load_op = .clear,
-                .store_op = .store,
-            },
+            // .{
+            //     .view = app.gbuffer.texture_views[2],
+            //     .clear_value = .{
+            //         .r = 0.0,
+            //         .g = 0.0,
+            //         .b = 0.0,
+            //         .a = 1.0,
+            //     },
+            //     .load_op = .clear,
+            //     .store_op = .store,
+            // },
         };
 
         app.write_gbuffer_pass.depth_stencil_attachment = gpu.RenderPassDepthStencilAttachment{
@@ -753,11 +746,10 @@ fn setupRenderPasses(app: *App) void {
             .stencil_clear_value = 1.0,
         };
 
-        app.write_gbuffer_pass.descriptor = gpu.RenderPassDescriptor{
-            .color_attachment_count = 3,
+        app.write_gbuffer_pass.descriptor = gpu.RenderPassDescriptor.init(.{
             .color_attachments = &app.write_gbuffer_pass.color_attachments,
             .depth_stencil_attachment = &app.write_gbuffer_pass.depth_stencil_attachment,
-        };
+        });
     }
     {
         // Texture Quad Pass
@@ -1047,6 +1039,8 @@ fn prepareViewMatrices(app: *App) void {
 
 fn buildCommandBuffer(app: *App) !*gpu.CommandBuffer {
     const back_buffer_view = app.core.swapChain().getCurrentTextureView().?;
+    defer back_buffer_view.release();
+
     const encoder = app.core.device().createCommandEncoder(null);
     defer encoder.release();
 
@@ -1121,92 +1115,70 @@ fn buildCommandBuffer(app: *App) !*gpu.CommandBuffer {
         },
     }
 
-    pass.setPipeline(app.imgui_render_pipeline);
-    imgui.mach_backend.newFrame();
-    app.drawUI();
-    imgui.mach_backend.draw(pass);
-
     pass.end();
     pass.release();
 
     return encoder.finish(null);
 }
 
-fn setupImgui(app: *App) void {
-    imgui.init(gpa.allocator());
-    const font_normal = imgui.io.addFontFromFile(assets.fonts.roboto_medium.path, 16.0);
+const modes = [_][:0]const u8{ "rendering", "gbuffers view" };
 
-    const blend_component_descriptor = gpu.BlendComponent{
-        .operation = .add,
-        .src_factor = .one,
-        .dst_factor = .zero,
-    };
-
-    const color_target_state = gpu.ColorTargetState{
-        .format = app.core.descriptor().format,
-        .blend = &.{
-            .color = blend_component_descriptor,
-            .alpha = blend_component_descriptor,
-        },
-    };
-
-    const shader_module = app.core.device().createShaderModuleWGSL("imgui", assets.shaders.imgui.bytes);
-    const imgui_pipeline_descriptor = gpu.RenderPipeline.Descriptor{
-        .fragment = &gpu.FragmentState.init(.{
-            .module = shader_module,
-            .entry_point = "frag_main",
-            .targets = &.{color_target_state},
-        }),
-        .vertex = gpu.VertexState.init(.{
-            .module = shader_module,
-            .entry_point = "vert_main",
-        }),
-    };
-
-    app.imgui_render_pipeline = app.core.device().createRenderPipeline(&imgui_pipeline_descriptor);
-
-    shader_module.release();
-
-    imgui.io.setDefaultFont(font_normal);
-    imgui.mach_backend.init(&app.core, app.core.device(), app.core.descriptor().format, .{});
-
-    const style = imgui.getStyle();
-    style.window_min_size = .{ 300.0, 100.0 };
-    style.window_border_size = 4.0;
-    style.scrollbar_size = 3.0;
+fn printControls(app: *App) void {
+    std.debug.print("[controls]\n", .{});
+    std.debug.print("[p] paused: {}\n", .{app.is_paused});
+    std.debug.print("[m] mode: {s}\n", .{modes[@intFromEnum(app.settings.render_mode)]});
+    std.debug.print("[,] decrease lights: {}\n", .{app.settings.lights_count});
+    std.debug.print("[.] increase lights: {}\n", .{app.settings.lights_count});
 }
 
-fn drawUI(app: *App) void {
-    imgui.setNextWindowPos(.{ .x = 10, .y = 10 });
-    if (!imgui.begin("Settings", .{})) {
-        imgui.end();
-        return;
-    }
-    _ = imgui.checkbox("Paused", .{ .v = &app.is_paused });
-    var update_uniform_buffers: bool = false;
-    const modes = [_][:0]const u8{ "rendering", "gbuffers view" };
-    const mode_index = @intFromEnum(app.settings.render_mode);
-    if (imgui.beginCombo("Mode", .{ .preview_value = modes[mode_index] })) {
-        for (modes, 0..) |mode, mode_i| {
-            const i = @as(u32, @intCast(mode_i));
-            if (imgui.selectable(mode, .{ .selected = mode_index == i })) {
-                update_uniform_buffers = true;
-                app.settings.render_mode = @as(RenderMode, @enumFromInt(mode_i));
+fn updateUI(app: *App, event: mach.Core.Event) void {
+    switch (event) {
+        .key_press => |ev| {
+            switch (ev.key) {
+                .p => app.is_paused = !app.is_paused,
+                .m => {
+                    const mode_index = @intFromEnum(app.settings.render_mode);
+                    app.settings.render_mode = @enumFromInt((mode_index + 1) % modes.len);
+                },
+                // TODO
+                // .o => {
+                //     app.current_object_index = (app.current_object_index + 1) % object_names.len;
+                // },
+                else => return,
             }
-        }
-        imgui.endCombo();
+            app.printControls();
+        },
+        else => {},
     }
-    if (imgui.sliderInt("Light count", .{ .v = &app.settings.lights_count, .min = 1, .max = max_num_lights })) {
-        app.queue.writeBuffer(
-            app.lights.config_uniform_buffer,
-            0,
-            &[1]i32{app.settings.lights_count},
-        );
-    }
-    imgui.end();
+    app.queue.writeBuffer(
+        app.lights.config_uniform_buffer,
+        0,
+        &[1]i32{app.settings.lights_count},
+    );
 }
+
+// TODO
+// fn drawUI(app: *App) void {
+//     if (imgui.beginCombo("Mode", .{ .preview_value = modes[mode_index] })) {
+//         for (modes, 0..) |mode, mode_i| {
+//             const i = @as(u32, @intCast(mode_i));
+//             if (imgui.selectable(mode, .{ .selected = mode_index == i })) {
+//                 app.settings.render_mode = @as(RenderMode, @enumFromInt(mode_i));
+//             }
+//         }
+//     }
+//     if (imgui.sliderInt("Light count", .{ .v = &app.settings.lights_count, .min = 1, .max = max_num_lights })) {
+//         app.queue.writeBuffer(
+//             app.lights.config_uniform_buffer,
+//             0,
+//             &[1]i32{app.settings.lights_count},
+//         );
+//     }
+//     imgui.end();
+// }
 
 fn updateUniformBuffers(app: *App) void {
+    app.core.device().tick();
     app.camera_rotation += toRadians(360.0) * (app.delta_time / 5.0); // one rotation every 5s
     const rotation = zm.rotationY(app.camera_rotation);
     const eye_position = zm.mul(rotation, zm.Vec{ 0, 50, -100, 0 });

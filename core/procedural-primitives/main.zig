@@ -35,7 +35,6 @@ pub fn update(app: *App) !bool {
         switch (event) {
             .key_press => |ev| {
                 if (ev.key == .space) return true;
-                // TODO(Rok Kos): Improve this, maybe even make ImGui for this
                 if (ev.key == .right) {
                     renderer.curr_primitive_index += 1;
                     renderer.curr_primitive_index %= 7;
