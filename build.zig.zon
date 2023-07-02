@@ -22,5 +22,9 @@
             .url = "https://github.com/hexops/mach-model3d/archive/13c35a8f6e733210f32c4a0ff7379c800b0d6fda.tar.gz",
             .hash = "1220b14687e0ba3ac404c2ed39e7b2e1e771c3076a67ba1e7d61875aeb0ce13a564d",
         },
+        .mach_basisu = .{
+            .url = "https://github.com/hexops/mach-basisu/archive/831de64fe2d7933d6418440f8558444ca32eeca5.tar.gz",
+            .hash = "1220ead8a15f606d6f0f853fe401460dfe18811e3d5d1aa7e808be825e44f17f0dc3",
+        },
     },
 }
