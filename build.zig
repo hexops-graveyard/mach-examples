@@ -28,17 +28,22 @@ pub fn build(b: *std.Build) !void {
             gpu_dawn_options: mach.gpu_dawn.Options,
         ) std.Build.ModuleDependency {
             _ = gpu_dawn_options;
-            if (dep == .zmath) return std.Build.ModuleDependency{
-                .name = @tagName(dep),
-                .module = zmath.package(b2, target2, optimize2, .{
-                    .options = .{ .enable_cross_platform_determinism = true },
-                }).zmath,
-            };
             const path = switch (dep) {
-                .zmath => unreachable,
+                .zmath => return std.Build.ModuleDependency{
+                    .name = @tagName(dep),
+                    .module = zmath.package(b2, target2, optimize2, .{
+                        .options = .{ .enable_cross_platform_determinism = true },
+                    }).zmath,
+                },
                 .zigimg => "libs/zigimg/zigimg.zig",
-                .model3d => "libs/mach/libs/model3d/src/main.zig",
                 .assets => "assets/assets.zig",
+                .model3d => return std.Build.ModuleDependency{
+                    .name = "model3d",
+                    .module = b2.dependency("mach_model3d", .{
+                        .target = target2,
+                        .optimize = optimize2,
+                    }).module("mach-model3d"),
+                },
             };
             return std.Build.ModuleDependency{
                 .name = @tagName(dep),
@@ -53,7 +58,6 @@ pub fn build(b: *std.Build) !void {
         std_platform_only: bool = false,
         has_assets: bool = false,
         use_freetype: bool = false,
-        use_model3d: bool = false,
         mach_engine_example: bool = false,
     }{
         .{ .name = "triangle" },
@@ -77,13 +81,11 @@ pub fn build(b: *std.Build) !void {
             .name = "pbr-basic",
             .deps = &.{ .zmath, .model3d, .assets },
             .std_platform_only = true,
-            .use_model3d = true,
         },
         .{
             .name = "deferred-rendering",
             .deps = &.{ .zmath, .model3d, .assets },
             .std_platform_only = true,
-            .use_model3d = true,
         },
         .{
             .name = "gkurve",
@@ -124,11 +126,17 @@ pub fn build(b: *std.Build) !void {
                 .res_dirs = if (example.has_assets) &.{example.name ++ "/assets"} else null,
                 .watch_paths = &.{path_suffix ++ example.name},
                 .use_freetype = if (example.use_freetype) "freetype" else null,
-                .use_model3d = example.use_model3d,
             },
         );
 
         try app.link(options);
+        for (example.deps) |dep| switch (dep) {
+            .model3d => app.step.linkLibrary(b.dependency("mach_model3d", .{
+                .target = target,
+                .optimize = optimize,
+            }).artifact("mach-model3d")),
+            else => {},
+        };
         app.install();
 
         const compile_step = b.step(example_name, "Compile " ++ example.name);
