@@ -4,7 +4,7 @@ const mach = @import("mach");
 const gpu = mach.gpu;
 const App = @import("main.zig").App;
 const zm = @import("zmath");
-const UVData = @import("atlas.zig").UVData;
+const AtlasUV = mach.Atlas.Region.UV;
 
 const Vec2 = @Vector(2, f32);
 
@@ -41,13 +41,22 @@ pub const FragUniform = struct {
     blend_color: @Vector(4, f32) = @Vector(4, f32){ 1, 1, 1, 1 },
 };
 
-pub fn equilateralTriangle(app: *App, position: Vec2, scale: f32, uniform: FragUniform, uv_data: UVData, height_scale: f32) !void {
+pub fn equilateralTriangle(app: *App, position: Vec2, scale: f32, uniform: FragUniform, uv: AtlasUV, height_scale: f32) !void {
     const triangle_height = scale * @sqrt(0.75) * height_scale;
 
     try app.vertices.appendSlice(&[3]Vertex{
-        .{ .pos = .{ position[0] + scale / 2, position[1] + triangle_height, 0, 1 }, .uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 0.5, 1 } },
-        .{ .pos = .{ position[0], position[1], 0, 1 }, .uv = uv_data.bottom_left },
-        .{ .pos = .{ position[0] + scale, position[1], 0, 1 }, .uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 1, 0 } },
+        .{
+            .pos = .{ position[0] + scale / 2, position[1] + triangle_height, 0, 1 },
+            .uv = .{ uv.x + uv.width * 0.5, uv.y + uv.height },
+        },
+        .{
+            .pos = .{ position[0], position[1], 0, 1 },
+            .uv = .{ uv.x, uv.y },
+        },
+        .{
+            .pos = .{ position[0] + scale, position[1], 0, 1 },
+            .uv = .{ uv.x + uv.width, uv.y },
+        },
     });
 
     try app.fragment_uniform_list.append(uniform);
@@ -56,18 +65,19 @@ pub fn equilateralTriangle(app: *App, position: Vec2, scale: f32, uniform: FragU
     app.update_frag_uniform_buffer = true;
 }
 
-pub fn quad(app: *App, position: Vec2, scale: Vec2, uniform: FragUniform, uv_data: UVData) !void {
-    const bottom_right_uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 1, 0 };
-    const up_left_uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 0, 1 };
-    const up_right_uv = uv_data.bottom_left + uv_data.width_and_height;
+pub fn quad(app: *App, position: Vec2, scale: Vec2, uniform: FragUniform, uv: AtlasUV) !void {
+    const bottom_left_uv = Vec2{ uv.x, uv.y };
+    const bottom_right_uv = Vec2{ uv.x + uv.width, uv.y };
+    const top_left_uv = Vec2{ uv.x, uv.y + uv.height };
+    const top_right_uv = Vec2{ uv.x + uv.width, uv.y + uv.height };
 
     try app.vertices.appendSlice(&[6]Vertex{
-        .{ .pos = .{ position[0], position[1] + scale[1], 0, 1 }, .uv = up_left_uv },
-        .{ .pos = .{ position[0], position[1], 0, 1 }, .uv = uv_data.bottom_left },
+        .{ .pos = .{ position[0], position[1] + scale[1], 0, 1 }, .uv = top_left_uv },
+        .{ .pos = .{ position[0], position[1], 0, 1 }, .uv = bottom_left_uv },
         .{ .pos = .{ position[0] + scale[0], position[1], 0, 1 }, .uv = bottom_right_uv },
 
-        .{ .pos = .{ position[0] + scale[0], position[1] + scale[1], 0, 1 }, .uv = up_right_uv },
-        .{ .pos = .{ position[0], position[1] + scale[1], 0, 1 }, .uv = up_left_uv },
+        .{ .pos = .{ position[0] + scale[0], position[1] + scale[1], 0, 1 }, .uv = top_right_uv },
+        .{ .pos = .{ position[0], position[1] + scale[1], 0, 1 }, .uv = top_left_uv },
         .{ .pos = .{ position[0] + scale[0], position[1], 0, 1 }, .uv = bottom_right_uv },
     });
 
@@ -77,23 +87,23 @@ pub fn quad(app: *App, position: Vec2, scale: Vec2, uniform: FragUniform, uv_dat
     app.update_frag_uniform_buffer = true;
 }
 
-pub fn circle(app: *App, position: Vec2, radius: f32, blend_color: @Vector(4, f32), uv_data: UVData) !void {
+pub fn circle(app: *App, position: Vec2, radius: f32, blend_color: @Vector(4, f32), uv: AtlasUV) !void {
     const low_mid = Vertex{
         .pos = .{ position[0], position[1] - (radius * 2.0), 0, 1 },
-        .uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 0.5, 0 },
+        .uv = .{ uv.x + uv.width * 0.5, uv.y },
     };
     const high_mid = Vertex{
         .pos = .{ position[0], position[1] + (radius * 2.0), 0, 1 },
-        .uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 0.5, 1 },
+        .uv = .{ uv.x + uv.width * 0.5, uv.y + uv.height },
     };
 
     const mid_left = Vertex{
         .pos = .{ position[0] - radius, position[1], 0, 1 },
-        .uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 0, 0.5 },
+        .uv = .{ uv.x, uv.y + uv.height * 0.5 },
     };
     const mid_right = Vertex{
         .pos = .{ position[0] + radius, position[1], 0, 1 },
-        .uv = uv_data.bottom_left + uv_data.width_and_height * Vec2{ 1, 0.5 },
+        .uv = .{ uv.x + uv.width, uv.y + uv.height * 0.5 },
     };
 
     try app.vertices.appendSlice(&[_]Vertex{

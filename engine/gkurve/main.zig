@@ -9,14 +9,13 @@ const ft = @import("freetype");
 const zm = @import("zmath");
 const zigimg = @import("zigimg");
 const draw = @import("draw.zig");
-const Atlas = @import("atlas.zig").Atlas;
+const Atlas = mach.Atlas;
 const Label = @import("label.zig");
 const ResizableLabel = @import("resizable_label.zig");
 const assets = @import("assets");
 
 pub const App = @This();
 
-const AtlasRGB8 = Atlas(zigimg.color.Rgba32);
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
 core: mach.Core,
@@ -32,7 +31,7 @@ frag_uniform_buffer: *gpu.Buffer,
 fragment_uniform_list: std.ArrayList(draw.FragUniform),
 update_frag_uniform_buffer: bool,
 bind_group: *gpu.BindGroup,
-texture_atlas_data: AtlasRGB8,
+texture_atlas_data: Atlas,
 
 pub fn init(app: *App) !void {
     app.allocator = gpa.allocator();
@@ -41,9 +40,12 @@ pub fn init(app: *App) !void {
     const queue = app.core.device().getQueue();
 
     // TODO: Refactor texture atlas size number
-    app.texture_atlas_data = try AtlasRGB8.init(app.allocator, 1280);
+    app.texture_atlas_data = try Atlas.init(
+        app.allocator,
+        1280,
+        .rgba,
+    );
     const atlas_size = gpu.Extent3D{ .width = app.texture_atlas_data.size, .height = app.texture_atlas_data.size };
-    const atlas_float_size = @as(f32, @floatFromInt(app.texture_atlas_data.size));
 
     const texture = app.core.device().createTexture(&.{
         .size = atlas_size,
@@ -63,14 +65,20 @@ pub fn init(app: *App) !void {
     defer img.deinit();
 
     const atlas_img_region = try app.texture_atlas_data.reserve(app.allocator, @as(u32, @truncate(img.width)), @as(u32, @truncate(img.height)));
-    const img_uv_data = atlas_img_region.getUVData(atlas_float_size);
+    const img_uv_data = atlas_img_region.calculateUV(app.texture_atlas_data.size);
 
     switch (img.pixels) {
-        .rgba32 => |pixels| app.texture_atlas_data.set(atlas_img_region, pixels),
+        .rgba32 => |pixels| app.texture_atlas_data.set(
+            atlas_img_region,
+            @as([*]const u8, @ptrCast(pixels.ptr))[0 .. pixels.len * 4],
+        ),
         .rgb24 => |pixels| {
             const data = try rgb24ToRgba32(app.allocator, pixels);
             defer data.deinit(app.allocator);
-            app.texture_atlas_data.set(atlas_img_region, data.rgba32);
+            app.texture_atlas_data.set(
+                atlas_img_region,
+                @as([*]const u8, @ptrCast(data.rgba32.ptr))[0 .. data.rgba32.len * 4],
+            );
         },
         else => @panic("unsupported image color format"),
     }
@@ -81,11 +89,11 @@ pub fn init(app: *App) !void {
     atlas_white_region.y += 1;
     atlas_white_region.width -= 2;
     atlas_white_region.height -= 2;
-    const white_texture_uv_data = atlas_white_region.getUVData(atlas_float_size);
+    const white_texture_uv_data = atlas_white_region.calculateUV(app.texture_atlas_data.size);
     var white_tex_data = try app.allocator.alloc(zigimg.color.Rgba32, white_tex_scale * white_tex_scale);
     defer app.allocator.free(white_tex_data);
     @memset(white_tex_data, zigimg.color.Rgba32.initRgb(0xff, 0xff, 0xff));
-    app.texture_atlas_data.set(atlas_white_region, white_tex_data);
+    app.texture_atlas_data.set(atlas_white_region, @as([*]const u8, @ptrCast(white_tex_data.ptr))[0 .. white_tex_data.len * 4]);
 
     app.vertices = try std.ArrayList(draw.Vertex).initCapacity(app.allocator, 9);
     app.fragment_uniform_list = try std.ArrayList(draw.FragUniform).initCapacity(app.allocator, 3);
@@ -141,7 +149,7 @@ pub fn init(app: *App) !void {
             // try resizable_label.print(app, "@", .{}, @Vector(4, f32){ 20, 150, 0, 0 }, @Vector(4, f32){ 1, 1, 1, 1 }, 130 * size_multiplier);
         },
         .quad => {
-            try draw.quad(app, .{ 0, 0 }, .{ 480, 480 }, .{}, .{ .bottom_left = .{ 0, 0 }, .width_and_height = .{ 1, 1 } });
+            try draw.quad(app, .{ 0, 0 }, .{ 480, 480 }, .{}, .{ .x = 0, .y = 0, .width = 1, .height = 1 });
         },
         .circle => {
             try draw.circle(app, .{ window_width / 2, window_height / 2 }, window_height / 2 - 10, .{ 0, 0.5, 0.75, 1.0 }, white_texture_uv_data);

@@ -5,9 +5,9 @@ const mach = @import("mach");
 const gpu = mach.gpu;
 const ft = @import("freetype");
 const zigimg = @import("zigimg");
-const Atlas = @import("atlas.zig").Atlas;
-const AtlasErr = @import("atlas.zig").Error;
-const UVData = @import("atlas.zig").UVData;
+const Atlas = mach.Atlas;
+const AtlasErr = Atlas.Error;
+const AtlasUV = Atlas.Region.UV;
 const App = @import("main.zig").App;
 const draw = @import("draw.zig");
 const Vertex = draw.Vertex;
@@ -47,7 +47,7 @@ face: ft.Face,
 char_map: std.AutoHashMap(u21, CharVertices),
 allocator: std.mem.Allocator,
 tessellator: earcut.Processor(f32),
-white_texture: UVData,
+white_texture: AtlasUV,
 
 // The data that the write function needs
 // TODO: move twxture here, don't limit to just white_texture
@@ -73,7 +73,7 @@ pub fn writer(label: *ResizableLabel, app: *App, position: Vec4, text_color: Vec
     };
 }
 
-pub fn init(self: *ResizableLabel, lib: ft.Library, font_path: []const u8, face_index: i32, allocator: std.mem.Allocator, white_texture: UVData) !void {
+pub fn init(self: *ResizableLabel, lib: ft.Library, font_path: [*:0]const u8, face_index: i32, allocator: std.mem.Allocator, white_texture: AtlasUV) !void {
     self.* = ResizableLabel{
         .face = try lib.createFace(font_path, face_index),
         .char_map = std.AutoHashMap(u21, CharVertices).init(allocator),
@@ -260,7 +260,10 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                     vert.* = v.value_ptr.filled_vertices.items[i];
                     vert.pos *= Vec4{ @as(f32, @floatFromInt(ctx.text_size)) / 1024, @as(f32, @floatFromInt(ctx.text_size)) / 1024, 0, 1 };
                     vert.pos += ctx.position + offset;
-                    vert.uv = vert.uv * ctx.label.white_texture.width_and_height + ctx.label.white_texture.bottom_left;
+                    vert.uv = .{
+                        vert.uv[0] * ctx.label.white_texture.width + ctx.label.white_texture.x,
+                        vert.uv[1] * ctx.label.white_texture.height + ctx.label.white_texture.y,
+                    };
                 }
                 try ctx.app.vertices.appendSlice(filled_vertices_after_offset);
 
@@ -281,7 +284,10 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
 
                     convex_vertices_after_offset[j].pos *= Vec4{ @as(f32, @floatFromInt(ctx.text_size)) / 1024, @as(f32, @floatFromInt(ctx.text_size)) / 1024, 0, 1 };
                     convex_vertices_after_offset[j].pos += ctx.position + offset;
-                    convex_vertices_after_offset[j].uv = convex_vertices_after_offset[j].uv * ctx.label.white_texture.width_and_height + ctx.label.white_texture.bottom_left;
+                    convex_vertices_after_offset[j].uv = .{
+                        convex_vertices_after_offset[j].uv[0] * ctx.label.white_texture.width + ctx.label.white_texture.x,
+                        convex_vertices_after_offset[j].uv[1] * ctx.label.white_texture.height + ctx.label.white_texture.y,
+                    };
 
                     convex_vertices_after_offset[j + 1] = filled_vertices_after_offset[v.value_ptr.convex_vertices_indices.items[k]];
                     convex_vertices_after_offset[j + 2] = filled_vertices_after_offset[v.value_ptr.convex_vertices_indices.items[k + 1]];
@@ -365,7 +371,7 @@ fn uniteOutsideAndInsideVertices(ctx: *OutlineContext) void {
         std.debug.assert(last_outline.items.len != 0);
         const closest_to_inside: usize = blk: {
             const first_point_inside = ctx.inside_verts.items[0];
-            var min: f32 = std.math.f32_max;
+            var min = std.math.floatMax(f32);
             var closest_index: usize = undefined;
 
             for (last_outline.items, 0..) |item, i| {

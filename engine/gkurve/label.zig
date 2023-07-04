@@ -2,11 +2,11 @@
 
 const std = @import("std");
 const mach = @import("mach");
-const ft = mach.freetype;
+const ft = @import("freetype");
 const zigimg = @import("zigimg");
-const Atlas = @import("atlas.zig").Atlas;
-const AtlasErr = @import("atlas.zig").Error;
-const UVData = @import("atlas.zig").UVData;
+const Atlas = mach.Atlas;
+const AtlasErr = Atlas.Error;
+const AtlasUV = Atlas.Region.UV;
 const App = @import("main.zig").App;
 const draw = @import("draw.zig");
 
@@ -16,7 +16,7 @@ const Vec2 = @Vector(2, f32);
 const Vec4 = @Vector(4, f32);
 
 const GlyphInfo = struct {
-    uv_data: UVData,
+    uv_data: AtlasUV,
     metrics: ft.GlyphMetrics,
 };
 
@@ -45,7 +45,7 @@ pub fn writer(label: *Label, app: *App, position: Vec2, text_color: Vec4) Writer
     };
 }
 
-pub fn init(lib: ft.Library, font_path: []const u8, face_index: i32, char_size: i32, allocator: std.mem.Allocator) !Label {
+pub fn init(lib: ft.Library, font_path: [*:0]const u8, face_index: i32, char_size: i32, allocator: std.mem.Allocator) !Label {
     return Label{
         .face = try lib.createFace(font_path, face_index),
         .size = char_size,
@@ -113,16 +113,15 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                         data.* = zigimg.color.Rgba32.initRgb(glyph_col, glyph_col, glyph_col);
                     }
                     var glyph_atlas_region = try ctx.app.texture_atlas_data.reserve(ctx.label.allocator, glyph_width + 2, glyph_height + 2);
-                    ctx.app.texture_atlas_data.set(glyph_atlas_region, glyph_data);
+                    ctx.app.texture_atlas_data.set(glyph_atlas_region, @as([*]const u8, @ptrCast(glyph_data.ptr))[0 .. glyph_data.len * 4]);
 
                     glyph_atlas_region.x += 1;
                     glyph_atlas_region.y += 1;
                     glyph_atlas_region.width -= 2;
                     glyph_atlas_region.height -= 2;
-                    const glyph_uv_data = glyph_atlas_region.getUVData(@as(f32, @floatFromInt(ctx.app.texture_atlas_data.size)));
 
                     v.value_ptr.* = GlyphInfo{
-                        .uv_data = glyph_uv_data,
+                        .uv_data = glyph_atlas_region.calculateUV(ctx.app.texture_atlas_data.size),
                         .metrics = glyph.metrics(),
                     };
                 }
