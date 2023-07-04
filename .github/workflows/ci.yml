@@ -9,7 +9,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          submodules: 'true'
+          submodules: 'recursive'
       - name: Setup Zig
         run: |
           sudo apt install xz-utils
@@ -22,7 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          submodules: 'true'
+          submodules: 'recursive'
       - name: Setup Zig
         run: |
           $ProgressPreference = 'SilentlyContinue'
@@ -38,12 +38,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          submodules: 'true'
+          submodules: 'recursive'
       - name: Setup Zig
         run: |
           brew install xz
           sudo sh -c 'wget -c https://ziglang.org/builds/zig-macos-x86_64-0.11.0-dev.3883+7166407d8.tar.xz -O - | tar -xJ --strip-components=1 -C /usr/local/bin'
       - name: build
         run: zig build
-        env:
-          AGREE: true
