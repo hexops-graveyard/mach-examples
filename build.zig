@@ -58,21 +58,18 @@ pub fn build(b: *std.Build) !void {
         std_platform_only: bool = false,
         has_assets: bool = false,
         use_freetype: bool = false,
-        mach_engine_example: bool = false,
     }{
-        .{ .name = "sysaudio", .deps = &.{}, .mach_engine_example = true },
+        .{ .name = "sysaudio", .deps = &.{} },
         .{
             .name = "gkurve",
             .deps = &.{ .zmath, .zigimg, .assets },
             .std_platform_only = true,
             .use_freetype = true,
-            .mach_engine_example = true,
         },
-        .{ .name = "custom-renderer", .deps = &.{}, .mach_engine_example = true },
+        .{ .name = "custom-renderer", .deps = &.{} },
         .{
             .name = "sprite2d",
             .deps = &.{ .zigimg, .assets },
-            .mach_engine_example = true,
         },
     }) |example| {
         // FIXME: this is workaround for a problem that some examples
@@ -91,12 +88,12 @@ pub fn build(b: *std.Build) !void {
             b,
             .{
                 .name = example.name,
-                .src = "engine/" ++ example.name ++ "/main.zig",
+                .src = "examples/" ++ example.name ++ "/main.zig",
                 .target = target,
                 .optimize = optimize,
                 .deps = deps.items,
                 .res_dirs = if (example.has_assets) &.{example.name ++ "/assets"} else null,
-                .watch_paths = &.{"engine/" ++ example.name},
+                .watch_paths = &.{"examples/" ++ example.name},
                 .use_freetype = if (example.use_freetype) "freetype" else null,
             },
         );
