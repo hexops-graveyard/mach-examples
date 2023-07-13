@@ -60,33 +60,7 @@ pub fn build(b: *std.Build) !void {
         use_freetype: bool = false,
         mach_engine_example: bool = false,
     }{
-        .{ .name = "triangle" },
-        .{ .name = "triangle-msaa" },
-        .{ .name = "clear-color" },
-        .{ .name = "procedural-primitives", .deps = &.{.zmath} },
-        .{ .name = "boids" },
-        .{ .name = "rotating-cube", .deps = &.{.zmath} },
-        .{ .name = "pixel-post-process", .deps = &.{.zmath} },
-        .{ .name = "two-cubes", .deps = &.{.zmath} },
-        .{ .name = "instanced-cube", .deps = &.{.zmath} },
-        .{ .name = "advanced-gen-texture-light", .deps = &.{.zmath} },
-        .{ .name = "fractal-cube", .deps = &.{.zmath} },
-        .{ .name = "textured-cube", .deps = &.{ .zmath, .zigimg, .assets } },
-        .{ .name = "sprite2d", .deps = &.{ .zmath, .zigimg, .assets } },
-        .{ .name = "image-blur", .deps = &.{ .zigimg, .assets } },
-        .{ .name = "cubemap", .deps = &.{ .zmath, .zigimg, .assets } },
-        .{ .name = "map-async", .deps = &.{} },
         .{ .name = "sysaudio", .deps = &.{}, .mach_engine_example = true },
-        .{
-            .name = "pbr-basic",
-            .deps = &.{ .zmath, .model3d, .assets },
-            .std_platform_only = true,
-        },
-        .{
-            .name = "deferred-rendering",
-            .deps = &.{ .zmath, .model3d, .assets },
-            .std_platform_only = true,
-        },
         .{
             .name = "gkurve",
             .deps = &.{ .zmath, .zigimg, .assets },
@@ -111,20 +85,18 @@ pub fn build(b: *std.Build) !void {
             if (target.getCpuArch() == .wasm32)
                 break;
 
-        const path_suffix = if (example.mach_engine_example) "engine/" else "core/";
         var deps = std.ArrayList(std.Build.ModuleDependency).init(b.allocator);
         for (example.deps) |d| try deps.append(d.moduleDependency(b, target, optimize, options.core.gpu_dawn_options));
-        const example_name = (if (example.mach_engine_example) "engine-" else "core-") ++ example.name;
         const app = try mach.App.init(
             b,
             .{
-                .name = example_name,
-                .src = path_suffix ++ example.name ++ "/main.zig",
+                .name = example.name,
+                .src = "engine/" ++ example.name ++ "/main.zig",
                 .target = target,
                 .optimize = optimize,
                 .deps = deps.items,
                 .res_dirs = if (example.has_assets) &.{example.name ++ "/assets"} else null,
-                .watch_paths = &.{path_suffix ++ example.name},
+                .watch_paths = &.{"engine/" ++ example.name},
                 .use_freetype = if (example.use_freetype) "freetype" else null,
             },
         );
@@ -139,12 +111,12 @@ pub fn build(b: *std.Build) !void {
         };
         app.install();
 
-        const compile_step = b.step(example_name, "Compile " ++ example.name);
+        const compile_step = b.step(example.name, "Compile " ++ example.name);
         compile_step.dependOn(&app.getInstallStep().?.step);
 
         const run_cmd = app.addRunArtifact();
         run_cmd.step.dependOn(compile_step);
-        const run_step = b.step("run-" ++ example_name, "Run " ++ example.name);
+        const run_step = b.step("run-" ++ example.name, "Run " ++ example.name);
         run_step.dependOn(&run_cmd.step);
     }
 
