@@ -71,6 +71,11 @@ pub fn build(b: *std.Build) !void {
             .name = "sprite2d",
             .deps = &.{ .zigimg, .assets },
         },
+        .{
+            .name = "text2d",
+            .deps = &.{ .zigimg, .assets },
+            .use_freetype = true,
+        },
     }) |example| {
         // FIXME: this is workaround for a problem that some examples
         // (having the std_platform_only=true field) as well as zigimg
