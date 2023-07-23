@@ -1,9 +1,8 @@
 const std = @import("std");
-const ArrayList = std.ArrayList;
 const mach = @import("mach");
-const gpu = mach.gpu;
 const App = @import("main.zig").App;
-const zm = @import("zmath");
+const gpu = mach.gpu;
+const math = mach.math;
 const AtlasUV = mach.Atlas.Region.UV;
 
 const Vec2 = @Vector(2, f32);
@@ -22,9 +21,7 @@ pub const VERTEX_BUFFER_LAYOUT = gpu.VertexBufferLayout{
     .attribute_count = VERTEX_ATTRIBUTES.len,
     .attributes = &VERTEX_ATTRIBUTES,
 };
-pub const VertexUniform = struct {
-    mat: zm.Mat,
-};
+pub const VertexUniform = mach.math.Mat4x4;
 
 const GkurveType = enum(u32) {
     quadratic_convex = 0,
@@ -129,4 +126,22 @@ pub fn circle(app: *App, position: Vec2, radius: f32, blend_color: @Vector(4, f3
 
     app.update_vertex_buffer = true;
     app.update_frag_uniform_buffer = true;
+}
+
+pub fn getVertexUniformBufferObject(app: *App) !VertexUniform {
+    // Note: We use window width/height here, not framebuffer width/height.
+    // On e.g. macOS, window size may be 640x480 while framebuffer size may be
+    // 1280x960 (subpixels.) Doing this lets us use a pixel, not subpixel,
+    // coordinate system.
+    const window_size = app.core.size();
+    const proj = math.mat.ortho(
+        0,
+        @floatFromInt(window_size.width),
+        0,
+        @floatFromInt(window_size.height),
+        -100,
+        100,
+    );
+    const mvp = math.mat.mul(proj, math.mat.translate3d(.{ -1, -1, 0 }));
+    return mvp;
 }

@@ -4,15 +4,14 @@
 
 const std = @import("std");
 const mach = @import("mach");
-const gpu = mach.gpu;
 const ft = @import("freetype");
-const zm = @import("zmath");
 const zigimg = @import("zigimg");
+const assets = @import("assets");
 const draw = @import("draw.zig");
-const Atlas = mach.Atlas;
 const Label = @import("label.zig");
 const ResizableLabel = @import("resizable_label.zig");
-const assets = @import("assets");
+const gpu = mach.gpu;
+const Atlas = mach.Atlas;
 
 pub const App = @This();
 
@@ -156,11 +155,11 @@ pub fn init(app: *App) !void {
         },
     }
 
-    const vert_wgsl = try std.fs.cwd().readFileAllocOptions(app.allocator, "engine/gkurve/vert.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
+    const vert_wgsl = try std.fs.cwd().readFileAllocOptions(app.allocator, "examples/gkurve/vert.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
     defer app.allocator.free(vert_wgsl);
     const vs_module = app.core.device().createShaderModuleWGSL("gkurve/vert.wgsl", vert_wgsl);
 
-    const frag_wgsl = try std.fs.cwd().readFileAllocOptions(app.allocator, "engine/gkurve/frag.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
+    const frag_wgsl = try std.fs.cwd().readFileAllocOptions(app.allocator, "examples/gkurve/frag.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
     defer app.allocator.free(frag_wgsl);
     const fs_module = app.core.device().createShaderModuleWGSL("gkurve/frag.wgsl", frag_wgsl);
 
@@ -315,7 +314,7 @@ pub fn update(app: *App) !bool {
             app.update_frag_uniform_buffer = false;
         }
         if (app.update_vertex_uniform_buffer) {
-            encoder.writeBuffer(app.vertex_uniform_buffer, 0, &[_]draw.VertexUniform{try app.getVertexUniformBufferObject()});
+            encoder.writeBuffer(app.vertex_uniform_buffer, 0, &[_]draw.VertexUniform{try draw.getVertexUniformBufferObject(app)});
             app.update_vertex_uniform_buffer = false;
         }
     }
@@ -346,24 +345,4 @@ fn rgb24ToRgba32(allocator: std.mem.Allocator, in: []zigimg.color.Rgb24) !zigimg
         out.rgba32[i] = zigimg.color.Rgba32{ .r = in[i].r, .g = in[i].g, .b = in[i].b, .a = 255 };
     }
     return out;
-}
-
-// Move to draw.zig
-pub fn getVertexUniformBufferObject(app: *App) !draw.VertexUniform {
-    // Note: We use window width/height here, not framebuffer width/height.
-    // On e.g. macOS, window size may be 640x480 while framebuffer size may be
-    // 1280x960 (subpixels.) Doing this lets us use a pixel, not subpixel,
-    // coordinate system.
-    const window_size = app.core.size();
-    const proj = zm.orthographicRh(
-        @as(f32, @floatFromInt(window_size.width)),
-        @as(f32, @floatFromInt(window_size.height)),
-        -100,
-        100,
-    );
-
-    const mvp = zm.mul(proj, zm.translation(-1, -1, 0));
-    return draw.VertexUniform{
-        .mat = mvp,
-    };
 }
