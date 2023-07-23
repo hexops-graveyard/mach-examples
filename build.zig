@@ -1,21 +1,13 @@
 const std = @import("std");
 const mach = @import("libs/mach/build.zig");
-const zmath = @import("libs/zmath/build.zig");
 
 pub fn build(b: *std.Build) !void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-    const options = mach.Options{ .core = .{
-        .gpu_dawn_options = .{
-            .from_source = b.option(bool, "dawn-from-source", "Build Dawn from source") orelse false,
-            .debug = b.option(bool, "dawn-debug", "Use a debug build of Dawn") orelse false,
-        },
-    } };
-
     try ensureDependencies(b.allocator);
 
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
     const Dependency = enum {
-        zmath,
         zigimg,
         model3d,
         assets,
@@ -29,12 +21,6 @@ pub fn build(b: *std.Build) !void {
         ) std.Build.ModuleDependency {
             _ = gpu_dawn_options;
             const path = switch (dep) {
-                .zmath => return std.Build.ModuleDependency{
-                    .name = @tagName(dep),
-                    .module = zmath.package(b2, target2, optimize2, .{
-                        .options = .{ .enable_cross_platform_determinism = true },
-                    }).zmath,
-                },
                 .zigimg => "libs/zigimg/zigimg.zig",
                 .assets => "assets/assets.zig",
                 .model3d => return std.Build.ModuleDependency{
@@ -62,7 +48,7 @@ pub fn build(b: *std.Build) !void {
         .{ .name = "sysaudio", .deps = &.{} },
         .{
             .name = "gkurve",
-            .deps = &.{ .zmath, .zigimg, .assets },
+            .deps = &.{ .zigimg, .assets },
             .std_platform_only = true,
             .use_freetype = true,
         },
@@ -88,7 +74,7 @@ pub fn build(b: *std.Build) !void {
                 break;
 
         var deps = std.ArrayList(std.Build.ModuleDependency).init(b.allocator);
-        for (example.deps) |d| try deps.append(d.moduleDependency(b, target, optimize, options.core.gpu_dawn_options));
+        for (example.deps) |d| try deps.append(d.moduleDependency(b, target, optimize, mach.gpu_dawn.Options{}));
         const app = try mach.App.init(
             b,
             .{
@@ -103,23 +89,20 @@ pub fn build(b: *std.Build) !void {
             },
         );
 
-        try app.link(options);
+        try app.link(.{});
         for (example.deps) |dep| switch (dep) {
-            .model3d => app.step.linkLibrary(b.dependency("mach_model3d", .{
+            .model3d => app.compile.linkLibrary(b.dependency("mach_model3d", .{
                 .target = target,
                 .optimize = optimize,
             }).artifact("mach-model3d")),
             else => {},
         };
-        app.install();
 
         const compile_step = b.step(example.name, "Compile " ++ example.name);
-        compile_step.dependOn(&app.getInstallStep().?.step);
+        compile_step.dependOn(&app.install.step);
 
-        const run_cmd = app.addRunArtifact();
-        run_cmd.step.dependOn(compile_step);
         const run_step = b.step("run-" ++ example.name, "Run " ++ example.name);
-        run_step.dependOn(&run_cmd.step);
+        run_step.dependOn(&app.run.step);
     }
 
     const compile_all = b.step("compile-all", "Compile all examples and applications");
@@ -142,7 +125,6 @@ fn sdkPath(comptime suffix: []const u8) []const u8 {
 fn ensureDependencies(allocator: std.mem.Allocator) !void {
     ensureGit(allocator);
     try ensureSubmodule(allocator, "libs/mach");
-    try ensureSubmodule(allocator, "libs/zmath");
     try ensureSubmodule(allocator, "libs/zigimg");
 }
 

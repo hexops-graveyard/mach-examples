@@ -2,16 +2,14 @@
 
 const std = @import("std");
 const mach = @import("mach");
-const gpu = mach.gpu;
 const ft = @import("freetype");
-const zigimg = @import("zigimg");
+const App = @import("main.zig").App;
+const Vertex = @import("draw.zig").Vertex;
+const math = mach.math;
+const earcut = mach.earcut;
 const Atlas = mach.Atlas;
 const AtlasErr = Atlas.Error;
 const AtlasUV = Atlas.Region.UV;
-const App = @import("main.zig").App;
-const draw = @import("draw.zig");
-const Vertex = draw.Vertex;
-const earcut = @import("mach").earcut;
 
 // If true, show the filled triangles green, the concave beziers blue and the convex ones red
 const debug_colors = false;
@@ -211,7 +209,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
 
                     for (all_outlines.items) |item| {
                         // FIXME: The uv_data is wrong, should be pushed up by the lowest a character can be
-                        const vertex_uv = item / @splat(2, @as(f32, 1024 << 6));
+                        const vertex_uv = item / math.vec.splat(@Vector(2, f32), 1024 << 6);
                         const vertex_pos = Vec4{ item[0], item[1], 0, 1 };
                         try v.value_ptr.filled_vertices.append(Vertex{ .pos = vertex_pos, .uv = vertex_uv });
                     }
@@ -232,7 +230,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                     var i: usize = 0;
                     while (i < outline_ctx.convex_vertices.items.len) : (i += 3) {
                         const vert = outline_ctx.convex_vertices.items[i];
-                        const vertex_uv = vert / @splat(2, @as(f32, 1024 << 6));
+                        const vertex_uv = vert / math.vec.splat(@Vector(2, f32), 1024 << 6);
                         const vertex_pos = Vec4{ vert[0], vert[1], 0, 1 };
                         try v.value_ptr.convex_vertices.append(Vertex{ .pos = vertex_pos, .uv = vertex_uv });
 
