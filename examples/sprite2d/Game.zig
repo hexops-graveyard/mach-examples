@@ -2,6 +2,7 @@ const std = @import("std");
 const zigimg = @import("zigimg");
 const assets = @import("assets");
 const mach_mod = @import("mach");
+const core = mach_mod.core;
 const gpu = mach_mod.gpu;
 const Sprite2D = mach_mod.gfx2d.Sprite2D;
 const math = mach_mod.math;
@@ -43,12 +44,10 @@ pub const name = .game;
 
 pub fn init(adapter: anytype) !void {
     // The adapter lets us get a type-safe interface to interact with any module in our program.
-    var mach = adapter.mod(.mach);
     var sprite2d = adapter.mod(.mach_sprite2d);
     var game = adapter.mod(.game);
 
     // The Mach .core is where we set window options, etc.
-    const core = mach.state().core;
     core.setTitle("gfx.Sprite2D example");
 
     // We can create entities, and set components on them. Note that components live in a module
@@ -76,8 +75,6 @@ pub fn init(adapter: anytype) !void {
 }
 
 pub fn tick(adapter: anytype) !void {
-    var mach = adapter.mod(.mach);
-    const core = mach.state().core;
     var game = adapter.mod(.game);
     var sprite2d = adapter.mod(.mach_sprite2d); // TODO: why can't this be const?
 

@@ -1,6 +1,7 @@
 const std = @import("std");
 const assets = @import("assets");
 const mach_mod = @import("mach");
+const core = mach_mod.core;
 const gpu = mach_mod.gpu;
 const Sprite2D = mach_mod.gfx2d.Sprite2D;
 const math = mach_mod.math;
@@ -38,13 +39,11 @@ pub const name = .game;
 
 pub fn init(adapter: anytype) !void {
     // The adapter lets us get a type-safe interface to interact with any module in our program.
-    var mach = adapter.mod(.mach);
     var sprite2d = adapter.mod(.mach_sprite2d);
     var text2d = adapter.mod(.mach_text2d);
     var game = adapter.mod(.game);
 
     // The Mach .core is where we set window options, etc.
-    const core = mach.state().core;
     core.setTitle("gfx.Sprite2D example");
 
     // Initialize text2D texture
@@ -77,9 +76,6 @@ pub fn init(adapter: anytype) !void {
 }
 
 pub fn tick(adapter: anytype) !void {
-    var mach = adapter.mod(.mach);
-    const core = mach.state().core;
-    core.device().tick();
     var game = adapter.mod(.game);
     var text2d = adapter.mod(.mach_text2d);
     var sprite2d = adapter.mod(.mach_sprite2d); // TODO: why can't this be const?

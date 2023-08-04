@@ -1,5 +1,6 @@
 const std = @import("std");
 const mach_mod = @import("mach");
+const core = mach_mod.core;
 const Renderer = @import("Renderer.zig");
 
 timer: mach_mod.Timer,
@@ -28,12 +29,10 @@ const Vec2 = @Vector(2, f32);
 
 pub fn init(adapter: anytype) !void {
     // The adapter lets us get a type-safe interface to interact with any module in our program.
-    var mach = adapter.mod(.mach);
     var renderer = adapter.mod(.renderer);
     var game = adapter.mod(.game);
 
     // The Mach .core is where we set window options, etc.
-    const core = mach.state().core;
     core.setTitle("Hello, ECS!");
 
     // We can create entities, and set components on them. Note that components live in a module
@@ -52,8 +51,6 @@ pub fn init(adapter: anytype) !void {
 }
 
 pub fn tick(adapter: anytype) !void {
-    var mach = adapter.mod(.mach);
-    const core = mach.state().core;
     var game = adapter.mod(.game);
     var renderer = adapter.mod(.renderer); // TODO: why can't this be const?
 

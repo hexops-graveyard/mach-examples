@@ -4,6 +4,7 @@
 
 const std = @import("std");
 const mach = @import("mach");
+const core = mach.core;
 const ft = @import("freetype");
 const zigimg = @import("zigimg");
 const assets = @import("assets");
@@ -17,10 +18,8 @@ pub const App = @This();
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
-core: mach.Core,
 allocator: std.mem.Allocator,
 pipeline: *gpu.RenderPipeline,
-queue: *gpu.Queue,
 vertex_buffer: *gpu.Buffer,
 vertices: std.ArrayList(draw.Vertex),
 update_vertex_buffer: bool,
@@ -34,9 +33,7 @@ texture_atlas_data: Atlas,
 
 pub fn init(app: *App) !void {
     app.allocator = gpa.allocator();
-    try app.core.init(app.allocator, .{});
-
-    const queue = app.core.device().getQueue();
+    try mach.core.init(.{});
 
     // TODO: Refactor texture atlas size number
     app.texture_atlas_data = try Atlas.init(
@@ -46,7 +43,7 @@ pub fn init(app: *App) !void {
     );
     const atlas_size = gpu.Extent3D{ .width = app.texture_atlas_data.size, .height = app.texture_atlas_data.size };
 
-    const texture = app.core.device().createTexture(&.{
+    const texture = mach.core.device.createTexture(&.{
         .size = atlas_size,
         .format = .rgba8_unorm,
         .usage = .{
@@ -110,14 +107,14 @@ pub fn init(app: *App) !void {
     };
     const demo_mode: DemoMode = .gkurves;
 
-    queue.writeTexture(
+    mach.core.queue.writeTexture(
         &.{ .texture = texture },
         &data_layout,
         &.{ .width = app.texture_atlas_data.size, .height = app.texture_atlas_data.size },
         app.texture_atlas_data.data,
     );
 
-    const wsize = app.core.size();
+    const wsize = mach.core.size();
     const window_width = @as(f32, @floatFromInt(wsize.width));
     const window_height = @as(f32, @floatFromInt(wsize.height));
     const triangle_scale = 250;
@@ -157,11 +154,11 @@ pub fn init(app: *App) !void {
 
     const vert_wgsl = try std.fs.cwd().readFileAllocOptions(app.allocator, "examples/gkurve/vert.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
     defer app.allocator.free(vert_wgsl);
-    const vs_module = app.core.device().createShaderModuleWGSL("gkurve/vert.wgsl", vert_wgsl);
+    const vs_module = mach.core.device.createShaderModuleWGSL("gkurve/vert.wgsl", vert_wgsl);
 
     const frag_wgsl = try std.fs.cwd().readFileAllocOptions(app.allocator, "examples/gkurve/frag.wgsl", std.math.maxInt(usize), null, @alignOf(u8), 0);
     defer app.allocator.free(frag_wgsl);
-    const fs_module = app.core.device().createShaderModuleWGSL("gkurve/frag.wgsl", frag_wgsl);
+    const fs_module = mach.core.device.createShaderModuleWGSL("gkurve/frag.wgsl", frag_wgsl);
 
     const blend = gpu.BlendState{
         .color = .{
@@ -177,7 +174,7 @@ pub fn init(app: *App) !void {
     };
 
     const color_target = gpu.ColorTargetState{
-        .format = app.core.descriptor().format,
+        .format = mach.core.descriptor.format,
         .blend = &blend,
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
@@ -191,13 +188,13 @@ pub fn init(app: *App) !void {
     const fbgle = gpu.BindGroupLayout.Entry.buffer(1, .{ .fragment = true }, .read_only_storage, true, 0);
     const sbgle = gpu.BindGroupLayout.Entry.sampler(2, .{ .fragment = true }, .filtering);
     const tbgle = gpu.BindGroupLayout.Entry.texture(3, .{ .fragment = true }, .float, .dimension_2d, false);
-    const bgl = app.core.device().createBindGroupLayout(
+    const bgl = mach.core.device.createBindGroupLayout(
         &gpu.BindGroupLayout.Descriptor.init(.{
             .entries = &.{ vbgle, fbgle, sbgle, tbgle },
         }),
     );
     const bind_group_layouts = [_]*gpu.BindGroupLayout{bgl};
-    const pipeline_layout = app.core.device().createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
+    const pipeline_layout = mach.core.device.createPipelineLayout(&gpu.PipelineLayout.Descriptor.init(.{
         .bind_group_layouts = &bind_group_layouts,
     }));
 
@@ -211,31 +208,31 @@ pub fn init(app: *App) !void {
         }),
     };
 
-    const vertex_buffer = app.core.device().createBuffer(&.{
+    const vertex_buffer = mach.core.device.createBuffer(&.{
         .usage = .{ .copy_dst = true, .vertex = true },
         .size = @sizeOf(draw.Vertex) * app.vertices.items.len,
         .mapped_at_creation = false,
     });
 
-    const vertex_uniform_buffer = app.core.device().createBuffer(&.{
+    const vertex_uniform_buffer = mach.core.device.createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = @sizeOf(draw.VertexUniform),
         .mapped_at_creation = false,
     });
 
-    const frag_uniform_buffer = app.core.device().createBuffer(&.{
+    const frag_uniform_buffer = mach.core.device.createBuffer(&.{
         .usage = .{ .copy_dst = true, .storage = true },
         .size = @sizeOf(draw.FragUniform) * app.fragment_uniform_list.items.len,
         .mapped_at_creation = false,
     });
 
-    const sampler = app.core.device().createSampler(&.{
+    const sampler = mach.core.device.createSampler(&.{
         // .mag_filter = .linear,
         // .min_filter = .linear,
     });
 
     std.debug.assert((app.vertices.items.len / 3) == app.fragment_uniform_list.items.len);
-    const bind_group = app.core.device().createBindGroup(
+    const bind_group = mach.core.device.createBindGroup(
         &gpu.BindGroup.Descriptor.init(.{
             .layout = bgl,
             .entries = &.{
@@ -247,8 +244,7 @@ pub fn init(app: *App) !void {
         }),
     );
 
-    app.pipeline = app.core.device().createRenderPipeline(&pipeline_descriptor);
-    app.queue = queue;
+    app.pipeline = mach.core.device.createRenderPipeline(&pipeline_descriptor);
     app.vertex_buffer = vertex_buffer;
     app.vertex_uniform_buffer = vertex_uniform_buffer;
     app.frag_uniform_buffer = frag_uniform_buffer;
@@ -265,7 +261,7 @@ pub fn init(app: *App) !void {
 
 pub fn deinit(app: *App) void {
     defer _ = gpa.deinit();
-    defer app.core.deinit();
+    defer mach.core.deinit();
 
     app.vertex_buffer.release();
     app.vertex_uniform_buffer.release();
@@ -277,7 +273,7 @@ pub fn deinit(app: *App) void {
 }
 
 pub fn update(app: *App) !bool {
-    var iter = app.core.pollEvents();
+    var iter = mach.core.pollEvents();
     while (iter.next()) |event| {
         switch (event) {
             .key_press => |ev| {
@@ -291,7 +287,7 @@ pub fn update(app: *App) !bool {
         }
     }
 
-    const back_buffer_view = app.core.swapChain().getCurrentTextureView().?;
+    const back_buffer_view = mach.core.swap_chain.getCurrentTextureView().?;
     const color_attachment = gpu.RenderPassColorAttachment{
         .view = back_buffer_view,
         .clear_value = std.mem.zeroes(gpu.Color),
@@ -299,7 +295,7 @@ pub fn update(app: *App) !bool {
         .store_op = .store,
     };
 
-    const encoder = app.core.device().createCommandEncoder(null);
+    const encoder = mach.core.device.createCommandEncoder(null);
     const render_pass_info = gpu.RenderPassDescriptor.init(.{
         .color_attachments = &.{color_attachment},
     });
@@ -314,7 +310,7 @@ pub fn update(app: *App) !bool {
             app.update_frag_uniform_buffer = false;
         }
         if (app.update_vertex_uniform_buffer) {
-            encoder.writeBuffer(app.vertex_uniform_buffer, 0, &[_]draw.VertexUniform{try draw.getVertexUniformBufferObject(app)});
+            encoder.writeBuffer(app.vertex_uniform_buffer, 0, &[_]draw.VertexUniform{try draw.getVertexUniformBufferObject()});
             app.update_vertex_uniform_buffer = false;
         }
     }
@@ -330,9 +326,9 @@ pub fn update(app: *App) !bool {
     var command = encoder.finish(null);
     encoder.release();
 
-    app.queue.submit(&[_]*gpu.CommandBuffer{command});
+    core.queue.submit(&[_]*gpu.CommandBuffer{command});
     command.release();
-    app.core.swapChain().present();
+    mach.core.swap_chain.present();
     back_buffer_view.release();
 
     return false;

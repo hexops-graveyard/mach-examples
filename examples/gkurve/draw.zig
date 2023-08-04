@@ -128,12 +128,12 @@ pub fn circle(app: *App, position: Vec2, radius: f32, blend_color: @Vector(4, f3
     app.update_frag_uniform_buffer = true;
 }
 
-pub fn getVertexUniformBufferObject(app: *App) !VertexUniform {
+pub fn getVertexUniformBufferObject() !VertexUniform {
     // Note: We use window width/height here, not framebuffer width/height.
     // On e.g. macOS, window size may be 640x480 while framebuffer size may be
     // 1280x960 (subpixels.) Doing this lets us use a pixel, not subpixel,
     // coordinate system.
-    const window_size = app.core.size();
+    const window_size = mach.core.size();
     const proj = math.mat.ortho(
         0,
         @floatFromInt(window_size.width),

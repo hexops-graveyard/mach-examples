@@ -1,6 +1,7 @@
 const std = @import("std");
 const gpu = @import("mach").gpu;
 const ecs = @import("mach").ecs;
+const core = @import("mach").core;
 
 const num_bind_groups = 1024 * 32;
 
@@ -30,7 +31,6 @@ const UniformBufferObject = packed struct {
 pub fn init(adapter: anytype) !void {
     var mach = adapter.mod(.mach);
     var renderer = adapter.mod(.renderer);
-    const core = mach.state().core;
     const device = mach.state().device;
 
     const shader_module = device.createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
@@ -38,7 +38,7 @@ pub fn init(adapter: anytype) !void {
     // Fragment state
     const blend = gpu.BlendState{};
     const color_target = gpu.ColorTargetState{
-        .format = core.descriptor().format,
+        .format = core.descriptor.format,
         .blend = &blend,
         .write_mask = gpu.ColorWriteMaskFlags.all,
     };
@@ -105,11 +105,10 @@ pub fn deinit(adapter: anytype) !void {
 pub fn tick(adapter: anytype) !void {
     var mach = adapter.mod(.mach);
     var renderer = adapter.mod(.renderer);
-    const core = mach.state().core;
     const device = mach.state().device;
 
     // Begin our render pass
-    const back_buffer_view = core.swapChain().getCurrentTextureView().?;
+    const back_buffer_view = core.swap_chain.getCurrentTextureView().?;
     const color_attachment = gpu.RenderPassColorAttachment{
         .view = back_buffer_view,
         .clear_value = std.mem.zeroes(gpu.Color),
@@ -157,6 +156,6 @@ pub fn tick(adapter: anytype) !void {
 
     renderer.state().queue.submit(&[_]*gpu.CommandBuffer{command});
     command.release();
-    core.swapChain().present();
+    core.swap_chain.present();
     back_buffer_view.release();
 }

@@ -17,9 +17,7 @@ pub fn build(b: *std.Build) !void {
             b2: *std.Build,
             target2: std.zig.CrossTarget,
             optimize2: std.builtin.OptimizeMode,
-            gpu_dawn_options: mach.gpu_dawn.Options,
         ) std.Build.ModuleDependency {
-            _ = gpu_dawn_options;
             const path = switch (dep) {
                 .zigimg => "libs/zigimg/zigimg.zig",
                 .assets => "assets/assets.zig",
@@ -74,7 +72,7 @@ pub fn build(b: *std.Build) !void {
                 break;
 
         var deps = std.ArrayList(std.Build.ModuleDependency).init(b.allocator);
-        for (example.deps) |d| try deps.append(d.moduleDependency(b, target, optimize, mach.gpu_dawn.Options{}));
+        for (example.deps) |d| try deps.append(d.moduleDependency(b, target, optimize));
         const app = try mach.App.init(
             b,
             .{

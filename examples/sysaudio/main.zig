@@ -19,7 +19,6 @@ pub const App = @This();
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
-core: mach.Core,
 audio_ctx: sysaudio.Context,
 player: sysaudio.Player,
 playing: [512]Tone = std.mem.zeroes([512]Tone),
@@ -31,7 +30,7 @@ const Tone = struct {
 };
 
 pub fn init(app: *App) !void {
-    try app.core.init(gpa.allocator(), .{});
+    try mach.core.init(.{});
 
     app.audio_ctx = try sysaudio.Context.init(null, gpa.allocator(), .{});
     errdefer app.audio_ctx.deinit();
@@ -44,14 +43,14 @@ pub fn init(app: *App) !void {
 
 pub fn deinit(app: *App) void {
     defer _ = gpa.deinit();
-    defer app.core.deinit();
+    defer mach.core.deinit();
 
     app.player.deinit();
     app.audio_ctx.deinit();
 }
 
 pub fn update(app: *App) !bool {
-    var iter = app.core.pollEvents();
+    var iter = mach.core.pollEvents();
     while (iter.next()) |event| {
         switch (event) {
             .key_press => |ev| {
@@ -69,9 +68,9 @@ pub fn update(app: *App) !bool {
     }
 
     if (builtin.cpu.arch != .wasm32) {
-        const back_buffer_view = app.core.swapChain().getCurrentTextureView().?;
+        const back_buffer_view = mach.core.swap_chain.getCurrentTextureView().?;
 
-        app.core.swapChain().present();
+        mach.core.swap_chain.present();
         back_buffer_view.release();
     }
 
@@ -126,7 +125,7 @@ pub fn fillTone(app: *App, frequency: f32) void {
     }
 }
 
-pub fn keyToFrequency(key: mach.Core.Key) f32 {
+pub fn keyToFrequency(key: mach.core.Key) f32 {
     // The frequencies here just come from a piano frequencies chart. You can google for them.
     return switch (key) {
         // First row of piano keys, the highest.
