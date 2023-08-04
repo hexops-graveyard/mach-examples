@@ -1,9 +1,7 @@
 const std = @import("std");
-const mach = @import("libs/mach/build.zig");
+const mach = @import("mach");
 
 pub fn build(b: *std.Build) !void {
-    try ensureDependencies(b.allocator);
-
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -19,7 +17,6 @@ pub fn build(b: *std.Build) !void {
             optimize2: std.builtin.OptimizeMode,
         ) std.Build.ModuleDependency {
             const path = switch (dep) {
-                .zigimg => "libs/zigimg/zigimg.zig",
                 .assets => "assets/assets.zig",
                 .model3d => return std.Build.ModuleDependency{
                     .name = "model3d",
@@ -27,6 +24,13 @@ pub fn build(b: *std.Build) !void {
                         .target = target2,
                         .optimize = optimize2,
                     }).module("mach-model3d"),
+                },
+                .zigimg => return std.Build.ModuleDependency{
+                    .name = "zigimg",
+                    .module = b2.dependency("zigimg", .{
+                        .target = target2,
+                        .optimize = optimize2,
+                    }).module("zigimg"),
                 },
             };
             return std.Build.ModuleDependency{
@@ -73,6 +77,8 @@ pub fn build(b: *std.Build) !void {
 
         var deps = std.ArrayList(std.Build.ModuleDependency).init(b.allocator);
         for (example.deps) |d| try deps.append(d.moduleDependency(b, target, optimize));
+        mach.mach_glfw_import_path = "mach.mach_core.mach_gpu.mach_gpu_dawn.mach_glfw";
+        mach.harfbuzz_import_path = "mach.mach_freetype.harfbuzz";
         const app = try mach.App.init(
             b,
             .{
@@ -105,54 +111,4 @@ pub fn build(b: *std.Build) !void {
 
     const compile_all = b.step("compile-all", "Compile all examples and applications");
     compile_all.dependOn(b.getInstallStep());
-}
-
-pub fn copyFile(src_path: []const u8, dst_path: []const u8) void {
-    std.fs.cwd().makePath(std.fs.path.dirname(dst_path).?) catch unreachable;
-    std.fs.cwd().copyFile(src_path, std.fs.cwd(), dst_path, .{}) catch unreachable;
-}
-
-fn sdkPath(comptime suffix: []const u8) []const u8 {
-    if (suffix[0] != '/') @compileError("suffix must be an absolute path");
-    return comptime blk: {
-        const root_dir = std.fs.path.dirname(@src().file) orelse ".";
-        break :blk root_dir ++ suffix;
-    };
-}
-
-fn ensureDependencies(allocator: std.mem.Allocator) !void {
-    ensureGit(allocator);
-    try ensureSubmodule(allocator, "libs/mach");
-    try ensureSubmodule(allocator, "libs/zigimg");
-}
-
-fn ensureSubmodule(allocator: std.mem.Allocator, path: []const u8) !void {
-    if (std.process.getEnvVarOwned(allocator, "NO_ENSURE_SUBMODULES")) |no_ensure_submodules| {
-        defer allocator.free(no_ensure_submodules);
-        if (std.mem.eql(u8, no_ensure_submodules, "true")) return;
-    } else |_| {}
-    var child = std.ChildProcess.init(&.{ "git", "submodule", "update", "--init", path }, allocator);
-    child.cwd = sdkPath("/");
-    child.stderr = std.io.getStdErr();
-    child.stdout = std.io.getStdOut();
-
-    _ = try child.spawnAndWait();
-}
-
-fn ensureGit(allocator: std.mem.Allocator) void {
-    const result = std.ChildProcess.exec(.{
-        .allocator = allocator,
-        .argv = &.{ "git", "--version" },
-    }) catch { // e.g. FileNotFound
-        std.log.err("mach: error: 'git --version' failed. Is git not installed?", .{});
-        std.process.exit(1);
-    };
-    defer {
-        allocator.free(result.stderr);
-        allocator.free(result.stdout);
-    }
-    if (result.term.Exited != 0) {
-        std.log.err("mach: error: 'git --version' failed. Is git not installed?", .{});
-        std.process.exit(1);
-    }
 }

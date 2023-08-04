@@ -9,9 +9,9 @@ More screenshots / example showcase: https://machengine.org/gpu
 ## Run examples
 
 ```sh
-git clone --recursive https://github.com/hexops/mach-examples
+git clone https://github.com/hexops/mach-examples
 cd mach-examples/
-zig build run-core-textured-cube
+zig build run-sprite2d
 ```
 
 ## Use Mach in your own project
