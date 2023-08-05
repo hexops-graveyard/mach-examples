@@ -1,5 +1,4 @@
 const std = @import("std");
-const assets = @import("assets");
 const mach_mod = @import("mach");
 const core = mach_mod.core;
 const gpu = mach_mod.gpu;
