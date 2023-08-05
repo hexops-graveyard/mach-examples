@@ -2,6 +2,7 @@ const mach_mod = @import("mach");
 const gpu = mach_mod.gpu;
 const ft = @import("freetype");
 const std = @import("std");
+const assets = @import("assets");
 
 pub const name = .mach_text2d;
 
@@ -47,7 +48,7 @@ pub fn machText2DInit(adapter: anytype) !void {
     );
 
     s.ft = try ft.Library.init();
-    s.face = try s.ft.createFace("assets/fonts/Roboto-Medium.ttf", 0);
+    s.face = try s.ft.createFaceMemory(assets.fonts.roboto_medium.bytes, 0);
 
     const font_size = 48 * 1;
     try s.face.setCharSize(font_size * 64, 0, 50, 0);
