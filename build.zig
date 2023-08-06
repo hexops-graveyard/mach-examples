@@ -6,9 +6,10 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const Dependency = enum {
-        zigimg,
-        model3d,
         assets,
+        model3d,
+        freetype,
+        zigimg,
 
         pub fn moduleDependency(
             dep: @This(),
@@ -24,6 +25,13 @@ pub fn build(b: *std.Build) !void {
                         .target = target2,
                         .optimize = optimize2,
                     }).module("mach-model3d"),
+                },
+                .freetype => return std.Build.ModuleDependency{
+                    .name = "freetype",
+                    .module = b2.dependency("mach_freetype", .{
+                        .target = target2,
+                        .optimize = optimize2,
+                    }).module("mach-freetype"),
                 },
                 .zigimg => return std.Build.ModuleDependency{
                     .name = "zigimg",
@@ -45,14 +53,12 @@ pub fn build(b: *std.Build) !void {
         deps: []const Dependency = &.{},
         std_platform_only: bool = false,
         has_assets: bool = false,
-        use_freetype: bool = false,
     }{
         .{ .name = "sysaudio", .deps = &.{} },
         .{
             .name = "gkurve",
-            .deps = &.{ .zigimg, .assets },
+            .deps = &.{ .zigimg, .freetype, .assets },
             .std_platform_only = true,
-            .use_freetype = true,
         },
         .{ .name = "custom-renderer", .deps = &.{} },
         .{
@@ -61,8 +67,7 @@ pub fn build(b: *std.Build) !void {
         },
         .{
             .name = "text2d",
-            .deps = &.{ .zigimg, .assets },
-            .use_freetype = true,
+            .deps = &.{ .zigimg, .freetype, .assets },
         },
     }) |example| {
         // FIXME: this is workaround for a problem that some examples
@@ -78,7 +83,6 @@ pub fn build(b: *std.Build) !void {
         var deps = std.ArrayList(std.Build.ModuleDependency).init(b.allocator);
         for (example.deps) |d| try deps.append(d.moduleDependency(b, target, optimize));
         mach.mach_glfw_import_path = "mach.mach_core.mach_gpu.mach_gpu_dawn.mach_glfw";
-        mach.harfbuzz_import_path = "mach.mach_freetype.harfbuzz";
         const app = try mach.App.init(
             b,
             .{
@@ -89,16 +93,20 @@ pub fn build(b: *std.Build) !void {
                 .deps = deps.items,
                 .res_dirs = if (example.has_assets) &.{example.name ++ "/assets"} else null,
                 .watch_paths = &.{"examples/" ++ example.name},
-                .use_freetype = if (example.use_freetype) "freetype" else null,
             },
         );
 
         try app.link(.{});
+
         for (example.deps) |dep| switch (dep) {
             .model3d => app.compile.linkLibrary(b.dependency("mach_model3d", .{
                 .target = target,
                 .optimize = optimize,
             }).artifact("mach-model3d")),
+            .freetype => app.compile.linkLibrary(b.dependency("mach_freetype.freetype", .{
+                .target = target,
+                .optimize = optimize,
+            }).artifact("freetype")),
             else => {},
         };
 
