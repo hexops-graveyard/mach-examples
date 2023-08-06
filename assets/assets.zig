@@ -2,7 +2,7 @@ const std = @import("std");
 
 // Relative to root folder
 // Use with std.fs.cwd().openFile(assets.some_file_path)
-const root_path = "assets/";
+const root_path = "../../assets/";
 const sprites_path = root_path ++ "sprites/";
 
 pub const sphere_path = root_path ++ "sphere.m3d";
@@ -33,11 +33,6 @@ pub const fonts = struct {
     pub const roboto_medium = struct {
         pub const path = root_path ++ "fonts/Roboto-Medium.ttf";
         pub const bytes = @embedFile("fonts/Roboto-Medium.ttf");
-    };
-
-    pub const firasans_regular = struct {
-        // Font part of Freetype lib
-        pub const path = "libs/mach/libs/freetype/upstream/assets/FiraSans-Regular.ttf";
     };
 };
 
