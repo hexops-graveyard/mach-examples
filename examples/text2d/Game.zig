@@ -167,9 +167,7 @@ pub fn tick(adapter: anytype) !void {
 
     // Every second, update the window title with the FPS
     if (game.state().fps_timer.read() >= 1.0) {
-        var buf: [128]u8 = undefined;
-        const title = try std.fmt.bufPrintZ(&buf, "gfx.Sprite2D example [ FPS: {d} ] [ Sprites: {d} ]", .{ game.state().frame_count, game.state().sprites });
-        core.setTitle(title);
+        try core.printTitle("gfx.Sprite2D example [ FPS: {d} ] [ Sprites: {d} ]", .{ game.state().frame_count, game.state().sprites });
         game.state().fps_timer.reset();
         game.state().frame_count = 0;
     }
