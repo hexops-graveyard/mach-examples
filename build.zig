@@ -120,3 +120,10 @@ pub fn build(b: *std.Build) !void {
     const compile_all = b.step("compile-all", "Compile all examples and applications");
     compile_all.dependOn(b.getInstallStep());
 }
+
+comptime {
+    const min_zig = std.SemanticVersion.parse("0.11.0") catch unreachable;
+    if (builtin.zig_version.order(min_zig) == .lt) {
+        @compileError(std.fmt.comptimePrint("Your Zig version v{} does not meet the minimum build requirement of v{}", .{ builtin.zig_version, min_zig }));
+    }
+}
