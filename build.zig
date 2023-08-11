@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const mach = @import("mach");
 
 pub fn build(b: *std.Build) !void {
