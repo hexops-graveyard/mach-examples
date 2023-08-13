@@ -51,7 +51,7 @@ pub fn init(adapter: anytype) !void {
     const uniform_buffer = device.createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = @sizeOf(UniformBufferObject) * uniform_offset * num_bind_groups,
-        .mapped_at_creation = false,
+        .mapped_at_creation = .false,
     });
     const bind_group_layout_entry = gpu.BindGroupLayout.Entry.buffer(0, .{ .vertex = true }, .uniform, true, 0);
     const bind_group_layout = device.createBindGroupLayout(

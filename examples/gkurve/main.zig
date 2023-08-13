@@ -202,19 +202,19 @@ pub fn init(app: *App) !void {
     const vertex_buffer = core.device.createBuffer(&.{
         .usage = .{ .copy_dst = true, .vertex = true },
         .size = @sizeOf(draw.Vertex) * app.vertices.items.len,
-        .mapped_at_creation = false,
+        .mapped_at_creation = .false,
     });
 
     const vertex_uniform_buffer = core.device.createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = @sizeOf(draw.VertexUniform),
-        .mapped_at_creation = false,
+        .mapped_at_creation = .false,
     });
 
     const frag_uniform_buffer = core.device.createBuffer(&.{
         .usage = .{ .copy_dst = true, .storage = true },
         .size = @sizeOf(draw.FragUniform) * app.fragment_uniform_list.items.len,
-        .mapped_at_creation = false,
+        .mapped_at_creation = .false,
     });
 
     const sampler = core.device.createSampler(&.{

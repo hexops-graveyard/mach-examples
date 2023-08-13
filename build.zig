@@ -97,7 +97,7 @@ pub fn build(b: *std.Build) !void {
             },
         );
 
-        try app.link(.{});
+        try app.link();
 
         for (example.deps) |dep| switch (dep) {
             .model3d => app.compile.linkLibrary(b.dependency("mach_model3d", .{
