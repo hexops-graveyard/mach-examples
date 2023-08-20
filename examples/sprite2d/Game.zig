@@ -24,10 +24,6 @@ sprites: usize,
 rand: std.rand.DefaultPrng,
 time: f32,
 
-pub const components = .{
-    .follower = void,
-};
-
 const d0 = 0.000001;
 
 // Each module must have a globally unique name declared, it is impossible to use two modules with
@@ -114,7 +110,7 @@ pub fn tick(adapter: anytype) !void {
     var player_transform = sprite2d.get(game.state().player, .transform).?;
     var player_pos = mat.translation3d(player_transform);
     if (spawning and game.state().spawn_timer.read() > 1.0 / 60.0) {
-        // Spawn new follower entities
+        // Spawn new entities
         _ = game.state().spawn_timer.lap();
         for (0..100) |_| {
             var new_pos = player_pos;
@@ -122,7 +118,6 @@ pub fn tick(adapter: anytype) !void {
             new_pos[1] += game.state().rand.random().floatNorm(f32) * 25;
 
             const new_entity = try adapter.newEntity();
-            try game.set(new_entity, .follower, {});
             try sprite2d.set(new_entity, .transform, mat.mul(mat.translate3d(new_pos), mat.scale3d(vec.splat(Vec3, 0.3))));
             try sprite2d.set(new_entity, .size, Vec2{ 32, 32 });
             try sprite2d.set(new_entity, .uv_transform, mat.translate2d(.{ 0, 0 }));
