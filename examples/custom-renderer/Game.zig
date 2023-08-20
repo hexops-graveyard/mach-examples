@@ -1,13 +1,14 @@
 const std = @import("std");
-const mach_mod = @import("mach");
-const core = mach_mod.core;
+const mach = @import("mach");
+const ecs = mach.ecs;
+const core = mach.core;
 const Renderer = @import("Renderer.zig");
 
-timer: mach_mod.Timer,
-player: mach_mod.ecs.EntityID,
+timer: mach.Timer,
+player: mach.ecs.EntityID,
 direction: Vec2 = .{ 0, 0 },
 spawning: bool = false,
-spawn_timer: mach_mod.Timer,
+spawn_timer: mach.Timer,
 
 pub const components = struct {
     pub const follower = void;
@@ -27,7 +28,7 @@ pub const name = .game;
 
 const Vec2 = @Vector(2, f32);
 
-pub fn init(adapter: anytype) !void {
+pub fn init(adapter: *mach.Engine) !void {
     // The adapter lets us get a type-safe interface to interact with any module in our program.
     var renderer = adapter.mod(.renderer);
     var game = adapter.mod(.game);
@@ -44,13 +45,13 @@ pub fn init(adapter: anytype) !void {
     try renderer.set(player, .scale, 1.0);
 
     game.initState(.{
-        .timer = try mach_mod.Timer.start(),
-        .spawn_timer = try mach_mod.Timer.start(),
+        .timer = try mach.Timer.start(),
+        .spawn_timer = try mach.Timer.start(),
         .player = player,
     });
 }
 
-pub fn tick(adapter: anytype) !void {
+pub fn tick(adapter: *mach.Engine) !void {
     var game = adapter.mod(.game);
     var renderer = adapter.mod(.renderer); // TODO: why can't this be const?
 

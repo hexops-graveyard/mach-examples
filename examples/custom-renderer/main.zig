@@ -4,13 +4,12 @@ const mach = @import("mach");
 const Renderer = @import("Renderer.zig");
 const Game = @import("Game.zig");
 
-// A Mach app is just a list of all the modules in our application. Our game itself is implemented
-// in our own module called Game.
-//
-// Modules can have components, systems, state, etc. They can also send and receive messages to
-// coordinate with each-other.
-pub const App = mach.App(.{
-    Game,
+// The list of modules to be used in our application. Our game itself is implemented in our own
+// module called Game.
+pub const modules = .{
     mach.Module,
     Renderer,
-});
+    Game,
+};
+
+pub const App = mach.App;

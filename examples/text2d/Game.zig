@@ -1,9 +1,10 @@
 const std = @import("std");
-const mach_mod = @import("mach");
-const core = mach_mod.core;
-const gpu = mach_mod.gpu;
-const Sprite2D = mach_mod.gfx2d.Sprite2D;
-const math = mach_mod.math;
+const mach = @import("mach");
+const core = mach.core;
+const gpu = mach.gpu;
+const ecs = mach.ecs;
+const Sprite2D = mach.gfx2d.Sprite2D;
+const math = mach.math;
 const vec = math.vec;
 const mat = math.mat;
 const Vec2 = math.Vec2;
@@ -11,12 +12,12 @@ const Vec3 = math.Vec3;
 const Mat3x3 = math.Mat3x3;
 const Mat4x4 = math.Mat4x4;
 
-timer: mach_mod.Timer,
-player: mach_mod.ecs.EntityID,
+timer: mach.Timer,
+player: mach.ecs.EntityID,
 direction: Vec2 = .{ 0, 0 },
 spawning: bool = false,
-spawn_timer: mach_mod.Timer,
-fps_timer: mach_mod.Timer,
+spawn_timer: mach.Timer,
+fps_timer: mach.Timer,
 frame_count: usize,
 sprites: usize,
 rand: std.rand.DefaultPrng,
@@ -36,7 +37,7 @@ const d0 = 0.000001;
 //
 pub const name = .game;
 
-pub fn init(adapter: anytype) !void {
+pub fn init(adapter: *mach.Engine) !void {
     // The adapter lets us get a type-safe interface to interact with any module in our program.
     var sprite2d = adapter.mod(.mach_sprite2d);
     var text2d = adapter.mod(.mach_text2d);
@@ -63,10 +64,10 @@ pub fn init(adapter: anytype) !void {
     try sprite2d.set(player, .uv_transform, mat.translate2d(Vec2{ @floatFromInt(r.x), @floatFromInt(r.y) }));
 
     game.initState(.{
-        .timer = try mach_mod.Timer.start(),
-        .spawn_timer = try mach_mod.Timer.start(),
+        .timer = try mach.Timer.start(),
+        .spawn_timer = try mach.Timer.start(),
         .player = player,
-        .fps_timer = try mach_mod.Timer.start(),
+        .fps_timer = try mach.Timer.start(),
         .frame_count = 0,
         .sprites = 0,
         .rand = std.rand.DefaultPrng.init(1337),
@@ -74,7 +75,7 @@ pub fn init(adapter: anytype) !void {
     });
 }
 
-pub fn tick(adapter: anytype) !void {
+pub fn tick(adapter: *mach.Engine) !void {
     var game = adapter.mod(.game);
     var text2d = adapter.mod(.mach_text2d);
     var sprite2d = adapter.mod(.mach_sprite2d); // TODO: why can't this be const?

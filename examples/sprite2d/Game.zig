@@ -1,11 +1,12 @@
 const std = @import("std");
 const zigimg = @import("zigimg");
 const assets = @import("assets");
-const mach_mod = @import("mach");
-const core = mach_mod.core;
-const gpu = mach_mod.gpu;
-const Sprite2D = mach_mod.gfx2d.Sprite2D;
-const math = mach_mod.math;
+const mach = @import("mach");
+const core = mach.core;
+const gpu = mach.gpu;
+const ecs = mach.ecs;
+const Sprite2D = mach.gfx2d.Sprite2D;
+const math = mach.math;
 const vec = math.vec;
 const mat = math.mat;
 const Vec2 = math.Vec2;
@@ -13,12 +14,12 @@ const Vec3 = math.Vec3;
 const Mat3x3 = math.Mat3x3;
 const Mat4x4 = math.Mat4x4;
 
-timer: mach_mod.Timer,
-player: mach_mod.ecs.EntityID,
+timer: mach.Timer,
+player: mach.ecs.EntityID,
 direction: Vec2 = .{ 0, 0 },
 spawning: bool = false,
-spawn_timer: mach_mod.Timer,
-fps_timer: mach_mod.Timer,
+spawn_timer: mach.Timer,
+fps_timer: mach.Timer,
 frame_count: usize,
 sprites: usize,
 rand: std.rand.DefaultPrng,
@@ -38,7 +39,7 @@ const d0 = 0.000001;
 //
 pub const name = .game;
 
-pub fn init(adapter: anytype) !void {
+pub fn init(adapter: *mach.Engine) !void {
     // The adapter lets us get a type-safe interface to interact with any module in our program.
     var sprite2d = adapter.mod(.mach_sprite2d);
     var game = adapter.mod(.game);
@@ -59,10 +60,10 @@ pub fn init(adapter: anytype) !void {
     try adapter.send(.machSprite2DInit);
 
     game.initState(.{
-        .timer = try mach_mod.Timer.start(),
-        .spawn_timer = try mach_mod.Timer.start(),
+        .timer = try mach.Timer.start(),
+        .spawn_timer = try mach.Timer.start(),
         .player = player,
-        .fps_timer = try mach_mod.Timer.start(),
+        .fps_timer = try mach.Timer.start(),
         .frame_count = 0,
         .sprites = 0,
         .rand = std.rand.DefaultPrng.init(1337),
@@ -70,7 +71,7 @@ pub fn init(adapter: anytype) !void {
     });
 }
 
-pub fn tick(adapter: anytype) !void {
+pub fn tick(adapter: *mach.Engine) !void {
     var game = adapter.mod(.game);
     var sprite2d = adapter.mod(.mach_sprite2d); // TODO: why can't this be const?
 
@@ -170,10 +171,10 @@ pub fn tick(adapter: anytype) !void {
 }
 
 // TODO: move this helper into gfx2d module
-fn loadTexture(adapter: anytype) !void {
-    var mach = adapter.mod(.mach);
+fn loadTexture(adapter: *mach.Engine) !void {
+    var mach_mod = adapter.mod(.mach);
     var sprite2d = adapter.mod(.mach_sprite2d);
-    const device = mach.state().device;
+    const device = mach_mod.state().device;
     const queue = device.getQueue();
 
     // Load the image from memory

@@ -1,7 +1,8 @@
 const std = @import("std");
-const gpu = @import("mach").gpu;
-const ecs = @import("mach").ecs;
-const core = @import("mach").core;
+const mach = @import("mach");
+const gpu = mach.gpu;
+const ecs = mach.ecs;
+const core = mach.core;
 
 const num_bind_groups = 1024 * 32;
 
@@ -28,10 +29,10 @@ const UniformBufferObject = packed struct {
     scale: f32,
 };
 
-pub fn init(adapter: anytype) !void {
-    var mach = adapter.mod(.mach);
+pub fn init(adapter: *mach.Engine) !void {
+    var mach_mod = adapter.mod(.mach);
     var renderer = adapter.mod(.renderer);
-    const device = mach.state().device;
+    const device = mach_mod.state().device;
 
     const shader_module = device.createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
 
@@ -93,7 +94,7 @@ pub fn init(adapter: anytype) !void {
     shader_module.release();
 }
 
-pub fn deinit(adapter: anytype) !void {
+pub fn deinit(adapter: *mach.Engine) !void {
     var renderer = adapter.mod(.renderer);
 
     renderer.state().pipeline.release();
@@ -102,10 +103,10 @@ pub fn deinit(adapter: anytype) !void {
     renderer.state().uniform_buffer.release();
 }
 
-pub fn tick(adapter: anytype) !void {
-    var mach = adapter.mod(.mach);
+pub fn tick(adapter: *mach.Engine) !void {
+    var mach_mod = adapter.mod(.mach);
     var renderer = adapter.mod(.renderer);
-    const device = mach.state().device;
+    const device = mach_mod.state().device;
 
     // Begin our render pass
     const back_buffer_view = core.swap_chain.getCurrentTextureView().?;

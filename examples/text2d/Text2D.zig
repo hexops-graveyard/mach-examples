@@ -1,20 +1,21 @@
-const mach_mod = @import("mach");
-const gpu = mach_mod.gpu;
+const mach = @import("mach");
+const gpu = mach.gpu;
+const ecs = mach.ecs;
 const ft = @import("freetype");
 const std = @import("std");
 const assets = @import("assets");
 
 pub const name = .mach_text2d;
 
-texture_atlas: mach_mod.Atlas,
+texture_atlas: mach.Atlas,
 texture: *gpu.Texture,
 ft: ft.Library,
 face: ft.Face,
-question_region: mach_mod.Atlas.Region,
+question_region: mach.Atlas.Region,
 
-pub fn machText2DInit(adapter: anytype) !void {
-    var mach = adapter.mod(.mach);
-    const device = mach.state().device;
+pub fn machText2DInit(adapter: *mach.Engine) !void {
+    var mach_mod = adapter.mod(.mach);
+    const device = mach_mod.state().device;
     const queue = device.getQueue();
 
     // rgba32_pixels
@@ -39,7 +40,7 @@ pub fn machText2DInit(adapter: anytype) !void {
     const s = text2d.state();
 
     s.texture = texture;
-    s.texture_atlas = try mach_mod.Atlas.init(
+    s.texture_atlas = try mach.Atlas.init(
         adapter.allocator,
         img_size.width,
         .rgba,
@@ -87,7 +88,7 @@ pub fn machText2DInit(adapter: anytype) !void {
     _ = metrics;
 }
 
-pub fn deinit(adapter: anytype) !void {
+pub fn deinit(adapter: *mach.Engine) !void {
     var text2d = adapter.mod(.mach_text2d);
     const s = text2d.state();
 
