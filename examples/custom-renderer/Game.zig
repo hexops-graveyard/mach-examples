@@ -9,8 +9,8 @@ direction: Vec2 = .{ 0, 0 },
 spawning: bool = false,
 spawn_timer: mach_mod.Timer,
 
-pub const components = .{
-    .follower = void,
+pub const components = struct {
+    pub const follower = void;
 };
 
 // Each module must have a globally unique name declared, it is impossible to use two modules with

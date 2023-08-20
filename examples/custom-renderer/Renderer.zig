@@ -15,10 +15,10 @@ uniform_buffer: *gpu.Buffer,
 
 pub const name = .renderer;
 
-pub const components = .{
-    .location = Vec3,
-    .rotation = Vec3,
-    .scale = f32,
+pub const components = struct {
+    pub const location = Vec3;
+    pub const rotation = Vec3;
+    pub const scale = f32;
 };
 
 pub const Vec3 = @Vector(3, f32);
