@@ -6,8 +6,6 @@ const assets = @import("assets");
 
 pub const name = .mach_text2d;
 
-// pub const components = .{};
-
 texture_atlas: mach_mod.Atlas,
 texture: *gpu.Texture,
 ft: ft.Library,

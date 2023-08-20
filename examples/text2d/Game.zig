@@ -150,7 +150,7 @@ pub fn tick(adapter: anytype) !void {
             var transform = mat.identity(Mat4x4);
             transform = mat.mul(transform, mat.translate3d(location));
             transform = mat.mul(transform, mat.rotateZ(2 * std.math.pi * game.state().time));
-            transform = mat.mul(transform, mat.scale3d(vec.splat(Vec3, @min(std.math.cos(game.state().time / 2.0), 0.5))));
+            transform = mat.mul(transform, mat.scale3d(vec.splat(Vec3, @min(std.math.cos(game.state().time / 2.0), 1.5))));
 
             // TODO: .set() API is substantially slower due to internals
             // try sprite2d.set(id, .transform, transform);
