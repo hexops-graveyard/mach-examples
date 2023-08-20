@@ -29,9 +29,9 @@ const UniformBufferObject = packed struct {
     scale: f32,
 };
 
-pub fn init(adapter: *mach.Engine) !void {
-    var mach_mod = adapter.mod(.mach);
-    var renderer = adapter.mod(.renderer);
+pub fn init(eng: *mach.Engine) !void {
+    var mach_mod = eng.mod(.mach);
+    var renderer = eng.mod(.renderer);
     const device = mach_mod.state().device;
 
     const shader_module = device.createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
@@ -94,8 +94,8 @@ pub fn init(adapter: *mach.Engine) !void {
     shader_module.release();
 }
 
-pub fn deinit(adapter: *mach.Engine) !void {
-    var renderer = adapter.mod(.renderer);
+pub fn deinit(eng: *mach.Engine) !void {
+    var renderer = eng.mod(.renderer);
 
     renderer.state().pipeline.release();
     renderer.state().queue.release();
@@ -103,9 +103,9 @@ pub fn deinit(adapter: *mach.Engine) !void {
     renderer.state().uniform_buffer.release();
 }
 
-pub fn tick(adapter: *mach.Engine) !void {
-    var mach_mod = adapter.mod(.mach);
-    var renderer = adapter.mod(.renderer);
+pub fn tick(eng: *mach.Engine) !void {
+    var mach_mod = eng.mod(.mach);
+    var renderer = eng.mod(.renderer);
     const device = mach_mod.state().device;
 
     // Begin our render pass
@@ -123,7 +123,7 @@ pub fn tick(adapter: *mach.Engine) !void {
     });
 
     // Update uniform buffer
-    var archetypes_iter = adapter.entities.query(.{ .all = &.{
+    var archetypes_iter = eng.entities.query(.{ .all = &.{
         .{ .renderer = &.{ .location, .scale } },
     } });
     var num_entities: usize = 0;

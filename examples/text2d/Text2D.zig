@@ -13,8 +13,8 @@ ft: ft.Library,
 face: ft.Face,
 question_region: mach.Atlas.Region,
 
-pub fn machText2DInit(adapter: *mach.Engine) !void {
-    var mach_mod = adapter.mod(.mach);
+pub fn machText2DInit(eng: *mach.Engine) !void {
+    var mach_mod = eng.mod(.mach);
     const device = mach_mod.state().device;
     const queue = device.getQueue();
 
@@ -36,12 +36,12 @@ pub fn machText2DInit(adapter: *mach.Engine) !void {
         .rows_per_image = @as(u32, @intCast(img_size.height)),
     };
 
-    var text2d = adapter.mod(.mach_text2d);
+    var text2d = eng.mod(.mach_text2d);
     const s = text2d.state();
 
     s.texture = texture;
     s.texture_atlas = try mach.Atlas.init(
-        adapter.allocator,
+        eng.allocator,
         img_size.width,
         .rgba,
     );
@@ -61,8 +61,8 @@ pub fn machText2DInit(adapter: *mach.Engine) !void {
 
     // Add 1 pixel padding to texture to avoid bleeding over other textures
     const margin = 1;
-    var glyph_data = try adapter.allocator.alloc([4]u8, (glyph_width + (margin * 2)) * (glyph_height + (margin * 2)));
-    defer adapter.allocator.free(glyph_data);
+    var glyph_data = try eng.allocator.alloc([4]u8, (glyph_width + (margin * 2)) * (glyph_height + (margin * 2)));
+    defer eng.allocator.free(glyph_data);
     const glyph_buffer = glyph_bitmap.buffer().?;
     for (glyph_data, 0..) |*data, i| {
         const x = i % (glyph_width + (margin * 2));
@@ -74,7 +74,7 @@ pub fn machText2DInit(adapter: *mach.Engine) !void {
             data.* = [4]u8{ col, col, col, std.math.maxInt(u8) };
         }
     }
-    var glyph_atlas_region = try s.texture_atlas.reserve(adapter.allocator, glyph_width + (margin * 2), glyph_height + (margin * 2));
+    var glyph_atlas_region = try s.texture_atlas.reserve(eng.allocator, glyph_width + (margin * 2), glyph_height + (margin * 2));
     s.texture_atlas.set(glyph_atlas_region, @as([*]const u8, @ptrCast(glyph_data.ptr))[0 .. glyph_data.len * 4]);
 
     glyph_atlas_region.x += margin;
@@ -88,11 +88,11 @@ pub fn machText2DInit(adapter: *mach.Engine) !void {
     _ = metrics;
 }
 
-pub fn deinit(adapter: *mach.Engine) !void {
-    var text2d = adapter.mod(.mach_text2d);
+pub fn deinit(eng: *mach.Engine) !void {
+    var text2d = eng.mod(.mach_text2d);
     const s = text2d.state();
 
-    s.texture_atlas.deinit(adapter.allocator);
+    s.texture_atlas.deinit(eng.allocator);
     s.texture.release();
     s.face.deinit();
     s.ft.deinit();

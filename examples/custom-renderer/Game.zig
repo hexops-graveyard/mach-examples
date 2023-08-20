@@ -28,10 +28,10 @@ pub const name = .game;
 
 const Vec2 = @Vector(2, f32);
 
-pub fn init(adapter: *mach.Engine) !void {
-    // The adapter lets us get a type-safe interface to interact with any module in our program.
-    var renderer = adapter.mod(.renderer);
-    var game = adapter.mod(.game);
+pub fn init(eng: *mach.Engine) !void {
+    // The eng lets us get a type-safe interface to interact with any module in our program.
+    var renderer = eng.mod(.renderer);
+    var game = eng.mod(.game);
 
     // The Mach .core is where we set window options, etc.
     core.setTitle("Hello, ECS!");
@@ -40,7 +40,7 @@ pub fn init(adapter: *mach.Engine) !void {
     // namespace, e.g. the `.renderer` module could have a 3D `.location` component with a different
     // type than the `.physics2d` module's `.location` component if you desire.
 
-    const player = try adapter.newEntity();
+    const player = try eng.newEntity();
     try renderer.set(player, .location, .{ 0, 0, 0 });
     try renderer.set(player, .scale, 1.0);
 
@@ -51,9 +51,9 @@ pub fn init(adapter: *mach.Engine) !void {
     });
 }
 
-pub fn tick(adapter: *mach.Engine) !void {
-    var game = adapter.mod(.game);
-    var renderer = adapter.mod(.renderer); // TODO: why can't this be const?
+pub fn tick(eng: *mach.Engine) !void {
+    var game = eng.mod(.game);
+    var renderer = eng.mod(.renderer); // TODO: why can't this be const?
 
     // TODO(engine): event polling should occur in mach.Module and get fired as ECS events.
     var iter = core.pollEvents();
@@ -81,7 +81,7 @@ pub fn tick(adapter: *mach.Engine) !void {
                     else => {},
                 }
             },
-            .close => try adapter.send(.machExit),
+            .close => try eng.send(.machExit),
             else => {},
         }
     }
@@ -93,7 +93,7 @@ pub fn tick(adapter: *mach.Engine) !void {
         for (0..10) |_| {
             // Spawn a new follower entity
             _ = game.state().spawn_timer.lap();
-            const new_entity = try adapter.newEntity();
+            const new_entity = try eng.newEntity();
             try game.set(new_entity, .follower, {});
             try renderer.set(new_entity, .location, player_pos);
             try renderer.set(new_entity, .scale, 1.0 / 6.0);
@@ -104,7 +104,7 @@ pub fn tick(adapter: *mach.Engine) !void {
     const delta_time = game.state().timer.lap();
 
     // Move following entities closer to us.
-    var archetypes_iter = adapter.entities.query(.{ .all = &.{
+    var archetypes_iter = eng.entities.query(.{ .all = &.{
         .{ .game = &.{.follower} },
     } });
     while (archetypes_iter.next()) |archetype| {
@@ -115,7 +115,7 @@ pub fn tick(adapter: *mach.Engine) !void {
             const close_dist = 1.0 / 15.0;
             var avoidance: Renderer.Vec3 = splat(0);
             var avoidance_div: f32 = 1.0;
-            var archetypes_iter_2 = adapter.entities.query(.{ .all = &.{
+            var archetypes_iter_2 = eng.entities.query(.{ .all = &.{
                 .{ .game = &.{.follower} },
             } });
             while (archetypes_iter_2.next()) |archetype_2| {

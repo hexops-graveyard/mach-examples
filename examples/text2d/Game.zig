@@ -37,28 +37,28 @@ const d0 = 0.000001;
 //
 pub const name = .game;
 
-pub fn init(adapter: *mach.Engine) !void {
-    // The adapter lets us get a type-safe interface to interact with any module in our program.
-    var sprite2d = adapter.mod(.mach_sprite2d);
-    var text2d = adapter.mod(.mach_text2d);
-    var game = adapter.mod(.game);
+pub fn init(eng: *mach.Engine) !void {
+    // The eng lets us get a type-safe interface to interact with any module in our program.
+    var sprite2d = eng.mod(.mach_sprite2d);
+    var text2d = eng.mod(.mach_text2d);
+    var game = eng.mod(.game);
 
     // The Mach .core is where we set window options, etc.
     core.setTitle("gfx.Sprite2D example");
 
     // Initialize text2D texture
-    try adapter.send(.machText2DInit);
+    try eng.send(.machText2DInit);
 
     // Tell sprite2d to use the texture
     sprite2d.state().texture = text2d.state().texture;
-    try adapter.send(.machSprite2DInit);
+    try eng.send(.machSprite2DInit);
 
     // We can create entities, and set components on them. Note that components live in a module
     // namespace, e.g. the `.mach_sprite2d` module could have a 3D `.location` component with a different
     // type than the `.physics2d` module's `.location` component if you desire.
 
     const r = text2d.state().question_region;
-    const player = try adapter.newEntity();
+    const player = try eng.newEntity();
     try sprite2d.set(player, .transform, mat.translate3d(.{ -0.02, 0, 0 }));
     try sprite2d.set(player, .size, Vec2{ @floatFromInt(r.width), @floatFromInt(r.height) });
     try sprite2d.set(player, .uv_transform, mat.translate2d(Vec2{ @floatFromInt(r.x), @floatFromInt(r.y) }));
@@ -75,10 +75,10 @@ pub fn init(adapter: *mach.Engine) !void {
     });
 }
 
-pub fn tick(adapter: *mach.Engine) !void {
-    var game = adapter.mod(.game);
-    var text2d = adapter.mod(.mach_text2d);
-    var sprite2d = adapter.mod(.mach_sprite2d); // TODO: why can't this be const?
+pub fn tick(eng: *mach.Engine) !void {
+    var game = eng.mod(.game);
+    var text2d = eng.mod(.mach_text2d);
+    var sprite2d = eng.mod(.mach_sprite2d); // TODO: why can't this be const?
 
     // TODO(engine): event polling should occur in mach.Module and get fired as ECS events.
     var iter = core.pollEvents();
@@ -106,7 +106,7 @@ pub fn tick(adapter: *mach.Engine) !void {
                     else => {},
                 }
             },
-            .close => try adapter.send(.machExit),
+            .close => try eng.send(.machExit),
             else => {},
         }
     }
@@ -124,7 +124,7 @@ pub fn tick(adapter: *mach.Engine) !void {
             new_pos[1] += game.state().rand.random().floatNorm(f32) * 25;
 
             const r = text2d.state().question_region;
-            const new_entity = try adapter.newEntity();
+            const new_entity = try eng.newEntity();
             try sprite2d.set(new_entity, .transform, mat.mul(mat.translate3d(new_pos), mat.scale3d(vec.splat(Vec3, 0.3))));
             try sprite2d.set(new_entity, .size, Vec2{ @floatFromInt(r.width), @floatFromInt(r.height) });
             try sprite2d.set(new_entity, .uv_transform, mat.translate2d(Vec2{ @floatFromInt(r.x), @floatFromInt(r.y) }));
@@ -136,7 +136,7 @@ pub fn tick(adapter: *mach.Engine) !void {
     const delta_time = game.state().timer.lap();
 
     // Rotate entities
-    var archetypes_iter = adapter.entities.query(.{ .all = &.{
+    var archetypes_iter = eng.entities.query(.{ .all = &.{
         .{ .mach_sprite2d = &.{.transform} },
     } });
     while (archetypes_iter.next()) |archetype| {
