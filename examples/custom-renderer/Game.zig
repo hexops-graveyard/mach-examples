@@ -30,8 +30,8 @@ const Vec2 = @Vector(2, f32);
 
 pub fn init(eng: *mach.Engine) !void {
     // The eng lets us get a type-safe interface to interact with any module in our program.
-    var renderer = eng.mod(.renderer);
-    var game = eng.mod(.game);
+    var renderer = &eng.mod.renderer;
+    var game = &eng.mod.game;
 
     // The Mach .core is where we set window options, etc.
     core.setTitle("Hello, ECS!");
@@ -44,21 +44,21 @@ pub fn init(eng: *mach.Engine) !void {
     try renderer.set(player, .location, .{ 0, 0, 0 });
     try renderer.set(player, .scale, 1.0);
 
-    game.initState(.{
+    game.state = .{
         .timer = try mach.Timer.start(),
         .spawn_timer = try mach.Timer.start(),
         .player = player,
-    });
+    };
 }
 
 pub fn tick(eng: *mach.Engine) !void {
-    var game = eng.mod(.game);
-    var renderer = eng.mod(.renderer); // TODO: why can't this be const?
+    var game = &eng.mod.game;
+    var renderer = &eng.mod.renderer;
 
     // TODO(engine): event polling should occur in mach.Module and get fired as ECS events.
     var iter = core.pollEvents();
-    var direction = game.state().direction;
-    var spawning = game.state().spawning;
+    var direction = game.state.direction;
+    var spawning = game.state.spawning;
     while (iter.next()) |event| {
         switch (event) {
             .key_press => |ev| {
@@ -85,14 +85,14 @@ pub fn tick(eng: *mach.Engine) !void {
             else => {},
         }
     }
-    game.state().direction = direction;
-    game.state().spawning = spawning;
+    game.state.direction = direction;
+    game.state.spawning = spawning;
 
-    var player_pos = renderer.get(game.state().player, .location).?;
-    if (spawning and game.state().spawn_timer.read() > 1.0 / 60.0) {
+    var player_pos = renderer.get(game.state.player, .location).?;
+    if (spawning and game.state.spawn_timer.read() > 1.0 / 60.0) {
         for (0..10) |_| {
             // Spawn a new follower entity
-            _ = game.state().spawn_timer.lap();
+            _ = game.state.spawn_timer.lap();
             const new_entity = try eng.newEntity();
             try game.set(new_entity, .follower, {});
             try renderer.set(new_entity, .location, player_pos);
@@ -101,7 +101,7 @@ pub fn tick(eng: *mach.Engine) !void {
     }
 
     // Multiply by delta_time to ensure that movement is the same speed regardless of the frame rate.
-    const delta_time = game.state().timer.lap();
+    const delta_time = game.state.timer.lap();
 
     // Move following entities closer to us.
     var archetypes_iter = eng.entities.query(.{ .all = &.{
@@ -152,7 +152,7 @@ pub fn tick(eng: *mach.Engine) !void {
     const speed = 1.0;
     player_pos[0] += direction[0] * speed * delta_time;
     player_pos[1] += direction[1] * speed * delta_time;
-    try renderer.set(game.state().player, .location, player_pos);
+    try renderer.set(game.state.player, .location, player_pos);
 }
 
 fn dist(a: Renderer.Vec3, b: Renderer.Vec3) f32 {

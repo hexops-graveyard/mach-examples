@@ -104,10 +104,12 @@ pub fn build(b: *std.Build) !void {
                 .target = target,
                 .optimize = optimize,
             }).artifact("mach-model3d")),
-            .freetype => app.compile.linkLibrary(b.dependency("mach_freetype.freetype", .{
-                .target = target,
-                .optimize = optimize,
-            }).artifact("freetype")),
+            .freetype => @import("mach_freetype").linkFreetype(
+                b,
+                optimize,
+                target,
+                app.compile,
+            ),
             else => {},
         };
 

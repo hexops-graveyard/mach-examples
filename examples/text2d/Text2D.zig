@@ -14,8 +14,7 @@ face: ft.Face,
 question_region: mach.Atlas.Region,
 
 pub fn machText2DInit(eng: *mach.Engine) !void {
-    var mach_mod = eng.mod(.mach);
-    const device = mach_mod.state().device;
+    const device = eng.mod.mach.state.device;
     const queue = device.getQueue();
 
     // rgba32_pixels
@@ -36,8 +35,7 @@ pub fn machText2DInit(eng: *mach.Engine) !void {
         .rows_per_image = @as(u32, @intCast(img_size.height)),
     };
 
-    var text2d = eng.mod(.mach_text2d);
-    const s = text2d.state();
+    var s = &eng.mod.mach_text2d.state;
 
     s.texture = texture;
     s.texture_atlas = try mach.Atlas.init(
@@ -89,8 +87,7 @@ pub fn machText2DInit(eng: *mach.Engine) !void {
 }
 
 pub fn deinit(eng: *mach.Engine) !void {
-    var text2d = eng.mod(.mach_text2d);
-    const s = text2d.state();
+    var s = &eng.mod.mach_text2d.state;
 
     s.texture_atlas.deinit(eng.allocator);
     s.texture.release();

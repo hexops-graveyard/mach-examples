@@ -41,8 +41,8 @@ pub const name = .game;
 
 pub fn init(eng: *mach.Engine) !void {
     // The eng lets us get a type-safe interface to interact with any module in our program.
-    var sprite2d = eng.mod(.mach_sprite2d);
-    var game = eng.mod(.game);
+    var sprite2d = &eng.mod.mach_sprite2d;
+    var game = &eng.mod.game;
 
     // The Mach .core is where we set window options, etc.
     core.setTitle("gfx.Sprite2D example");
@@ -59,7 +59,7 @@ pub fn init(eng: *mach.Engine) !void {
     try loadTexture(eng);
     try eng.send(.machSprite2DInit);
 
-    game.initState(.{
+    game.state = .{
         .timer = try mach.Timer.start(),
         .spawn_timer = try mach.Timer.start(),
         .player = player,
@@ -68,17 +68,17 @@ pub fn init(eng: *mach.Engine) !void {
         .sprites = 0,
         .rand = std.rand.DefaultPrng.init(1337),
         .time = 0,
-    });
+    };
 }
 
 pub fn tick(eng: *mach.Engine) !void {
-    var game = eng.mod(.game);
-    var sprite2d = eng.mod(.mach_sprite2d); // TODO: why can't this be const?
+    var game = &eng.mod.game;
+    var sprite2d = &eng.mod.mach_sprite2d;
 
     // TODO(engine): event polling should occur in mach.Module and get fired as ECS events.
     var iter = core.pollEvents();
-    var direction = game.state().direction;
-    var spawning = game.state().spawning;
+    var direction = game.state.direction;
+    var spawning = game.state.spawning;
     while (iter.next()) |event| {
         switch (event) {
             .key_press => |ev| {
@@ -105,29 +105,29 @@ pub fn tick(eng: *mach.Engine) !void {
             else => {},
         }
     }
-    game.state().direction = direction;
-    game.state().spawning = spawning;
+    game.state.direction = direction;
+    game.state.spawning = spawning;
 
-    var player_transform = sprite2d.get(game.state().player, .transform).?;
+    var player_transform = sprite2d.get(game.state.player, .transform).?;
     var player_pos = mat.translation3d(player_transform);
-    if (spawning and game.state().spawn_timer.read() > 1.0 / 60.0) {
+    if (spawning and game.state.spawn_timer.read() > 1.0 / 60.0) {
         // Spawn new entities
-        _ = game.state().spawn_timer.lap();
+        _ = game.state.spawn_timer.lap();
         for (0..100) |_| {
             var new_pos = player_pos;
-            new_pos[0] += game.state().rand.random().floatNorm(f32) * 25;
-            new_pos[1] += game.state().rand.random().floatNorm(f32) * 25;
+            new_pos[0] += game.state.rand.random().floatNorm(f32) * 25;
+            new_pos[1] += game.state.rand.random().floatNorm(f32) * 25;
 
             const new_entity = try eng.newEntity();
             try sprite2d.set(new_entity, .transform, mat.mul(mat.translate3d(new_pos), mat.scale3d(vec.splat(Vec3, 0.3))));
             try sprite2d.set(new_entity, .size, Vec2{ 32, 32 });
             try sprite2d.set(new_entity, .uv_transform, mat.translate2d(.{ 0, 0 }));
-            game.state().sprites += 1;
+            game.state.sprites += 1;
         }
     }
 
     // Multiply by delta_time to ensure that movement is the same speed regardless of the frame rate.
-    const delta_time = game.state().timer.lap();
+    const delta_time = game.state.timer.lap();
 
     // Rotate entities
     var archetypes_iter = eng.entities.query(.{ .all = &.{
@@ -144,8 +144,8 @@ pub fn tick(eng: *mach.Engine) !void {
             // transform = mat.mul(transform, mat.translate3d(location));
             var transform = mat.identity(Mat4x4);
             transform = mat.mul(transform, mat.translate3d(location));
-            transform = mat.mul(transform, mat.rotateZ(2 * std.math.pi * game.state().time));
-            transform = mat.mul(transform, mat.scale3d(vec.splat(Vec3, @min(std.math.cos(game.state().time / 2.0), 0.5))));
+            transform = mat.mul(transform, mat.rotateZ(2 * std.math.pi * game.state.time));
+            transform = mat.mul(transform, mat.scale3d(vec.splat(Vec3, @min(std.math.cos(game.state.time / 2.0), 0.5))));
 
             // TODO: .set() API is substantially slower due to internals
             // try sprite2d.set(id, .transform, transform);
@@ -158,23 +158,22 @@ pub fn tick(eng: *mach.Engine) !void {
     const speed = 200.0;
     player_pos[0] += direction[0] * speed * delta_time;
     player_pos[1] += direction[1] * speed * delta_time;
-    try sprite2d.set(game.state().player, .transform, mat.translate3d(player_pos));
+    try sprite2d.set(game.state.player, .transform, mat.translate3d(player_pos));
 
     // Every second, update the window title with the FPS
-    if (game.state().fps_timer.read() >= 1.0) {
-        try core.printTitle("gfx.Sprite2D example [ FPS: {d} ] [ Sprites: {d} ]", .{ game.state().frame_count, game.state().sprites });
-        game.state().fps_timer.reset();
-        game.state().frame_count = 0;
+    if (game.state.fps_timer.read() >= 1.0) {
+        try core.printTitle("gfx.Sprite2D example [ FPS: {d} ] [ Sprites: {d} ]", .{ game.state.frame_count, game.state.sprites });
+        game.state.fps_timer.reset();
+        game.state.frame_count = 0;
     }
-    game.state().frame_count += 1;
-    game.state().time += delta_time;
+    game.state.frame_count += 1;
+    game.state.time += delta_time;
 }
 
 // TODO: move this helper into gfx2d module
 fn loadTexture(eng: *mach.Engine) !void {
-    var mach_mod = eng.mod(.mach);
-    var sprite2d = eng.mod(.mach_sprite2d);
-    const device = mach_mod.state().device;
+    var sprite2d = &eng.mod.mach_sprite2d;
+    const device = eng.mod.mach.state.device;
     const queue = device.getQueue();
 
     // Load the image from memory
@@ -207,7 +206,7 @@ fn loadTexture(eng: *mach.Engine) !void {
     }
 
     // Tell sprite2d to use the texture
-    sprite2d.state().texture = texture;
+    sprite2d.state.texture = texture;
 }
 
 fn rgb24ToRgba32(allocator: std.mem.Allocator, in: []zigimg.color.Rgb24) !zigimg.color.PixelStorage {
