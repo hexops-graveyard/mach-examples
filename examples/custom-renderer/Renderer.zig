@@ -1,7 +1,6 @@
 const std = @import("std");
 const mach = @import("mach");
 const gpu = mach.gpu;
-const ecs = mach.ecs;
 const core = mach.core;
 
 const num_bind_groups = 1024 * 32;
@@ -29,10 +28,11 @@ const UniformBufferObject = packed struct {
     scale: f32,
 };
 
-pub fn init(eng: *mach.Engine) !void {
-    var renderer = &eng.mod.renderer;
-    const device = eng.mod.mach.state.device;
-
+pub fn init(
+    renderer: *mach.Mod(.renderer),
+    engine: *mach.Mod(.engine),
+) !void {
+    const device = engine.state.device;
     const shader_module = device.createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
 
     // Fragment state
@@ -93,18 +93,21 @@ pub fn init(eng: *mach.Engine) !void {
     shader_module.release();
 }
 
-pub fn deinit(eng: *mach.Engine) !void {
-    var renderer = &eng.mod.renderer;
-
+pub fn deinit(
+    renderer: *mach.Mod(.renderer),
+) !void {
     renderer.state.pipeline.release();
     renderer.state.queue.release();
     for (renderer.state.bind_groups) |bind_group| bind_group.release();
     renderer.state.uniform_buffer.release();
 }
 
-pub fn tick(eng: *mach.Engine) !void {
-    var renderer = &eng.mod.renderer;
-    const device = eng.mod.mach.state.device;
+pub fn tick(
+    world: *mach.World,
+    renderer: *mach.Mod(.renderer),
+    engine: *mach.Mod(.engine),
+) !void {
+    const device = engine.state.device;
 
     // Begin our render pass
     const back_buffer_view = core.swap_chain.getCurrentTextureView().?;
@@ -121,7 +124,7 @@ pub fn tick(eng: *mach.Engine) !void {
     });
 
     // Update uniform buffer
-    var archetypes_iter = eng.entities.query(.{ .all = &.{
+    var archetypes_iter = world.entities.query(.{ .all = &.{
         .{ .renderer = &.{ .location, .scale } },
     } });
     var num_entities: usize = 0;

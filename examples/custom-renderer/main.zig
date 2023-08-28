@@ -7,7 +7,7 @@ const Game = @import("Game.zig");
 // The list of modules to be used in our application. Our game itself is implemented in our own
 // module called Game.
 pub const modules = .{
-    mach.Module,
+    mach.Engine,
     Renderer,
     Game,
 };
