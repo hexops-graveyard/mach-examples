@@ -29,7 +29,7 @@ pub const name = .game;
 const Vec2 = @Vector(2, f32);
 
 pub fn init(
-    world: *mach.World,
+    engine: *mach.Mod(.engine),
     renderer: *mach.Mod(.renderer),
     game: *mach.Mod(.game),
 ) !void {
@@ -40,7 +40,7 @@ pub fn init(
     // namespace, e.g. the `.renderer` module could have a 3D `.location` component with a different
     // type than the `.physics2d` module's `.location` component if you desire.
 
-    const player = try world.newEntity();
+    const player = try engine.newEntity();
     try renderer.set(player, .location, .{ 0, 0, 0 });
     try renderer.set(player, .scale, 1.0);
 
@@ -52,7 +52,7 @@ pub fn init(
 }
 
 pub fn tick(
-    world: *mach.World,
+    engine: *mach.Mod(.engine),
     renderer: *mach.Mod(.renderer),
     game: *mach.Mod(.game),
 ) !void {
@@ -82,7 +82,7 @@ pub fn tick(
                     else => {},
                 }
             },
-            .close => try world.send(.engineExit),
+            .close => try engine.send(.exit),
             else => {},
         }
     }
@@ -94,7 +94,7 @@ pub fn tick(
         for (0..10) |_| {
             // Spawn a new follower entity
             _ = game.state.spawn_timer.lap();
-            const new_entity = try world.newEntity();
+            const new_entity = try engine.newEntity();
             try game.set(new_entity, .follower, {});
             try renderer.set(new_entity, .location, player_pos);
             try renderer.set(new_entity, .scale, 1.0 / 6.0);
@@ -105,7 +105,7 @@ pub fn tick(
     const delta_time = game.state.timer.lap();
 
     // Move following entities closer to us.
-    var archetypes_iter = world.entities.query(.{ .all = &.{
+    var archetypes_iter = engine.entities.query(.{ .all = &.{
         .{ .game = &.{.follower} },
     } });
     while (archetypes_iter.next()) |archetype| {
@@ -116,7 +116,7 @@ pub fn tick(
             const close_dist = 1.0 / 15.0;
             var avoidance: Renderer.Vec3 = splat(0);
             var avoidance_div: f32 = 1.0;
-            var archetypes_iter_2 = world.entities.query(.{ .all = &.{
+            var archetypes_iter_2 = engine.entities.query(.{ .all = &.{
                 .{ .game = &.{.follower} },
             } });
             while (archetypes_iter_2.next()) |archetype_2| {

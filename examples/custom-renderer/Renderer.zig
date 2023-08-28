@@ -29,8 +29,8 @@ const UniformBufferObject = packed struct {
 };
 
 pub fn init(
-    renderer: *mach.Mod(.renderer),
     engine: *mach.Mod(.engine),
+    renderer: *mach.Mod(.renderer),
 ) !void {
     const device = engine.state.device;
     const shader_module = device.createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
@@ -103,9 +103,8 @@ pub fn deinit(
 }
 
 pub fn tick(
-    world: *mach.World,
-    renderer: *mach.Mod(.renderer),
     engine: *mach.Mod(.engine),
+    renderer: *mach.Mod(.renderer),
 ) !void {
     const device = engine.state.device;
 
@@ -124,7 +123,7 @@ pub fn tick(
     });
 
     // Update uniform buffer
-    var archetypes_iter = world.entities.query(.{ .all = &.{
+    var archetypes_iter = engine.entities.query(.{ .all = &.{
         .{ .renderer = &.{ .location, .scale } },
     } });
     var num_entities: usize = 0;
