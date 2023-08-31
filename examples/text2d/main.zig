@@ -7,7 +7,7 @@ const Text2D = @import("Text2D.zig");
 // The list of modules to be used in our application. Our game itself is implemented in our own
 // module called Game.
 pub const modules = .{
-    mach.Module,
+    mach.Engine,
     mach.gfx2d.Sprite2D,
     Text2D,
     Game,

@@ -39,25 +39,25 @@ const d0 = 0.000001;
 //
 pub const name = .game;
 
-pub fn init(eng: *mach.Engine) !void {
-    // The eng lets us get a type-safe interface to interact with any module in our program.
-    var sprite2d = &eng.mod.mach_sprite2d;
-    var game = &eng.mod.game;
-
+pub fn init(
+    engine: *mach.Mod(.engine),
+    sprite2d: *mach.Mod(.engine_sprite2d),
+    game: *mach.Mod(.game),
+) !void {
     // The Mach .core is where we set window options, etc.
     core.setTitle("gfx.Sprite2D example");
 
     // We can create entities, and set components on them. Note that components live in a module
-    // namespace, e.g. the `.mach_sprite2d` module could have a 3D `.location` component with a different
+    // namespace, e.g. the `.engine_sprite2d` module could have a 3D `.location` component with a different
     // type than the `.physics2d` module's `.location` component if you desire.
 
-    const player = try eng.newEntity();
+    const player = try engine.newEntity();
     try sprite2d.set(player, .transform, mat.translate3d(.{ -0.02, 0, 0 }));
     try sprite2d.set(player, .size, Vec2{ 32, 32 });
     try sprite2d.set(player, .uv_transform, mat.translate2d(.{ 0, 0 }));
 
-    try loadTexture(eng);
-    try eng.send(.machSprite2DInit);
+    try loadTexture(engine, sprite2d);
+    try sprite2d.send(.init);
 
     game.state = .{
         .timer = try mach.Timer.start(),
@@ -71,11 +71,12 @@ pub fn init(eng: *mach.Engine) !void {
     };
 }
 
-pub fn tick(eng: *mach.Engine) !void {
-    var game = &eng.mod.game;
-    var sprite2d = &eng.mod.mach_sprite2d;
-
-    // TODO(engine): event polling should occur in mach.Module and get fired as ECS events.
+pub fn tick(
+    engine: *mach.Mod(.engine),
+    sprite2d: *mach.Mod(.engine_sprite2d),
+    game: *mach.Mod(.game),
+) !void {
+    // TODO(engine): event polling should occur in mach.Engine module and get fired as ECS events.
     var iter = core.pollEvents();
     var direction = game.state.direction;
     var spawning = game.state.spawning;
@@ -101,7 +102,7 @@ pub fn tick(eng: *mach.Engine) !void {
                     else => {},
                 }
             },
-            .close => try eng.send(.machExit),
+            .close => try engine.send(.exit),
             else => {},
         }
     }
@@ -118,7 +119,7 @@ pub fn tick(eng: *mach.Engine) !void {
             new_pos[0] += game.state.rand.random().floatNorm(f32) * 25;
             new_pos[1] += game.state.rand.random().floatNorm(f32) * 25;
 
-            const new_entity = try eng.newEntity();
+            const new_entity = try engine.newEntity();
             try sprite2d.set(new_entity, .transform, mat.mul(mat.translate3d(new_pos), mat.scale3d(vec.splat(Vec3, 0.3))));
             try sprite2d.set(new_entity, .size, Vec2{ 32, 32 });
             try sprite2d.set(new_entity, .uv_transform, mat.translate2d(.{ 0, 0 }));
@@ -130,12 +131,12 @@ pub fn tick(eng: *mach.Engine) !void {
     const delta_time = game.state.timer.lap();
 
     // Rotate entities
-    var archetypes_iter = eng.entities.query(.{ .all = &.{
-        .{ .mach_sprite2d = &.{.transform} },
+    var archetypes_iter = engine.entities.query(.{ .all = &.{
+        .{ .engine_sprite2d = &.{.transform} },
     } });
     while (archetypes_iter.next()) |archetype| {
         var ids = archetype.slice(.entity, .id);
-        var transforms = archetype.slice(.mach_sprite2d, .transform);
+        var transforms = archetype.slice(.engine_sprite2d, .transform);
         for (ids, transforms) |id, *old_transform| {
             _ = id;
             var location = mat.translation3d(old_transform.*);
@@ -171,13 +172,15 @@ pub fn tick(eng: *mach.Engine) !void {
 }
 
 // TODO: move this helper into gfx2d module
-fn loadTexture(eng: *mach.Engine) !void {
-    var sprite2d = &eng.mod.mach_sprite2d;
-    const device = eng.mod.mach.state.device;
+fn loadTexture(
+    engine: *mach.Mod(.engine),
+    sprite2d: *mach.Mod(.engine_sprite2d),
+) !void {
+    const device = engine.state.device;
     const queue = device.getQueue();
 
     // Load the image from memory
-    var img = try zigimg.Image.fromMemory(eng.allocator, assets.example_spritesheet_image);
+    var img = try zigimg.Image.fromMemory(engine.allocator, assets.example_spritesheet_image);
     defer img.deinit();
     const img_size = gpu.Extent3D{ .width = @as(u32, @intCast(img.width)), .height = @as(u32, @intCast(img.height)) };
 
@@ -198,8 +201,8 @@ fn loadTexture(eng: *mach.Engine) !void {
     switch (img.pixels) {
         .rgba32 => |pixels| queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, pixels),
         .rgb24 => |pixels| {
-            const data = try rgb24ToRgba32(eng.allocator, pixels);
-            defer data.deinit(eng.allocator);
+            const data = try rgb24ToRgba32(engine.allocator, pixels);
+            defer data.deinit(engine.allocator);
             queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, data.rgba32);
         },
         else => @panic("unsupported image color format"),

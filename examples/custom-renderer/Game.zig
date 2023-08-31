@@ -56,7 +56,7 @@ pub fn tick(
     renderer: *mach.Mod(.renderer),
     game: *mach.Mod(.game),
 ) !void {
-    // TODO(engine): event polling should occur in mach.Module and get fired as ECS events.
+    // TODO(engine): event polling should occur in mach.Engine module and get fired as ECS events.
     var iter = core.pollEvents();
     var direction = game.state.direction;
     var spawning = game.state.spawning;
