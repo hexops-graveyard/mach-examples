@@ -57,7 +57,7 @@ pub fn init(
     try sprite2d.set(player, .uv_transform, mat.translate2d(.{ 0, 0 }));
 
     try loadTexture(engine, sprite2d);
-    try sprite2d.send(.init);
+    try sprite2d.send(.init, .{});
 
     game.state = .{
         .timer = try mach.Timer.start(),
@@ -102,7 +102,7 @@ pub fn tick(
                     else => {},
                 }
             },
-            .close => try engine.send(.exit),
+            .close => try engine.send(.exit, .{}),
             else => {},
         }
     }
