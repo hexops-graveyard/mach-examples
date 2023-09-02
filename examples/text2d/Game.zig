@@ -47,17 +47,17 @@ pub fn init(
     core.setTitle("gfx.Sprite2D example");
 
     // Initialize text2D texture
-    try text2d.send(.init);
+    try text2d.send(.init, .{});
 
     // Tell sprite2d to use the texture
     sprite2d.state.texture = text2d.state.texture;
-    try sprite2d.send(.init);
+    try sprite2d.send(.init, .{});
 
     // We can create entities, and set components on them. Note that components live in a module
     // namespace, e.g. the `.engine_sprite2d` module could have a 3D `.location` component with a different
     // type than the `.physics2d` module's `.location` component if you desire.
 
-    const r = text2d.state.question_region;
+    const r = text2d.state.regions.get('?').?;
     const player = try engine.newEntity();
     try sprite2d.set(player, .transform, mat.translate3d(.{ -0.02, 0, 0 }));
     try sprite2d.set(player, .size, Vec2{ @floatFromInt(r.width), @floatFromInt(r.height) });
@@ -107,7 +107,7 @@ pub fn tick(
                     else => {},
                 }
             },
-            .close => try engine.send(.exit),
+            .close => try engine.send(.exit, .{}),
             else => {},
         }
     }
@@ -116,15 +116,17 @@ pub fn tick(
 
     var player_transform = sprite2d.get(game.state.player, .transform).?;
     var player_pos = mat.translation3d(player_transform);
-    if (spawning and game.state.spawn_timer.read() > 1.0 / 60.0) {
+    if (!spawning and game.state.spawn_timer.read() > 1.0 / 60.0) {
         // Spawn new entities
         _ = game.state.spawn_timer.lap();
-        for (0..100) |_| {
+        for (0..50) |_| {
             var new_pos = player_pos;
             new_pos[0] += game.state.rand.random().floatNorm(f32) * 25;
             new_pos[1] += game.state.rand.random().floatNorm(f32) * 25;
 
-            const r = text2d.state.question_region;
+            const rand_index = game.state.rand.random().intRangeAtMost(usize, 0, text2d.state.regions.count() - 1);
+            const r = text2d.state.regions.entries.get(rand_index).value;
+
             const new_entity = try engine.newEntity();
             try sprite2d.set(new_entity, .transform, mat.mul(mat.translate3d(new_pos), mat.scale3d(vec.splat(Vec3, 0.3))));
             try sprite2d.set(new_entity, .size, Vec2{ @floatFromInt(r.width), @floatFromInt(r.height) });
@@ -136,7 +138,7 @@ pub fn tick(
     // Multiply by delta_time to ensure that movement is the same speed regardless of the frame rate.
     const delta_time = game.state.timer.lap();
 
-    // Rotate entities
+    // Animate entities
     var archetypes_iter = engine.entities.query(.{ .all = &.{
         .{ .engine_sprite2d = &.{.transform} },
     } });
@@ -144,15 +146,18 @@ pub fn tick(
         var ids = archetype.slice(.entity, .id);
         var transforms = archetype.slice(.engine_sprite2d, .transform);
         for (ids, transforms) |id, *old_transform| {
-            _ = id;
             var location = mat.translation3d(old_transform.*);
-            // var transform = mat.mul(old_transform, mat.translate3d(-location));
-            // transform = mat.mul(mat.rotateZ(0.3 * delta_time), transform);
-            // transform = mat.mul(transform, mat.translate3d(location));
+            if (location[0] < -@as(f32, @floatFromInt(core.size().width)) / 1.5 or location[0] > @as(f32, @floatFromInt(core.size().width)) / 1.5 or location[1] < -@as(f32, @floatFromInt(core.size().height)) / 1.5 or location[1] > @as(f32, @floatFromInt(core.size().height)) / 1.5) {
+                try engine.entities.remove(id);
+                game.state.sprites -= 1;
+                continue;
+            }
+
             var transform = mat.identity(Mat4x4);
+            transform = mat.mul(transform, mat.scale3d(vec.splat(Vec3, 1.0 + (0.2 * delta_time))));
             transform = mat.mul(transform, mat.translate3d(location));
             transform = mat.mul(transform, mat.rotateZ(2 * std.math.pi * game.state.time));
-            transform = mat.mul(transform, mat.scale3d(vec.splat(Vec3, @min(std.math.cos(game.state.time / 2.0), 1.5))));
+            transform = mat.mul(transform, mat.scale3d(vec.splat(Vec3, @max(std.math.cos(game.state.time / 2.0), 0.2))));
 
             // TODO: .set() API is substantially slower due to internals
             // try sprite2d.set(id, .transform, transform);
@@ -165,7 +170,11 @@ pub fn tick(
     const speed = 200.0;
     player_pos[0] += direction[0] * speed * delta_time;
     player_pos[1] += direction[1] * speed * delta_time;
-    try sprite2d.set(game.state.player, .transform, mat.translate3d(player_pos));
+    player_transform = mat.mul(
+        mat.translate3d(player_pos),
+        mat.scale3d(vec.splat(Vec3, 1.0)),
+    );
+    try sprite2d.set(game.state.player, .transform, player_transform);
 
     // Every second, update the window title with the FPS
     if (game.state.fps_timer.read() >= 1.0) {

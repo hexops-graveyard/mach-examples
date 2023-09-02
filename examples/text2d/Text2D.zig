@@ -7,18 +7,19 @@ const assets = @import("assets");
 
 pub const name = .engine_text2d;
 
+const RegionMap = std.AutoArrayHashMapUnmanaged(u21, mach.Atlas.Region);
+
 texture_atlas: mach.Atlas,
 texture: *gpu.Texture,
 ft: ft.Library,
 face: ft.Face,
-question_region: mach.Atlas.Region,
+regions: RegionMap = .{},
 
 pub fn engineText2dInit(
     engine: *mach.Mod(.engine),
     text2d: *mach.Mod(.engine_text2d),
 ) !void {
     const device = engine.state.device;
-    const queue = device.getQueue();
 
     // rgba32_pixels
     const img_size = gpu.Extent3D{ .width = 1024, .height = 1024 };
@@ -33,10 +34,6 @@ pub fn engineText2dInit(
             .render_attachment = true,
         },
     });
-    const data_layout = gpu.Texture.DataLayout{
-        .bytes_per_row = @as(u32, @intCast(img_size.width * 4)),
-        .rows_per_image = @as(u32, @intCast(img_size.height)),
-    };
 
     var s = &text2d.state;
     s.texture = texture;
@@ -46,46 +43,69 @@ pub fn engineText2dInit(
         .rgba,
     );
 
+    // TODO: state fields' default values do not work
+    s.regions = .{};
+
     s.ft = try ft.Library.init();
     s.face = try s.ft.createFaceMemory(assets.fonts.roboto_medium.bytes, 0);
 
-    const font_size = 48 * 1;
-    try s.face.setCharSize(font_size * 64, 0, 50, 0);
-    try s.face.loadChar('?', .{ .render = true });
-    const glyph = s.face.glyph();
-    const metrics = glyph.metrics();
+    try text2d.send(.prepare, .{&[_]u21{ '?', '!', 'a', 'b', '#', '@', '%', '$', '&', '^', '*', '+', '=', '<', '>', '/', ':', ';', 'Q', '~' }});
+}
 
-    const glyph_bitmap = glyph.bitmap();
-    const glyph_width = glyph_bitmap.width();
-    const glyph_height = glyph_bitmap.rows();
+pub fn engineText2dPrepare(
+    engine: *mach.Mod(.engine),
+    text2d: *mach.Mod(.engine_text2d),
+    codepoints: []const u21,
+) !void {
+    const device = engine.state.device;
+    const queue = device.getQueue();
+    var s = &text2d.state;
 
-    // Add 1 pixel padding to texture to avoid bleeding over other textures
-    const margin = 1;
-    var glyph_data = try engine.allocator.alloc([4]u8, (glyph_width + (margin * 2)) * (glyph_height + (margin * 2)));
-    defer engine.allocator.free(glyph_data);
-    const glyph_buffer = glyph_bitmap.buffer().?;
-    for (glyph_data, 0..) |*data, i| {
-        const x = i % (glyph_width + (margin * 2));
-        const y = i / (glyph_width + (margin * 2));
-        if (x < margin or x > (glyph_width + margin) or y < margin or y > (glyph_height + margin)) {
-            data.* = [4]u8{ 0, 0, 0, 0 };
-        } else {
-            const col = 255 - glyph_buffer[((y - margin) * glyph_width + (x - margin)) % glyph_buffer.len];
-            data.* = [4]u8{ col, col, col, std.math.maxInt(u8) };
+    for (codepoints) |codepoint| {
+        const font_size = 48 * 1;
+        try s.face.setCharSize(font_size * 64, 0, 50, 0);
+        try s.face.loadChar(codepoint, .{ .render = true });
+        const glyph = s.face.glyph();
+        const metrics = glyph.metrics();
+
+        const glyph_bitmap = glyph.bitmap();
+        const glyph_width = glyph_bitmap.width();
+        const glyph_height = glyph_bitmap.rows();
+
+        // Add 1 pixel padding to texture to avoid bleeding over other textures
+        const margin = 1;
+        var glyph_data = try engine.allocator.alloc([4]u8, (glyph_width + (margin * 2)) * (glyph_height + (margin * 2)));
+        defer engine.allocator.free(glyph_data);
+        const glyph_buffer = glyph_bitmap.buffer().?;
+        for (glyph_data, 0..) |*data, i| {
+            const x = i % (glyph_width + (margin * 2));
+            const y = i / (glyph_width + (margin * 2));
+            if (x < margin or x > (glyph_width + margin) or y < margin or y > (glyph_height + margin)) {
+                data.* = [4]u8{ 0, 0, 0, 0 };
+            } else {
+                const alpha = glyph_buffer[((y - margin) * glyph_width + (x - margin)) % glyph_buffer.len];
+                data.* = [4]u8{ 0, 0, 0, alpha };
+            }
         }
+        var glyph_atlas_region = try s.texture_atlas.reserve(engine.allocator, glyph_width + (margin * 2), glyph_height + (margin * 2));
+        s.texture_atlas.set(glyph_atlas_region, @as([*]const u8, @ptrCast(glyph_data.ptr))[0 .. glyph_data.len * 4]);
+
+        glyph_atlas_region.x += margin;
+        glyph_atlas_region.y += margin;
+        glyph_atlas_region.width -= margin * 2;
+        glyph_atlas_region.height -= margin * 2;
+
+        try s.regions.put(engine.allocator, codepoint, glyph_atlas_region);
+        _ = metrics;
     }
-    var glyph_atlas_region = try s.texture_atlas.reserve(engine.allocator, glyph_width + (margin * 2), glyph_height + (margin * 2));
-    s.texture_atlas.set(glyph_atlas_region, @as([*]const u8, @ptrCast(glyph_data.ptr))[0 .. glyph_data.len * 4]);
 
-    glyph_atlas_region.x += margin;
-    glyph_atlas_region.y += margin;
-    glyph_atlas_region.width -= margin * 2;
-    glyph_atlas_region.height -= margin * 2;
-    s.question_region = glyph_atlas_region;
-
+    // rgba32_pixels
+    const img_size = gpu.Extent3D{ .width = 1024, .height = 1024 };
+    const data_layout = gpu.Texture.DataLayout{
+        .bytes_per_row = @as(u32, @intCast(img_size.width * 4)),
+        .rows_per_image = @as(u32, @intCast(img_size.height)),
+    };
     queue.writeTexture(&.{ .texture = s.texture }, &data_layout, &img_size, s.texture_atlas.data);
-
-    _ = metrics;
 }
 
 pub fn deinit(
@@ -96,4 +116,5 @@ pub fn deinit(
     text2d.state.texture.release();
     text2d.state.face.deinit();
     text2d.state.ft.deinit();
+    text2d.state.regions.deinit(engine.allocator);
 }
