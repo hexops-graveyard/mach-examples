@@ -1,7 +1,11 @@
 const std = @import("std");
+
 const mach = @import("mach");
-const gpu = mach.gpu;
 const core = mach.core;
+const gpu = mach.gpu;
+const math = mach.math;
+
+const Vec3 = math.Vec3;
 
 const num_bind_groups = 1024 * 32;
 
@@ -21,10 +25,9 @@ pub const components = struct {
     pub const scale = f32;
 };
 
-pub const Vec3 = @Vector(3, f32);
-
+// TODO: this shouldn't be a packed struct, it should be extern.
 const UniformBufferObject = packed struct {
-    offset: Vec3,
+    offset: Vec3.Vector,
     scale: f32,
 };
 
@@ -135,7 +138,7 @@ pub fn tick(
             _ = id;
 
             const ubo = UniformBufferObject{
-                .offset = location,
+                .offset = location.v,
                 .scale = scale,
             };
             encoder.writeBuffer(renderer.state.uniform_buffer, uniform_offset * num_entities, &[_]UniformBufferObject{ubo});
