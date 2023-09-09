@@ -7,8 +7,9 @@ const gpu = mach.gpu;
 const ecs = mach.ecs;
 const Sprite2D = mach.gfx2d.Sprite2D;
 const math = mach.math;
-const vec = math.vec;
-const mat = math.mat;
+
+const vec2 = math.vec2;
+const vec3 = math.vec3;
 const Vec2 = math.Vec2;
 const Vec3 = math.Vec3;
 const Mat3x3 = math.Mat3x3;
@@ -16,7 +17,7 @@ const Mat4x4 = math.Mat4x4;
 
 timer: mach.Timer,
 player: mach.ecs.EntityID,
-direction: Vec2 = .{ 0, 0 },
+direction: Vec2 = vec2(0, 0),
 spawning: bool = false,
 spawn_timer: mach.Timer,
 fps_timer: mach.Timer,
@@ -52,9 +53,9 @@ pub fn init(
     // type than the `.physics2d` module's `.location` component if you desire.
 
     const player = try engine.newEntity();
-    try sprite2d.set(player, .transform, mat.translate3d(.{ -0.02, 0, 0 }));
-    try sprite2d.set(player, .size, Vec2{ 32, 32 });
-    try sprite2d.set(player, .uv_transform, mat.translate2d(.{ 0, 0 }));
+    try sprite2d.set(player, .transform, Mat4x4.translate(vec3(-0.02, 0, 0)));
+    try sprite2d.set(player, .size, vec2(32, 32));
+    try sprite2d.set(player, .uv_transform, Mat3x3.translate(vec2(0, 0)));
 
     try loadTexture(engine, sprite2d);
     try sprite2d.send(.init, .{});
@@ -84,20 +85,20 @@ pub fn tick(
         switch (event) {
             .key_press => |ev| {
                 switch (ev.key) {
-                    .left => direction[0] -= 1,
-                    .right => direction[0] += 1,
-                    .up => direction[1] += 1,
-                    .down => direction[1] -= 1,
+                    .left => direction.v[0] -= 1,
+                    .right => direction.v[0] += 1,
+                    .up => direction.v[1] += 1,
+                    .down => direction.v[1] -= 1,
                     .space => spawning = true,
                     else => {},
                 }
             },
             .key_release => |ev| {
                 switch (ev.key) {
-                    .left => direction[0] += 1,
-                    .right => direction[0] -= 1,
-                    .up => direction[1] -= 1,
-                    .down => direction[1] += 1,
+                    .left => direction.v[0] += 1,
+                    .right => direction.v[0] -= 1,
+                    .up => direction.v[1] -= 1,
+                    .down => direction.v[1] += 1,
                     .space => spawning = false,
                     else => {},
                 }
@@ -110,19 +111,19 @@ pub fn tick(
     game.state.spawning = spawning;
 
     var player_transform = sprite2d.get(game.state.player, .transform).?;
-    var player_pos = mat.translation3d(player_transform);
+    var player_pos = player_transform.translation();
     if (spawning and game.state.spawn_timer.read() > 1.0 / 60.0) {
         // Spawn new entities
         _ = game.state.spawn_timer.lap();
         for (0..100) |_| {
             var new_pos = player_pos;
-            new_pos[0] += game.state.rand.random().floatNorm(f32) * 25;
-            new_pos[1] += game.state.rand.random().floatNorm(f32) * 25;
+            new_pos.v[0] += game.state.rand.random().floatNorm(f32) * 25;
+            new_pos.v[1] += game.state.rand.random().floatNorm(f32) * 25;
 
             const new_entity = try engine.newEntity();
-            try sprite2d.set(new_entity, .transform, mat.mul(mat.translate3d(new_pos), mat.scale3d(vec.splat(Vec3, 0.3))));
-            try sprite2d.set(new_entity, .size, Vec2{ 32, 32 });
-            try sprite2d.set(new_entity, .uv_transform, mat.translate2d(.{ 0, 0 }));
+            try sprite2d.set(new_entity, .transform, Mat4x4.translate(new_pos).mul(Mat4x4.scale(Vec3.splat(0.3))));
+            try sprite2d.set(new_entity, .size, vec2(32, 32));
+            try sprite2d.set(new_entity, .uv_transform, Mat3x3.translate(vec2(0, 0)));
             game.state.sprites += 1;
         }
     }
@@ -139,14 +140,14 @@ pub fn tick(
         var transforms = archetype.slice(.engine_sprite2d, .transform);
         for (ids, transforms) |id, *old_transform| {
             _ = id;
-            var location = mat.translation3d(old_transform.*);
-            // var transform = mat.mul(old_transform, mat.translate3d(-location));
-            // transform = mat.mul(mat.rotateZ(0.3 * delta_time), transform);
-            // transform = mat.mul(transform, mat.translate3d(location));
-            var transform = mat.identity(Mat4x4);
-            transform = mat.mul(transform, mat.translate3d(location));
-            transform = mat.mul(transform, mat.rotateZ(2 * std.math.pi * game.state.time));
-            transform = mat.mul(transform, mat.scale3d(vec.splat(Vec3, @min(std.math.cos(game.state.time / 2.0), 0.5))));
+            var location = old_transform.*.translation();
+            // var transform = old_transform.mul(Mat4x4.translate(-location));
+            // transform = mat.rotateZ(0.3 * delta_time).mul(transform);
+            // transform = transform.mul(Mat4x4.translate(location));
+            var transform = Mat4x4.ident;
+            transform = transform.mul(Mat4x4.translate(location));
+            transform = transform.mul(Mat4x4.rotateZ(2 * math.pi * game.state.time));
+            transform = transform.mul(Mat4x4.scaleScalar(@min(math.cos(game.state.time / 2.0), 0.5)));
 
             // TODO: .set() API is substantially slower due to internals
             // try sprite2d.set(id, .transform, transform);
@@ -157,9 +158,9 @@ pub fn tick(
     // Calculate the player position, by moving in the direction the player wants to go
     // by the speed amount.
     const speed = 200.0;
-    player_pos[0] += direction[0] * speed * delta_time;
-    player_pos[1] += direction[1] * speed * delta_time;
-    try sprite2d.set(game.state.player, .transform, mat.translate3d(player_pos));
+    player_pos.v[0] += direction.x() * speed * delta_time;
+    player_pos.v[1] += direction.y() * speed * delta_time;
+    try sprite2d.set(game.state.player, .transform, Mat4x4.translate(player_pos));
 
     // Every second, update the window title with the FPS
     if (game.state.fps_timer.read() >= 1.0) {
