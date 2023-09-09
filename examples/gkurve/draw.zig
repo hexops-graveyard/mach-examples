@@ -1,10 +1,13 @@
 const std = @import("std");
+
 const mach = @import("mach");
 const App = @import("main.zig").App;
 const gpu = mach.gpu;
 const math = mach.math;
 const AtlasUV = mach.Atlas.Region.UV;
 
+const Mat4x4 = math.Mat4x4;
+const vec3 = math.vec3;
 const Vec2 = @Vector(2, f32);
 
 pub const Vertex = struct {
@@ -21,7 +24,7 @@ pub const VERTEX_BUFFER_LAYOUT = gpu.VertexBufferLayout{
     .attribute_count = VERTEX_ATTRIBUTES.len,
     .attributes = &VERTEX_ATTRIBUTES,
 };
-pub const VertexUniform = mach.math.Mat4x4;
+pub const VertexUniform = Mat4x4;
 
 const GkurveType = enum(u32) {
     quadratic_convex = 0,
@@ -134,7 +137,7 @@ pub fn getVertexUniformBufferObject() !VertexUniform {
     // 1280x960 (subpixels.) Doing this lets us use a pixel, not subpixel,
     // coordinate system.
     const window_size = mach.core.size();
-    const proj = math.mat.ortho(
+    const proj = Mat4x4.ortho(
         0,
         @floatFromInt(window_size.width),
         0,
@@ -142,6 +145,6 @@ pub fn getVertexUniformBufferObject() !VertexUniform {
         -100,
         100,
     );
-    const mvp = math.mat.mul(proj, math.mat.translate3d(.{ -1, -1, 0 }));
+    const mvp = proj.mul(Mat4x4.translate(vec3(-1, -1, 0)));
     return mvp;
 }

@@ -369,7 +369,7 @@ fn uniteOutsideAndInsideVertices(ctx: *OutlineContext) void {
         std.debug.assert(last_outline.items.len != 0);
         const closest_to_inside: usize = blk: {
             const first_point_inside = ctx.inside_verts.items[0];
-            var min = std.math.floatMax(f32);
+            var min = math.floatMax(f32);
             var closest_index: usize = undefined;
 
             for (last_outline.items, 0..) |item, i| {
