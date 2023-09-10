@@ -40,6 +40,10 @@ const d0 = 0.000001;
 //
 pub const name = .game;
 
+pub const Pipeline = enum(u32) {
+    default,
+};
+
 pub fn init(
     engine: *mach.Mod(.engine),
     sprite2d: *mach.Mod(.engine_sprite2d),
@@ -56,9 +60,11 @@ pub fn init(
     try sprite2d.set(player, .transform, Mat4x4.translate(vec3(-0.02, 0, 0)));
     try sprite2d.set(player, .size, vec2(32, 32));
     try sprite2d.set(player, .uv_transform, Mat3x3.translate(vec2(0, 0)));
+    try sprite2d.set(player, .pipeline, @intFromEnum(Pipeline.default));
 
     try loadTexture(engine, sprite2d);
     try sprite2d.send(.init, .{});
+    try sprite2d.send(.updated, .{@intFromEnum(Pipeline.default)});
 
     game.state = .{
         .timer = try mach.Timer.start(),
@@ -124,6 +130,7 @@ pub fn tick(
             try sprite2d.set(new_entity, .transform, Mat4x4.translate(new_pos).mul(&Mat4x4.scale(Vec3.splat(0.3))));
             try sprite2d.set(new_entity, .size, vec2(32, 32));
             try sprite2d.set(new_entity, .uv_transform, Mat3x3.translate(vec2(0, 0)));
+            try sprite2d.set(new_entity, .pipeline, @intFromEnum(Pipeline.default));
             game.state.sprites += 1;
         }
     }
@@ -161,6 +168,7 @@ pub fn tick(
     player_pos.v[0] += direction.x() * speed * delta_time;
     player_pos.v[1] += direction.y() * speed * delta_time;
     try sprite2d.set(game.state.player, .transform, Mat4x4.translate(player_pos));
+    try sprite2d.send(.updated, .{@intFromEnum(Pipeline.default)});
 
     // Every second, update the window title with the FPS
     if (game.state.fps_timer.read() >= 1.0) {
