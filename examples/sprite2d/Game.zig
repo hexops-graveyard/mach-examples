@@ -121,7 +121,7 @@ pub fn tick(
             new_pos.v[1] += game.state.rand.random().floatNorm(f32) * 25;
 
             const new_entity = try engine.newEntity();
-            try sprite2d.set(new_entity, .transform, Mat4x4.translate(new_pos).mul(Mat4x4.scale(Vec3.splat(0.3))));
+            try sprite2d.set(new_entity, .transform, Mat4x4.translate(new_pos).mul(&Mat4x4.scale(Vec3.splat(0.3))));
             try sprite2d.set(new_entity, .size, vec2(32, 32));
             try sprite2d.set(new_entity, .uv_transform, Mat3x3.translate(vec2(0, 0)));
             game.state.sprites += 1;
@@ -141,13 +141,13 @@ pub fn tick(
         for (ids, transforms) |id, *old_transform| {
             _ = id;
             var location = old_transform.*.translation();
-            // var transform = old_transform.mul(Mat4x4.translate(-location));
-            // transform = mat.rotateZ(0.3 * delta_time).mul(transform);
-            // transform = transform.mul(Mat4x4.translate(location));
+            // var transform = old_transform.mul(&Mat4x4.translate(-location));
+            // transform = mat.rotateZ(0.3 * delta_time).mul(&transform);
+            // transform = transform.mul(&Mat4x4.translate(location));
             var transform = Mat4x4.ident;
-            transform = transform.mul(Mat4x4.translate(location));
-            transform = transform.mul(Mat4x4.rotateZ(2 * math.pi * game.state.time));
-            transform = transform.mul(Mat4x4.scaleScalar(@min(math.cos(game.state.time / 2.0), 0.5)));
+            transform = transform.mul(&Mat4x4.translate(location));
+            transform = transform.mul(&Mat4x4.rotateZ(2 * math.pi * game.state.time));
+            transform = transform.mul(&Mat4x4.scaleScalar(@min(math.cos(game.state.time / 2.0), 0.5)));
 
             // TODO: .set() API is substantially slower due to internals
             // try sprite2d.set(id, .transform, transform);

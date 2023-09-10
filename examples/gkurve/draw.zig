@@ -145,6 +145,6 @@ pub fn getVertexUniformBufferObject() !VertexUniform {
         -100,
         100,
     );
-    const mvp = proj.mul(Mat4x4.translate(vec3(-1, -1, 0)));
+    const mvp = proj.mul(&Mat4x4.translate(vec3(-1, -1, 0)));
     return mvp;
 }

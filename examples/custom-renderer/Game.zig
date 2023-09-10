@@ -127,26 +127,26 @@ pub fn tick(
                 var other_locations = archetype_2.slice(.renderer, .location);
                 for (other_ids, other_locations) |other_id, other_location| {
                     if (id == other_id) continue;
-                    if (location.dist(other_location) < close_dist) {
-                        avoidance = avoidance.sub(location.dir(other_location, 0.0000001));
+                    if (location.dist(&other_location) < close_dist) {
+                        avoidance = avoidance.sub(&location.dir(&other_location, 0.0000001));
                         avoidance_div += 1.0;
                     }
                 }
             }
             // Avoid the player
             var avoid_player_multiplier: f32 = 1.0;
-            if (location.dist(player_pos) < close_dist * 6.0) {
-                avoidance = avoidance.sub(location.dir(player_pos, 0.0000001));
+            if (location.dist(&player_pos) < close_dist * 6.0) {
+                avoidance = avoidance.sub(&location.dir(&player_pos, 0.0000001));
                 avoidance_div += 1.0;
                 avoid_player_multiplier = 4.0;
             }
 
             // Move away from things we want to avoid
             var move_speed = 1.0 * delta_time;
-            var new_location = location.add(avoidance.divScalar(avoidance_div).mulScalar(move_speed * avoid_player_multiplier));
+            var new_location = location.add(&avoidance.divScalar(avoidance_div).mulScalar(move_speed * avoid_player_multiplier));
 
             // Move towards the center
-            new_location = new_location.lerp(vec3(0, 0, 0), move_speed / avoidance_div);
+            new_location = new_location.lerp(&vec3(0, 0, 0), move_speed / avoidance_div);
             try renderer.set(id, .location, new_location);
         }
     }

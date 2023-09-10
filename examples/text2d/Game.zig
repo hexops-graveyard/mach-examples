@@ -128,7 +128,7 @@ pub fn tick(
             const r = text2d.state.regions.entries.get(rand_index).value;
 
             const new_entity = try engine.newEntity();
-            try sprite2d.set(new_entity, .transform, Mat4x4.translate(new_pos).mul(Mat4x4.scaleScalar(0.3)));
+            try sprite2d.set(new_entity, .transform, Mat4x4.translate(new_pos).mul(&Mat4x4.scaleScalar(0.3)));
             try sprite2d.set(new_entity, .size, vec2(@floatFromInt(r.width), @floatFromInt(r.height)));
             try sprite2d.set(new_entity, .uv_transform, Mat3x3.translate(vec2(@floatFromInt(r.x), @floatFromInt(r.y))));
             game.state.sprites += 1;
@@ -154,10 +154,10 @@ pub fn tick(
             }
 
             var transform = Mat4x4.ident;
-            transform = transform.mul(Mat4x4.scale(Vec3.splat(1.0 + (0.2 * delta_time))));
-            transform = transform.mul(Mat4x4.translate(location));
-            transform = transform.mul(Mat4x4.rotateZ(2 * math.pi * game.state.time));
-            transform = transform.mul(Mat4x4.scale(Vec3.splat(@max(math.cos(game.state.time / 2.0), 0.2))));
+            transform = transform.mul(&Mat4x4.scale(Vec3.splat(1.0 + (0.2 * delta_time))));
+            transform = transform.mul(&Mat4x4.translate(location));
+            transform = transform.mul(&Mat4x4.rotateZ(2 * math.pi * game.state.time));
+            transform = transform.mul(&Mat4x4.scale(Vec3.splat(@max(math.cos(game.state.time / 2.0), 0.2))));
 
             // TODO: .set() API is substantially slower due to internals
             // try sprite2d.set(id, .transform, transform);
@@ -171,7 +171,7 @@ pub fn tick(
     player_pos.v[0] += direction.x() * speed * delta_time;
     player_pos.v[1] += direction.y() * speed * delta_time;
     player_transform = Mat4x4.translate(player_pos).mul(
-        Mat4x4.scale(Vec3.splat(1.0)),
+        &Mat4x4.scale(Vec3.splat(1.0)),
     );
     try sprite2d.set(game.state.player, .transform, player_transform);
 
