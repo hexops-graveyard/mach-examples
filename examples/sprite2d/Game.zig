@@ -62,8 +62,11 @@ pub fn init(
     try sprite2d.set(player, .uv_transform, Mat3x3.translate(vec2(0, 0)));
     try sprite2d.set(player, .pipeline, @intFromEnum(Pipeline.default));
 
-    try loadTexture(engine, sprite2d);
     try sprite2d.send(.init, .{});
+    try sprite2d.send(.initPipeline, .{Sprite2D.PipelineOptions{
+        .pipeline = @intFromEnum(Pipeline.default),
+        .texture = try loadTexture(engine),
+    }});
     try sprite2d.send(.updated, .{@intFromEnum(Pipeline.default)});
 
     game.state = .{
@@ -170,6 +173,15 @@ pub fn tick(
     try sprite2d.set(game.state.player, .transform, Mat4x4.translate(player_pos));
     try sprite2d.send(.updated, .{@intFromEnum(Pipeline.default)});
 
+    // Perform pre-render work
+    try sprite2d.send(.preRender, .{@intFromEnum(Pipeline.default)});
+
+    // Render a frame
+    try engine.send(.beginPass, .{gpu.Color{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 }});
+    try sprite2d.send(.render, .{@intFromEnum(Pipeline.default)});
+    try engine.send(.endPass, .{});
+    try engine.send(.present, .{}); // Present the frame
+
     // Every second, update the window title with the FPS
     if (game.state.fps_timer.read() >= 1.0) {
         try core.printTitle("gfx.Sprite2D example [ FPS: {d} ] [ Sprites: {d} ]", .{ game.state.frame_count, game.state.sprites });
@@ -183,8 +195,7 @@ pub fn tick(
 // TODO: move this helper into gfx2d module
 fn loadTexture(
     engine: *mach.Mod(.engine),
-    sprite2d: *mach.Mod(.engine_sprite2d),
-) !void {
+) !*gpu.Texture {
     const device = engine.state.device;
     const queue = device.getQueue();
 
@@ -216,9 +227,7 @@ fn loadTexture(
         },
         else => @panic("unsupported image color format"),
     }
-
-    // Tell sprite2d to use the texture
-    sprite2d.state.texture = texture;
+    return texture;
 }
 
 fn rgb24ToRgba32(allocator: std.mem.Allocator, in: []zigimg.color.Rgb24) !zigimg.color.PixelStorage {
