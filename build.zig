@@ -83,7 +83,6 @@ pub fn build(b: *std.Build) !void {
 
         var deps = std.ArrayList(std.Build.ModuleDependency).init(b.allocator);
         for (example.deps) |d| try deps.append(d.moduleDependency(b, target, optimize));
-        mach.mach_glfw_import_path = "mach.mach_core.mach_glfw";
         const app = try mach.App.init(
             b,
             .{
@@ -104,12 +103,10 @@ pub fn build(b: *std.Build) !void {
                 .target = target,
                 .optimize = optimize,
             }).artifact("mach-model3d")),
-            .freetype => @import("mach_freetype").linkFreetype(
-                b,
-                optimize,
-                target,
-                app.compile,
-            ),
+            .freetype => @import("mach_freetype").linkFreetype(b.dependency("mach_freetype", .{
+                .target = target,
+                .optimize = optimize,
+            }).builder, app.compile),
             else => {},
         };
 
