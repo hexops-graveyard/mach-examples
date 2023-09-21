@@ -67,7 +67,7 @@ pub fn build(b: *std.Build) !void {
             .deps = &.{ .zigimg, .assets },
         },
         .{
-            .name = "text2d",
+            .name = "glyphs",
             .deps = &.{ .zigimg, .freetype, .assets },
         },
     }) |example| {
