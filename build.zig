@@ -63,11 +63,11 @@ pub fn build(b: *std.Build) !void {
         },
         .{ .name = "custom-renderer", .deps = &.{} },
         .{
-            .name = "sprite2d",
+            .name = "sprite",
             .deps = &.{ .zigimg, .assets },
         },
         .{
-            .name = "text2d",
+            .name = "text",
             .deps = &.{ .freetype, .assets },
         },
         .{

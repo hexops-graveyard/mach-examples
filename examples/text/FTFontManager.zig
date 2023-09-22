@@ -3,10 +3,10 @@ const ft = @import("freetype");
 const mach = @import("mach");
 const math = mach.math;
 const vec2 = math.vec2;
-const FontRenderer = mach.gfx2d.FontRenderer;
-const RGBA32 = mach.gfx2d.RGBA32;
-const Glyph = mach.gfx2d.Glyph;
-const GlyphMetrics = mach.gfx2d.GlyphMetrics;
+const FontRenderer = mach.gfx.FontRenderer;
+const RGBA32 = mach.gfx.RGBA32;
+const Glyph = mach.gfx.Glyph;
+const GlyphMetrics = mach.gfx.GlyphMetrics;
 
 freetype: ft.Library,
 faces: FaceMap = .{},

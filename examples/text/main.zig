@@ -7,7 +7,7 @@ const Game = @import("Game.zig");
 // module called Game.
 pub const modules = .{
     mach.Engine,
-    mach.gfx2d.Text2D,
+    mach.gfx.Text,
     Game,
 };
 

@@ -7,8 +7,8 @@
             .hash = "12208c69b00540fe3f38893800fb6c89a9fe27b4a687de5d0462e498a43db4caeec0",
         },
         .mach = .{
-            .url = "https://pkg.machengine.org/mach/932a0a99798c5a3f4b9957338e24f49690e82dbe.tar.gz",
-            .hash = "122030fc1a80609a9e65e1ada987187d6231880418e977907180f80d100a65b7042b",
+            .url = "https://pkg.machengine.org/mach/c16cddd2509092f9201de08c8eed97c110526bd0.tar.gz",
+            .hash = "1220de48e37fad71bae32c505c86bd706df41718033b8ab3ee8241c82ab8fb7bd34c",
         },
         .mach_freetype = .{
             .url = "https://pkg.machengine.org/mach-freetype/92773615e2480c0a6f561748f2ba1180376bbb68.tar.gz",

@@ -5,7 +5,7 @@ const mach = @import("mach");
 const core = mach.core;
 const gpu = mach.gpu;
 const ecs = mach.ecs;
-const Text2D = mach.gfx2d.Text2D;
+const Text = mach.gfx.Text;
 const FTFontManager = @import("FTFontManager.zig");
 const math = mach.math;
 
@@ -47,20 +47,20 @@ pub const Pipeline = enum(u32) {
 };
 
 var fonts: FTFontManager = undefined;
-var font: mach.gfx2d.FontRenderer = undefined;
+var font: mach.gfx.FontRenderer = undefined;
 
 const upscale = 1.0;
 
 pub fn init(
     engine: *mach.Mod(.engine),
-    text2d: *mach.Mod(.engine_text2d),
+    text_mod: *mach.Mod(.mach_gfx_text),
     game: *mach.Mod(.game),
 ) !void {
     // The Mach .core is where we set window options, etc.
-    core.setTitle("gfx.Text2D example");
+    core.setTitle("gfx.Text example");
 
     // We can create entities, and set components on them. Note that components live in a module
-    // namespace, e.g. the `.engine_text2d` module could have a 3D `.location` component with a different
+    // namespace, e.g. the `.mach_gfx_text` module could have a 3D `.location` component with a different
     // type than the `.physics2d` module's `.location` component if you desire.
 
     fonts = try FTFontManager.init();
@@ -74,18 +74,18 @@ pub fn init(
     font = try fonts.renderer("Roboto Medium", 0);
 
     const player = try engine.newEntity();
-    try text2d.set(player, .pipeline, @intFromEnum(Pipeline.default));
-    try text2d.set(player, .transform, Mat4x4.scaleScalar(upscale).mul(&Mat4x4.translate(vec3(0, 0, 0))));
-    try text2d.set(player, .text, "Text2D but with spaces 😊 :) :) :)\nand\nnewlines!");
-    try text2d.set(player, .font, font);
-    try text2d.set(player, .font_size, 48);
-    try text2d.set(player, .color, vec4(0.6, 1.0, 0.6, 1.0));
+    try text_mod.set(player, .pipeline, @intFromEnum(Pipeline.default));
+    try text_mod.set(player, .transform, Mat4x4.scaleScalar(upscale).mul(&Mat4x4.translate(vec3(0, 0, 0))));
+    try text_mod.set(player, .text, "Text but with spaces 😊 :) :) :)\nand\nnewlines!");
+    try text_mod.set(player, .font, font);
+    try text_mod.set(player, .font_size, 48);
+    try text_mod.set(player, .color, vec4(0.6, 1.0, 0.6, 1.0));
 
-    try text2d.send(.init, .{});
-    try text2d.send(.initPipeline, .{Text2D.PipelineOptions{
+    try text_mod.send(.init, .{});
+    try text_mod.send(.initPipeline, .{Text.PipelineOptions{
         .pipeline = @intFromEnum(Pipeline.default),
     }});
-    try text2d.send(.updated, .{@intFromEnum(Pipeline.default)});
+    try text_mod.send(.updated, .{@intFromEnum(Pipeline.default)});
 
     game.state = .{
         .timer = try mach.Timer.start(),
@@ -105,7 +105,7 @@ pub fn deinit(engine: *mach.Mod(.engine)) !void {
 
 pub fn tick(
     engine: *mach.Mod(.engine),
-    text2d: *mach.Mod(.engine_text2d),
+    text_mod: *mach.Mod(.mach_gfx_text),
     game: *mach.Mod(.game),
 ) !void {
     // TODO(engine): event polling should occur in mach.Engine module and get fired as ECS events.
@@ -141,7 +141,7 @@ pub fn tick(
     game.state.direction = direction;
     game.state.spawning = spawning;
 
-    var player_transform = text2d.get(game.state.player, .transform).?;
+    var player_transform = text_mod.get(game.state.player, .transform).?;
     var player_pos = player_transform.translation().divScalar(upscale);
     if (spawning and game.state.spawn_timer.read() > 1.0 / 60.0) {
         // Spawn new entities
@@ -152,13 +152,13 @@ pub fn tick(
             new_pos.v[1] += game.state.rand.random().floatNorm(f32) * 25;
 
             const new_entity = try engine.newEntity();
-            try text2d.set(new_entity, .pipeline, @intFromEnum(Pipeline.default));
-            try text2d.set(new_entity, .transform, Mat4x4.scaleScalar(upscale).mul(&Mat4x4.translate(new_pos)));
-            try text2d.set(new_entity, .text, "!$?");
-            try text2d.set(new_entity, .font, font);
+            try text_mod.set(new_entity, .pipeline, @intFromEnum(Pipeline.default));
+            try text_mod.set(new_entity, .transform, Mat4x4.scaleScalar(upscale).mul(&Mat4x4.translate(new_pos)));
+            try text_mod.set(new_entity, .text, "!$?");
+            try text_mod.set(new_entity, .font, font);
             // TODO: if this font size is different, there's a panic
-            try text2d.set(new_entity, .font_size, 48);
-            try text2d.set(new_entity, .color, vec4(0.6, 1.0, 0.6, 1.0));
+            try text_mod.set(new_entity, .font_size, 48);
+            try text_mod.set(new_entity, .color, vec4(0.6, 1.0, 0.6, 1.0));
             game.state.texts += 1;
         }
     }
@@ -168,11 +168,11 @@ pub fn tick(
 
     // Rotate entities
     var archetypes_iter = engine.entities.query(.{ .all = &.{
-        .{ .engine_text2d = &.{.transform} },
+        .{ .mach_gfx_text = &.{.transform} },
     } });
     while (archetypes_iter.next()) |archetype| {
         var ids = archetype.slice(.entity, .id);
-        var transforms = archetype.slice(.engine_text2d, .transform);
+        var transforms = archetype.slice(.mach_gfx_text, .transform);
         for (ids, transforms) |id, *old_transform| {
             _ = id;
             var location = old_transform.*.translation();
@@ -185,7 +185,7 @@ pub fn tick(
             transform = transform.mul(&Mat4x4.scaleScalar(@min(math.cos(game.state.time / 2.0), 0.5)));
 
             // TODO: .set() API is substantially slower due to internals
-            // try text2d.set(id, .transform, transform);
+            // try text_mod.set(id, .transform, transform);
             old_transform.* = transform;
         }
     }
@@ -195,21 +195,21 @@ pub fn tick(
     const speed = 200.0 / upscale;
     player_pos.v[0] += direction.x() * speed * delta_time;
     player_pos.v[1] += direction.y() * speed * delta_time;
-    try text2d.set(game.state.player, .transform, Mat4x4.scaleScalar(upscale).mul(&Mat4x4.translate(player_pos)));
-    try text2d.send(.updated, .{@intFromEnum(Pipeline.default)});
+    try text_mod.set(game.state.player, .transform, Mat4x4.scaleScalar(upscale).mul(&Mat4x4.translate(player_pos)));
+    try text_mod.send(.updated, .{@intFromEnum(Pipeline.default)});
 
     // Perform pre-render work
-    try text2d.send(.preRender, .{@intFromEnum(Pipeline.default)});
+    try text_mod.send(.preRender, .{@intFromEnum(Pipeline.default)});
 
     // Render a frame
     try engine.send(.beginPass, .{gpu.Color{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 }});
-    try text2d.send(.render, .{@intFromEnum(Pipeline.default)});
+    try text_mod.send(.render, .{@intFromEnum(Pipeline.default)});
     try engine.send(.endPass, .{});
     try engine.send(.present, .{}); // Present the frame
 
     // Every second, update the window title with the FPS
     if (game.state.fps_timer.read() >= 1.0) {
-        try core.printTitle("gfx.Text2D example [ FPS: {d} ] [ Texts: {d} ]", .{ game.state.frame_count, game.state.texts });
+        try core.printTitle("gfx.Text example [ FPS: {d} ] [ Texts: {d} ]", .{ game.state.frame_count, game.state.texts });
         game.state.fps_timer.reset();
         game.state.frame_count = 0;
     }

@@ -3,7 +3,7 @@ const mach = @import("mach");
 const core = mach.core;
 const gpu = mach.gpu;
 const ecs = mach.ecs;
-const Sprite2D = mach.gfx2d.Sprite2D;
+const Sprite = mach.gfx.Sprite;
 const math = mach.math;
 const vec2 = math.vec2;
 const vec3 = math.vec3;
@@ -44,34 +44,34 @@ pub const Pipeline = enum(u32) {
 
 pub fn init(
     engine: *mach.Mod(.engine),
-    sprite2d: *mach.Mod(.engine_sprite2d),
-    text2d: *mach.Mod(.engine_text2d),
+    sprite_mod: *mach.Mod(.mach_gfx_sprite),
+    text_mod: *mach.Mod(.game_text),
     game: *mach.Mod(.game),
 ) !void {
     // The Mach .core is where we set window options, etc.
-    core.setTitle("gfx.Sprite2D example");
+    core.setTitle("gfx.Sprite example");
 
-    // Initialize text2D texture
-    try text2d.send(.init, .{});
+    // Initialize mach.gfx.Text module
+    try text_mod.send(.init, .{});
 
-    // Tell sprite2d to use the texture
-    try sprite2d.send(.init, .{});
-    try sprite2d.send(.initPipeline, .{Sprite2D.PipelineOptions{
+    // Tell sprite_mod to use the texture
+    try sprite_mod.send(.init, .{});
+    try sprite_mod.send(.initPipeline, .{Sprite.PipelineOptions{
         .pipeline = @intFromEnum(Pipeline.text),
-        .texture = text2d.state.texture,
+        .texture = text_mod.state.texture,
     }});
 
     // We can create entities, and set components on them. Note that components live in a module
-    // namespace, e.g. the `.engine_sprite2d` module could have a 3D `.location` component with a different
+    // namespace, e.g. the `.mach_gfx_sprite` module could have a 3D `.location` component with a different
     // type than the `.physics2d` module's `.location` component if you desire.
 
-    const r = text2d.state.regions.get('?').?;
+    const r = text_mod.state.regions.get('?').?;
     const player = try engine.newEntity();
-    try sprite2d.set(player, .transform, Mat4x4.translate(vec3(-0.02, 0, 0)));
-    try sprite2d.set(player, .size, vec2(@floatFromInt(r.width), @floatFromInt(r.height)));
-    try sprite2d.set(player, .uv_transform, Mat3x3.translate(vec2(@floatFromInt(r.x), @floatFromInt(r.y))));
-    try sprite2d.set(player, .pipeline, @intFromEnum(Pipeline.text));
-    try sprite2d.send(.updated, .{@intFromEnum(Pipeline.text)});
+    try sprite_mod.set(player, .transform, Mat4x4.translate(vec3(-0.02, 0, 0)));
+    try sprite_mod.set(player, .size, vec2(@floatFromInt(r.width), @floatFromInt(r.height)));
+    try sprite_mod.set(player, .uv_transform, Mat3x3.translate(vec2(@floatFromInt(r.x), @floatFromInt(r.y))));
+    try sprite_mod.set(player, .pipeline, @intFromEnum(Pipeline.text));
+    try sprite_mod.send(.updated, .{@intFromEnum(Pipeline.text)});
 
     game.state = .{
         .timer = try mach.Timer.start(),
@@ -87,8 +87,8 @@ pub fn init(
 
 pub fn tick(
     engine: *mach.Mod(.engine),
-    sprite2d: *mach.Mod(.engine_sprite2d),
-    text2d: *mach.Mod(.engine_text2d),
+    sprite_mod: *mach.Mod(.mach_gfx_sprite),
+    text_mod: *mach.Mod(.game_text),
     game: *mach.Mod(.game),
 ) !void {
     // TODO(engine): event polling should occur in mach.Engine module and get fired as ECS events.
@@ -124,7 +124,7 @@ pub fn tick(
     game.state.direction = direction;
     game.state.spawning = spawning;
 
-    var player_transform = sprite2d.get(game.state.player, .transform).?;
+    var player_transform = sprite_mod.get(game.state.player, .transform).?;
     var player_pos = player_transform.translation();
     if (!spawning and game.state.spawn_timer.read() > 1.0 / 60.0) {
         // Spawn new entities
@@ -134,14 +134,14 @@ pub fn tick(
             new_pos.v[0] += game.state.rand.random().floatNorm(f32) * 25;
             new_pos.v[1] += game.state.rand.random().floatNorm(f32) * 25;
 
-            const rand_index = game.state.rand.random().intRangeAtMost(usize, 0, text2d.state.regions.count() - 1);
-            const r = text2d.state.regions.entries.get(rand_index).value;
+            const rand_index = game.state.rand.random().intRangeAtMost(usize, 0, text_mod.state.regions.count() - 1);
+            const r = text_mod.state.regions.entries.get(rand_index).value;
 
             const new_entity = try engine.newEntity();
-            try sprite2d.set(new_entity, .transform, Mat4x4.translate(new_pos).mul(&Mat4x4.scaleScalar(0.3)));
-            try sprite2d.set(new_entity, .size, vec2(@floatFromInt(r.width), @floatFromInt(r.height)));
-            try sprite2d.set(new_entity, .uv_transform, Mat3x3.translate(vec2(@floatFromInt(r.x), @floatFromInt(r.y))));
-            try sprite2d.set(new_entity, .pipeline, @intFromEnum(Pipeline.text));
+            try sprite_mod.set(new_entity, .transform, Mat4x4.translate(new_pos).mul(&Mat4x4.scaleScalar(0.3)));
+            try sprite_mod.set(new_entity, .size, vec2(@floatFromInt(r.width), @floatFromInt(r.height)));
+            try sprite_mod.set(new_entity, .uv_transform, Mat3x3.translate(vec2(@floatFromInt(r.x), @floatFromInt(r.y))));
+            try sprite_mod.set(new_entity, .pipeline, @intFromEnum(Pipeline.text));
             game.state.sprites += 1;
         }
     }
@@ -151,11 +151,11 @@ pub fn tick(
 
     // Animate entities
     var archetypes_iter = engine.entities.query(.{ .all = &.{
-        .{ .engine_sprite2d = &.{.transform} },
+        .{ .mach_gfx_sprite = &.{.transform} },
     } });
     while (archetypes_iter.next()) |archetype| {
         var ids = archetype.slice(.entity, .id);
-        var transforms = archetype.slice(.engine_sprite2d, .transform);
+        var transforms = archetype.slice(.mach_gfx_sprite, .transform);
         for (ids, transforms) |id, *old_transform| {
             var location = old_transform.translation();
             if (location.x() < -@as(f32, @floatFromInt(core.size().width)) / 1.5 or location.x() > @as(f32, @floatFromInt(core.size().width)) / 1.5 or location.y() < -@as(f32, @floatFromInt(core.size().height)) / 1.5 or location.y() > @as(f32, @floatFromInt(core.size().height)) / 1.5) {
@@ -171,7 +171,7 @@ pub fn tick(
             transform = transform.mul(&Mat4x4.scale(Vec3.splat(@max(math.cos(game.state.time / 2.0), 0.2))));
 
             // TODO: .set() API is substantially slower due to internals
-            // try sprite2d.set(id, .transform, transform);
+            // try sprite_mod.set(id, .transform, transform);
             old_transform.* = transform;
         }
     }
@@ -184,22 +184,22 @@ pub fn tick(
     player_transform = Mat4x4.translate(player_pos).mul(
         &Mat4x4.scale(Vec3.splat(1.0)),
     );
-    try sprite2d.set(game.state.player, .transform, player_transform);
+    try sprite_mod.set(game.state.player, .transform, player_transform);
 
-    try sprite2d.send(.updated, .{@intFromEnum(Pipeline.text)});
+    try sprite_mod.send(.updated, .{@intFromEnum(Pipeline.text)});
 
     // Perform pre-render work
-    try sprite2d.send(.preRender, .{@intFromEnum(Pipeline.text)});
+    try sprite_mod.send(.preRender, .{@intFromEnum(Pipeline.text)});
 
     // Render a frame
     try engine.send(.beginPass, .{gpu.Color{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 }});
-    try sprite2d.send(.render, .{@intFromEnum(Pipeline.text)});
+    try sprite_mod.send(.render, .{@intFromEnum(Pipeline.text)});
     try engine.send(.endPass, .{});
     try engine.send(.present, .{}); // Present the frame
 
     // Every second, update the window title with the FPS
     if (game.state.fps_timer.read() >= 1.0) {
-        try core.printTitle("gfx.Sprite2D example [ FPS: {d} ] [ Sprites: {d} ]", .{ game.state.frame_count, game.state.sprites });
+        try core.printTitle("gfx.Sprite example [ FPS: {d} ] [ Sprites: {d} ]", .{ game.state.frame_count, game.state.sprites });
         game.state.fps_timer.reset();
         game.state.frame_count = 0;
     }
