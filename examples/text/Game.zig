@@ -6,7 +6,7 @@ const core = mach.core;
 const gpu = mach.gpu;
 const ecs = mach.ecs;
 const Text = mach.gfx.Text;
-const FTFontManager = @import("FTFontManager.zig");
+// const FTFontManager = @import("FTFontManager.zig");
 const math = mach.math;
 
 const vec2 = math.vec2;
@@ -46,9 +46,6 @@ pub const Pipeline = enum(u32) {
     default,
 };
 
-var fonts: FTFontManager = undefined;
-var font: mach.gfx.FontRenderer = undefined;
-
 const upscale = 1.0;
 
 pub fn init(
@@ -63,21 +60,11 @@ pub fn init(
     // namespace, e.g. the `.mach_gfx_text` module could have a 3D `.location` component with a different
     // type than the `.physics2d` module's `.location` component if you desire.
 
-    fonts = try FTFontManager.init();
-    _ = try fonts.ensureFontFaceBytes(
-        engine.allocator,
-        // TODO: put these params into a struct for passing identically into .renderer()
-        "Roboto Medium",
-        0,
-        assets.fonts.roboto_medium.bytes,
-    );
-    font = try fonts.renderer("Roboto Medium", 0);
-
     const player = try engine.newEntity();
     try text_mod.set(player, .pipeline, @intFromEnum(Pipeline.default));
     try text_mod.set(player, .transform, Mat4x4.scaleScalar(upscale).mul(&Mat4x4.translate(vec3(0, 0, 0))));
     try text_mod.set(player, .text, "Text but with spaces 😊 :) :) :)\nand\nnewlines!");
-    try text_mod.set(player, .font, font);
+    try text_mod.set(player, .font_name, "Roboto Medium"); // TODO
     try text_mod.set(player, .font_size, 48);
     try text_mod.set(player, .color, vec4(0.6, 1.0, 0.6, 1.0));
 
@@ -100,7 +87,7 @@ pub fn init(
 }
 
 pub fn deinit(engine: *mach.Mod(.engine)) !void {
-    fonts.deinit(engine.allocator);
+    _ = engine;
 }
 
 pub fn tick(
@@ -155,8 +142,7 @@ pub fn tick(
             try text_mod.set(new_entity, .pipeline, @intFromEnum(Pipeline.default));
             try text_mod.set(new_entity, .transform, Mat4x4.scaleScalar(upscale).mul(&Mat4x4.translate(new_pos)));
             try text_mod.set(new_entity, .text, "!$?");
-            try text_mod.set(new_entity, .font, font);
-            // TODO: if this font size is different, there's a panic
+            try text_mod.set(new_entity, .font_name, "Roboto Medium"); // TODO
             try text_mod.set(new_entity, .font_size, 48);
             try text_mod.set(new_entity, .color, vec4(0.6, 1.0, 0.6, 1.0));
             game.state.texts += 1;
