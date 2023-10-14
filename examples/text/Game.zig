@@ -3,10 +3,10 @@ const zigimg = @import("zigimg");
 const assets = @import("assets");
 const mach = @import("mach");
 const core = mach.core;
+const gfx = mach.gfx;
 const gpu = mach.gpu;
 const ecs = mach.ecs;
 const Text = mach.gfx.Text;
-// const FTFontManager = @import("FTFontManager.zig");
 const math = mach.math;
 
 const vec2 = math.vec2;
@@ -56,17 +56,35 @@ pub fn init(
     // The Mach .core is where we set window options, etc.
     core.setTitle("gfx.Text example");
 
-    // We can create entities, and set components on them. Note that components live in a module
-    // namespace, e.g. the `.mach_gfx_text` module could have a 3D `.location` component with a different
-    // type than the `.physics2d` module's `.location` component if you desire.
-
+    // Create some text
     const player = try engine.newEntity();
     try text_mod.set(player, .pipeline, @intFromEnum(Pipeline.default));
     try text_mod.set(player, .transform, Mat4x4.scaleScalar(upscale).mul(&Mat4x4.translate(vec3(0, 0, 0))));
-    try text_mod.set(player, .text, "Text but with spaces 😊 :) :) :)\nand\nnewlines!");
-    try text_mod.set(player, .font_name, "Roboto Medium"); // TODO
-    try text_mod.set(player, .font_size, 48);
-    try text_mod.set(player, .color, vec4(0.6, 1.0, 0.6, 1.0));
+    const style1 = Text.Style{
+        .font_name = "Roboto Medium", // TODO
+        .font_size = 48 * gfx.px_per_pt, // 48pt
+        .font_weight = gfx.font_weight_normal,
+        .italic = false,
+        .color = vec4(0.6, 1.0, 0.6, 1.0),
+    };
+    var style2 = style1;
+    style2.italic = true;
+    var style3 = style1;
+    style3.font_weight = gfx.font_weight_bold;
+    try text_mod.set(player, .text, &.{
+        .{
+            .string = "Text but with spaces 😊\nand\n",
+            .style = &style1,
+        },
+        .{
+            .string = "italics\nand\n",
+            .style = &style2,
+        },
+        .{
+            .string = "bold\nand\n",
+            .style = &style3,
+        },
+    });
 
     try text_mod.send(.init, .{});
     try text_mod.send(.initPipeline, .{Text.PipelineOptions{
@@ -141,10 +159,21 @@ pub fn tick(
             const new_entity = try engine.newEntity();
             try text_mod.set(new_entity, .pipeline, @intFromEnum(Pipeline.default));
             try text_mod.set(new_entity, .transform, Mat4x4.scaleScalar(upscale).mul(&Mat4x4.translate(new_pos)));
-            try text_mod.set(new_entity, .text, "!$?");
-            try text_mod.set(new_entity, .font_name, "Roboto Medium"); // TODO
-            try text_mod.set(new_entity, .font_size, 48);
-            try text_mod.set(new_entity, .color, vec4(0.6, 1.0, 0.6, 1.0));
+
+            const style1 = Text.Style{
+                .font_name = "Roboto Medium", // TODO
+                .font_size = 48 * gfx.px_per_pt, // 48pt
+                .font_weight = gfx.font_weight_normal,
+                .italic = false,
+                .color = vec4(0.6, 1.0, 0.6, 1.0),
+            };
+            try text_mod.set(new_entity, .text, &.{
+                .{
+                    .string = "!$?😊",
+                    .style = &style1,
+                },
+            });
+
             game.state.texts += 1;
         }
     }
