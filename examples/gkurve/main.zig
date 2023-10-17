@@ -12,7 +12,7 @@ const draw = @import("draw.zig");
 const Label = @import("label.zig");
 const ResizableLabel = @import("resizable_label.zig");
 const gpu = mach.gpu;
-const Atlas = mach.Atlas;
+const Atlas = mach.gfx.Atlas;
 
 pub const App = @This();
 

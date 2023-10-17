@@ -7,7 +7,7 @@ const App = @import("main.zig").App;
 const Vertex = @import("draw.zig").Vertex;
 const math = mach.math;
 const earcut = mach.earcut;
-const Atlas = mach.Atlas;
+const Atlas = mach.gfx.Atlas;
 const AtlasErr = Atlas.Error;
 const AtlasUV = Atlas.Region.UV;
 

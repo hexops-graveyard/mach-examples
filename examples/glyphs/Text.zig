@@ -7,9 +7,9 @@ const assets = @import("assets");
 
 pub const name = .game_text;
 
-const RegionMap = std.AutoArrayHashMapUnmanaged(u21, mach.Atlas.Region);
+const RegionMap = std.AutoArrayHashMapUnmanaged(u21, mach.gfx.Atlas.Region);
 
-texture_atlas: mach.Atlas,
+texture_atlas: mach.gfx.Atlas,
 texture: *gpu.Texture,
 ft: ft.Library,
 face: ft.Face,
@@ -37,7 +37,7 @@ pub fn gameTextInit(
 
     var s = &text_mod.state;
     s.texture = texture;
-    s.texture_atlas = try mach.Atlas.init(
+    s.texture_atlas = try mach.gfx.Atlas.init(
         engine.allocator,
         img_size.width,
         .rgba,

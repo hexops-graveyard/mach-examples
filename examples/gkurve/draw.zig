@@ -4,7 +4,7 @@ const mach = @import("mach");
 const App = @import("main.zig").App;
 const gpu = mach.gpu;
 const math = mach.math;
-const AtlasUV = mach.Atlas.Region.UV;
+const AtlasUV = mach.gfx.Atlas.Region.UV;
 
 const Mat4x4 = math.Mat4x4;
 const vec3 = math.vec3;
