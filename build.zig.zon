@@ -1,18 +1,28 @@
 .{
     .name = "mach-examples",
     .version = "0.2.0",
+    .paths = .{
+        "assets",
+        "examples",
+        "build.zig",
+        "build.zig.zon",
+        "LICENSE",
+        "LICENSE-APACHE",
+        "LICENSE-MIT",
+        "README.md",
+    },
     .dependencies = .{
         .zigimg = .{
-            .url = "https://github.com/zigimg/zigimg/archive/9b455a1d74cd5d6c4c6ec1d853a91cfafb143984.tar.gz",
-            .hash = "1220b7d5999a2768a68a61feedb71414e3fc6aac7ed1e13690f875a0e3dc4fa40b84",
+            .url = "https://github.com/zigimg/zigimg/archive/b820e0cc2dd1513eb591737b86e500aa16987166.tar.gz",
+            .hash = "12208e62f86ea09b244a89fde2ef957162f75f51458d8f27434c380d9bdbdeeb0d24",
         },
         .mach = .{
-            .url = "https://pkg.machengine.org/mach/1c16060eaacfbe053db80cbc105df1319d3a9ef3.tar.gz",
-            .hash = "1220d89bd6317d1a66d1466440bf60b9667d1e323914dfc02f3e10937d1b040a94ef",
+            .url = "https://pkg.machengine.org/mach/098d5ee73fa4e0b499e300abe17fc8056a7d1d84.tar.gz",
+            .hash = "1220460f5e1d1f18cb7734e48e7f1d1bff2bd154b9c7d86ff667e80b05be8951143c",
         },
         .mach_freetype = .{
-            .url = "https://pkg.machengine.org/mach-freetype/90b353a9425067010ae5e924dc845e5e5045dab7.tar.gz",
-            .hash = "12200d064703408a8c4a5734dac089a07c228d94a2ea19f3d2b5a07c2c97f1ca46dc",
+            .url = "https://pkg.machengine.org/mach-freetype/f152278c6ccc6dcf6dcf4308bbe027a7598ffe63.tar.gz",
+            .hash = "1220e0de43cacb583b8f9efddcbe359398cfca17a39e265b56c8f2a10314eb8f7a5f",
         },
     },
 }
