@@ -41,6 +41,7 @@ const d0 = 0.000001;
 //    unique.
 //
 pub const name = .game;
+pub const Mod = mach.Mod(@This());
 
 pub const Pipeline = enum(u32) {
     default,
@@ -49,9 +50,9 @@ pub const Pipeline = enum(u32) {
 const upscale = 1.0;
 
 pub fn init(
-    engine: *mach.Mod(.engine),
-    text_mod: *mach.Mod(.mach_gfx_text),
-    game: *mach.Mod(.game),
+    engine: *mach.Engine.Mod,
+    text_mod: *Text.Mod,
+    game: *Mod,
 ) !void {
     // The Mach .core is where we set window options, etc.
     core.setTitle("gfx.Text example");
@@ -104,14 +105,14 @@ pub fn init(
     };
 }
 
-pub fn deinit(engine: *mach.Mod(.engine)) !void {
+pub fn deinit(engine: *mach.Engine.Mod) !void {
     _ = engine;
 }
 
 pub fn tick(
-    engine: *mach.Mod(.engine),
-    text_mod: *mach.Mod(.mach_gfx_text),
-    game: *mach.Mod(.game),
+    engine: *mach.Engine.Mod,
+    text_mod: *Text.Mod,
+    game: *Mod,
 ) !void {
     // TODO(engine): event polling should occur in mach.Engine module and get fired as ECS events.
     var iter = core.pollEvents();

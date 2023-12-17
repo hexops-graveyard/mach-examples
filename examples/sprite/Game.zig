@@ -39,15 +39,16 @@ const d0 = 0.000001;
 //    unique.
 //
 pub const name = .game;
+pub const Mod = mach.Mod(@This());
 
 pub const Pipeline = enum(u32) {
     default,
 };
 
 pub fn init(
-    engine: *mach.Mod(.engine),
-    sprite_mod: *mach.Mod(.mach_gfx_sprite),
-    game: *mach.Mod(.game),
+    engine: *mach.Engine.Mod,
+    sprite_mod: *Sprite.Mod,
+    game: *Mod,
 ) !void {
     // The Mach .core is where we set window options, etc.
     core.setTitle("gfx.Sprite example");
@@ -82,9 +83,9 @@ pub fn init(
 }
 
 pub fn tick(
-    engine: *mach.Mod(.engine),
-    sprite_mod: *mach.Mod(.mach_gfx_sprite),
-    game: *mach.Mod(.game),
+    engine: *mach.Engine.Mod,
+    sprite_mod: *Sprite.Mod,
+    game: *Mod,
 ) !void {
     // TODO(engine): event polling should occur in mach.Engine module and get fired as ECS events.
     var iter = core.pollEvents();
@@ -194,7 +195,7 @@ pub fn tick(
 
 // TODO: move this helper into gfx module
 fn loadTexture(
-    engine: *mach.Mod(.engine),
+    engine: *mach.Engine.Mod,
 ) !*gpu.Texture {
     const device = engine.state.device;
     const queue = device.getQueue();

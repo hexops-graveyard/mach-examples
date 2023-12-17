@@ -6,6 +6,7 @@ const std = @import("std");
 const assets = @import("assets");
 
 pub const name = .game_text;
+pub const Mod = mach.Mod(@This());
 
 const RegionMap = std.AutoArrayHashMapUnmanaged(u21, mach.gfx.Atlas.Region);
 
@@ -16,8 +17,8 @@ face: ft.Face,
 regions: RegionMap = .{},
 
 pub fn deinit(
-    engine: *mach.Mod(.engine),
-    text_mod: *mach.Mod(.game_text),
+    engine: *mach.Engine.Mod,
+    text_mod: *Mod,
 ) !void {
     text_mod.state.texture_atlas.deinit(engine.allocator);
     text_mod.state.texture.release();
@@ -28,8 +29,8 @@ pub fn deinit(
 
 pub const local = struct {
     pub fn init(
-        engine: *mach.Mod(.engine),
-        text_mod: *mach.Mod(.game_text),
+        engine: *mach.Engine.Mod,
+        text_mod: *Mod,
     ) !void {
         const device = engine.state.device;
 
@@ -65,8 +66,8 @@ pub const local = struct {
     }
 
     pub fn prepare(
-        engine: *mach.Mod(.engine),
-        text_mod: *mach.Mod(.game_text),
+        engine: *mach.Engine.Mod,
+        text_mod: *Mod,
         codepoints: []const u21,
     ) !void {
         const device = engine.state.device;

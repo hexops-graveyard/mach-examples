@@ -12,6 +12,8 @@ const Vec3 = math.Vec3;
 const Mat3x3 = math.Mat3x3;
 const Mat4x4 = math.Mat4x4;
 
+const Text = @import("Text.zig");
+
 timer: mach.Timer,
 player: mach.ecs.EntityID,
 direction: Vec2 = vec2(0, 0),
@@ -36,6 +38,7 @@ const d0 = 0.000001;
 //    unique.
 //
 pub const name = .game;
+pub const Mod = mach.Mod(@This());
 
 pub const Pipeline = enum(u32) {
     default,
@@ -43,10 +46,10 @@ pub const Pipeline = enum(u32) {
 };
 
 pub fn init(
-    engine: *mach.Mod(.engine),
-    sprite_mod: *mach.Mod(.mach_gfx_sprite),
-    text_mod: *mach.Mod(.game_text),
-    game: *mach.Mod(.game),
+    engine: *mach.Engine.Mod,
+    sprite_mod: *Sprite.Mod,
+    text_mod: *Text.Mod,
+    game: *Mod,
 ) !void {
     // The Mach .core is where we set window options, etc.
     core.setTitle("gfx.Sprite example");
@@ -62,7 +65,7 @@ pub fn init(
     }});
 
     // We can create entities, and set components on them. Note that components live in a module
-    // namespace, e.g. the `.mach_gfx_sprite` module could have a 3D `.location` component with a different
+    // namespace, e.g. the `Sprite` module could have a 3D `.location` component with a different
     // type than the `.physics2d` module's `.location` component if you desire.
 
     const r = text_mod.state.regions.get('?').?;
@@ -86,10 +89,10 @@ pub fn init(
 }
 
 pub fn tick(
-    engine: *mach.Mod(.engine),
-    sprite_mod: *mach.Mod(.mach_gfx_sprite),
-    text_mod: *mach.Mod(.game_text),
-    game: *mach.Mod(.game),
+    engine: *mach.Engine.Mod,
+    sprite_mod: *Sprite.Mod,
+    text_mod: *Text.Mod,
+    game: *Mod,
 ) !void {
     // TODO(engine): event polling should occur in mach.Engine module and get fired as ECS events.
     var iter = core.pollEvents();

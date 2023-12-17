@@ -18,6 +18,7 @@ bind_groups: [num_bind_groups]*gpu.BindGroup,
 uniform_buffer: *gpu.Buffer,
 
 pub const name = .renderer;
+pub const Mod = mach.Mod(@This());
 
 pub const components = struct {
     pub const location = Vec3;
@@ -32,8 +33,8 @@ const UniformBufferObject = packed struct {
 };
 
 pub fn init(
-    engine: *mach.Mod(.engine),
-    renderer: *mach.Mod(.renderer),
+    engine: *mach.Engine.Mod,
+    renderer: *Mod,
 ) !void {
     const device = engine.state.device;
     const shader_module = device.createShaderModuleWGSL("shader.wgsl", @embedFile("shader.wgsl"));
@@ -97,7 +98,7 @@ pub fn init(
 }
 
 pub fn deinit(
-    renderer: *mach.Mod(.renderer),
+    renderer: *Mod,
 ) !void {
     renderer.state.pipeline.release();
     renderer.state.queue.release();
@@ -106,8 +107,8 @@ pub fn deinit(
 }
 
 pub fn tick(
-    engine: *mach.Mod(.engine),
-    renderer: *mach.Mod(.renderer),
+    engine: *mach.Engine.Mod,
+    renderer: *Mod,
 ) !void {
     const device = engine.state.device;
 

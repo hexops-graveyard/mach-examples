@@ -3,6 +3,7 @@ const mach = @import("mach");
 const ecs = mach.ecs;
 const core = mach.core;
 const math = mach.math;
+const Renderer = @import("Renderer.zig");
 
 const vec3 = math.vec3;
 const vec2 = math.vec2;
@@ -30,11 +31,12 @@ pub const components = struct {
 //    unique.
 //
 pub const name = .game;
+pub const Mod = mach.Mod(@This());
 
 pub fn init(
-    engine: *mach.Mod(.engine),
-    renderer: *mach.Mod(.renderer),
-    game: *mach.Mod(.game),
+    engine: *mach.Engine.Mod,
+    renderer: *Renderer.Mod,
+    game: *Mod,
 ) !void {
     // The Mach .core is where we set window options, etc.
     core.setTitle("Hello, ECS!");
@@ -55,9 +57,9 @@ pub fn init(
 }
 
 pub fn tick(
-    engine: *mach.Mod(.engine),
-    renderer: *mach.Mod(.renderer),
-    game: *mach.Mod(.game),
+    engine: *mach.Engine.Mod,
+    renderer: *Renderer.Mod,
+    game: *Mod,
 ) !void {
     // TODO(engine): event polling should occur in mach.Engine module and get fired as ECS events.
     var iter = core.pollEvents();
