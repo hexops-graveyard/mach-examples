@@ -137,14 +137,14 @@ pub fn getVertexUniformBufferObject() !VertexUniform {
     // 1280x960 (subpixels.) Doing this lets us use a pixel, not subpixel,
     // coordinate system.
     const window_size = mach.core.size();
-    const proj = Mat4x4.ortho(
-        0,
-        @floatFromInt(window_size.width),
-        0,
-        @floatFromInt(window_size.height),
-        -100,
-        100,
-    );
+    const proj = Mat4x4.projection2D(.{
+        .left = 0,
+        .right = @floatFromInt(window_size.width),
+        .bottom = 0,
+        .top = @floatFromInt(window_size.height),
+        .near = -0.1,
+        .far = 100,
+    });
     const mvp = proj.mul(&Mat4x4.translate(vec3(-1, -1, 0)));
     return mvp;
 }
