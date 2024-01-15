@@ -12,29 +12,29 @@ pub fn build(b: *std.Build) !void {
         freetype,
         zigimg,
 
-        pub fn moduleDependency(
+        pub fn dependency(
             dep: @This(),
             b2: *std.Build,
-            target2: std.zig.CrossTarget,
+            target2: std.Build.ResolvedTarget,
             optimize2: std.builtin.OptimizeMode,
-        ) std.Build.ModuleDependency {
+        ) std.Build.Module.Import {
             const path = switch (dep) {
                 .assets => "assets/assets.zig",
-                .model3d => return std.Build.ModuleDependency{
+                .model3d => return std.Build.Module.Import{
                     .name = "model3d",
                     .module = b2.dependency("mach_model3d", .{
                         .target = target2,
                         .optimize = optimize2,
                     }).module("mach-model3d"),
                 },
-                .freetype => return std.Build.ModuleDependency{
+                .freetype => return std.Build.Module.Import{
                     .name = "freetype",
                     .module = b2.dependency("mach_freetype", .{
                         .target = target2,
                         .optimize = optimize2,
                     }).module("mach-freetype"),
                 },
-                .zigimg => return std.Build.ModuleDependency{
+                .zigimg => return std.Build.Module.Import{
                     .name = "zigimg",
                     .module = b2.dependency("zigimg", .{
                         .target = target2,
@@ -42,9 +42,9 @@ pub fn build(b: *std.Build) !void {
                     }).module("zigimg"),
                 },
             };
-            return std.Build.ModuleDependency{
+            return std.Build.Module.Import{
                 .name = @tagName(dep),
-                .module = b2.createModule(.{ .source_file = .{ .path = path } }),
+                .module = b2.createModule(.{ .root_source_file = .{ .path = path } }),
             };
         }
     };
@@ -82,11 +82,11 @@ pub fn build(b: *std.Build) !void {
         // as soon as any such examples is found. This does means that any
         // example which works on wasm should be placed before those who dont.
         if (example.std_platform_only)
-            if (target.getCpuArch() == .wasm32)
+            if (target.result.cpu.arch == .wasm32)
                 break;
 
-        var deps = std.ArrayList(std.Build.ModuleDependency).init(b.allocator);
-        for (example.deps) |d| try deps.append(d.moduleDependency(b, target, optimize));
+        var deps = std.ArrayList(std.Build.Module.Import).init(b.allocator);
+        for (example.deps) |d| try deps.append(d.dependency(b, target, optimize));
         const app = try mach.App.init(
             b,
             .{
@@ -107,10 +107,6 @@ pub fn build(b: *std.Build) !void {
                 .target = target,
                 .optimize = optimize,
             }).artifact("mach-model3d")),
-            .freetype => @import("mach_freetype").linkFreetype(b.dependency("mach_freetype", .{
-                .target = target,
-                .optimize = optimize,
-            }).builder, app.compile),
             else => {},
         };
 
