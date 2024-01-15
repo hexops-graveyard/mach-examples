@@ -132,9 +132,9 @@ pub fn tick(
     } });
     var num_entities: usize = 0;
     while (archetypes_iter.next()) |archetype| {
-        var ids = archetype.slice(.entity, .id);
-        var locations = archetype.slice(.renderer, .location);
-        var scales = archetype.slice(.renderer, .scale);
+        const ids = archetype.slice(.entity, .id);
+        const locations = archetype.slice(.renderer, .location);
+        const scales = archetype.slice(.renderer, .scale);
         for (ids, locations, scales) |id, location, scale| {
             _ = id;
 

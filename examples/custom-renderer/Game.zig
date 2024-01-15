@@ -114,8 +114,8 @@ pub fn tick(
         .{ .game = &.{.follower} },
     } });
     while (archetypes_iter.next()) |archetype| {
-        var ids = archetype.slice(.entity, .id);
-        var locations = archetype.slice(.renderer, .location);
+        const ids = archetype.slice(.entity, .id);
+        const locations = archetype.slice(.renderer, .location);
         for (ids, locations) |id, location| {
             // Avoid other follower entities by moving away from them if they are close to us.
             const close_dist = 1.0 / 15.0;
@@ -125,8 +125,8 @@ pub fn tick(
                 .{ .game = &.{.follower} },
             } });
             while (archetypes_iter_2.next()) |archetype_2| {
-                var other_ids = archetype_2.slice(.entity, .id);
-                var other_locations = archetype_2.slice(.renderer, .location);
+                const other_ids = archetype_2.slice(.entity, .id);
+                const other_locations = archetype_2.slice(.renderer, .location);
                 for (other_ids, other_locations) |other_id, other_location| {
                     if (id == other_id) continue;
                     if (location.dist(&other_location) < close_dist) {
@@ -144,7 +144,7 @@ pub fn tick(
             }
 
             // Move away from things we want to avoid
-            var move_speed = 1.0 * delta_time;
+            const move_speed = 1.0 * delta_time;
             var new_location = location.add(&avoidance.divScalar(avoidance_div).mulScalar(move_speed * avoid_player_multiplier));
 
             // Move towards the center

@@ -157,8 +157,8 @@ pub fn tick(
         .{ .mach_gfx_sprite = &.{.transform} },
     } });
     while (archetypes_iter.next()) |archetype| {
-        var ids = archetype.slice(.entity, .id);
-        var transforms = archetype.slice(.mach_gfx_sprite, .transform);
+        const ids = archetype.slice(.entity, .id);
+        const transforms = archetype.slice(.mach_gfx_sprite, .transform);
         for (ids, transforms) |id, *old_transform| {
             var location = old_transform.translation();
             if (location.x() < -@as(f32, @floatFromInt(core.size().width)) / 1.5 or location.x() > @as(f32, @floatFromInt(core.size().width)) / 1.5 or location.y() < -@as(f32, @floatFromInt(core.size().height)) / 1.5 or location.y() > @as(f32, @floatFromInt(core.size().height)) / 1.5) {

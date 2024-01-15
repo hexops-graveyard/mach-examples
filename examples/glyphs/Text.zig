@@ -87,7 +87,7 @@ pub const local = struct {
 
             // Add 1 pixel padding to texture to avoid bleeding over other textures
             const margin = 1;
-            var glyph_data = try engine.allocator.alloc([4]u8, (glyph_width + (margin * 2)) * (glyph_height + (margin * 2)));
+            const glyph_data = try engine.allocator.alloc([4]u8, (glyph_width + (margin * 2)) * (glyph_height + (margin * 2)));
             defer engine.allocator.free(glyph_data);
             const glyph_buffer = glyph_bitmap.buffer().?;
             for (glyph_data, 0..) |*data, i| {

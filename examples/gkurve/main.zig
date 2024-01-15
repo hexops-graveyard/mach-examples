@@ -82,7 +82,7 @@ pub fn init(app: *App) !void {
     atlas_white_region.width -= 2;
     atlas_white_region.height -= 2;
     const white_texture_uv_data = atlas_white_region.calculateUV(app.texture_atlas_data.size);
-    var white_tex_data = try core.allocator.alloc(zigimg.color.Rgba32, white_tex_scale * white_tex_scale);
+    const white_tex_data = try core.allocator.alloc(zigimg.color.Rgba32, white_tex_scale * white_tex_scale);
     defer core.allocator.free(white_tex_data);
     @memset(white_tex_data, zigimg.color.Rgba32.initRgb(0xff, 0xff, 0xff));
     app.texture_atlas_data.set(atlas_white_region, @as([*]const u8, @ptrCast(white_tex_data.ptr))[0 .. white_tex_data.len * 4]);

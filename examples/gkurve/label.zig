@@ -95,7 +95,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                     const glyph_height = glyph_bitmap.rows();
 
                     // Add 1 pixel padding to texture to avoid bleeding over other textures
-                    var glyph_data = try ctx.label.allocator.alloc(zigimg.color.Rgba32, (glyph_width + 2) * (glyph_height + 2));
+                    const glyph_data = try ctx.label.allocator.alloc(zigimg.color.Rgba32, (glyph_width + 2) * (glyph_height + 2));
                     defer ctx.label.allocator.free(glyph_data);
                     const glyph_buffer = glyph_bitmap.buffer().?;
                     for (glyph_data, 0..) |*data, i| {

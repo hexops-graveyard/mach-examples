@@ -147,11 +147,11 @@ pub fn tick(
         .{ .mach_gfx_sprite = &.{.transform} },
     } });
     while (archetypes_iter.next()) |archetype| {
-        var ids = archetype.slice(.entity, .id);
-        var transforms = archetype.slice(.mach_gfx_sprite, .transform);
+        const ids = archetype.slice(.entity, .id);
+        const transforms = archetype.slice(.mach_gfx_sprite, .transform);
         for (ids, transforms) |id, *old_transform| {
             _ = id;
-            var location = old_transform.*.translation();
+            const location = old_transform.*.translation();
             // var transform = old_transform.mul(&Mat4x4.translate(-location));
             // transform = mat.rotateZ(0.3 * delta_time).mul(&transform);
             // transform = transform.mul(&Mat4x4.translate(location));

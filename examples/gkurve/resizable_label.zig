@@ -252,7 +252,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                 }
 
                 // Read the data and apply resizing of pos and uv
-                var filled_vertices_after_offset = try ctx.label.allocator.alloc(Vertex, v.value_ptr.filled_vertices.items.len);
+                const filled_vertices_after_offset = try ctx.label.allocator.alloc(Vertex, v.value_ptr.filled_vertices.items.len);
                 defer ctx.label.allocator.free(filled_vertices_after_offset);
                 for (filled_vertices_after_offset, 0..) |*vert, i| {
                     vert.* = v.value_ptr.filled_vertices.items[i];
@@ -300,7 +300,7 @@ fn write(ctx: WriterContext, bytes: []const u8) WriterError!usize {
                     try ctx.app.fragment_uniform_list.appendNTimes(.{ .type = .quadratic_convex, .blend_color = ctx.text_color }, convex_vertices_after_offset.len / 3);
                 }
 
-                var concave_vertices_after_offset = try ctx.label.allocator.alloc(Vertex, v.value_ptr.concave_vertices.items.len);
+                const concave_vertices_after_offset = try ctx.label.allocator.alloc(Vertex, v.value_ptr.concave_vertices.items.len);
                 defer ctx.label.allocator.free(concave_vertices_after_offset);
                 for (concave_vertices_after_offset, 0..) |*vert, i| {
                     vert.* = filled_vertices_after_offset[v.value_ptr.concave_vertices.items[i]];
@@ -400,7 +400,7 @@ fn moveToFunction(ctx: *OutlineContext, _to: ft.Vector) ft.Error!void {
 
     if (ctx.outline_verts.items.len == 0 or ctx.outline_verts.items[ctx.outline_verts.items.len - 1].items.len > 0) {
         // The last polygon we were building is now finished.
-        var new_outline_list = std.ArrayList(Vec2).init(ctx.outline_verts.allocator);
+        const new_outline_list = std.ArrayList(Vec2).init(ctx.outline_verts.allocator);
         ctx.outline_verts.append(new_outline_list) catch unreachable;
     }
 
