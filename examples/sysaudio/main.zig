@@ -39,7 +39,7 @@ pub fn init(app: *App) !void {
     try app.audio_ctx.refresh();
 
     const device = app.audio_ctx.defaultDevice(.playback) orelse return error.NoDeviceFound;
-    app.player = try app.audio_ctx.createPlayer(device, writeFn, .{ .user_data = app });
+    app.player = try app.audio_ctx.createPlayer(device, writeCallback, .{ .user_data = app });
     try app.player.start();
 }
 
@@ -79,11 +79,17 @@ pub fn update(app: *App) !bool {
     return false;
 }
 
-fn writeFn(app_op: ?*anyopaque, frames: usize) void {
-    const app: *App = @as(*App, @ptrCast(@alignCast(app_op)));
+fn writeCallback(ctx: ?*anyopaque, output: []u8) void {
+    const app: *App = @as(*App, @ptrCast(@alignCast(ctx)));
+
+    // const seconds_per_frame = 1.0 / @as(f32, @floatFromInt(player.sampleRate()));
+    const frame_size = app.player.format().frameSize(@intCast(app.player.channels().len));
+    const frames = output.len / frame_size;
+    _ = frames;
 
     var frame: usize = 0;
-    while (frame < frames) : (frame += 1) {
+    while (frame < output.len) : (frame += frame_size) {
+        // Calculate the audio sample we'll play on both channels for this frame
         var sample: f32 = 0;
         for (&app.playing) |*tone| {
             if (tone.sample_counter >= tone.duration) continue;
@@ -109,8 +115,15 @@ fn writeFn(app_op: ?*anyopaque, frames: usize) void {
             sample += sine_wave * fade_in * fade_out;
         }
 
-        // Emit the sample on all channels.
-        app.player.writeAll(frame, sample);
+        // Convert our float sample to the format the audio driver is working in
+        sysaudio.convertTo(
+            f32,
+            // Pass two samples (assume two channel audio)
+            // Note that in a real application this must match app.player.channels().len
+            &.{ sample, sample },
+            app.player.format(),
+            output[frame..][0..frame_size],
+        );
     }
 }
 
